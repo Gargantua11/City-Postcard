@@ -146,7 +146,7 @@ class _RegisterStep1ScreenState extends State<RegisterStep1Screen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
-                      const SizedBox(height: 100),
+                      const SizedBox(height: 70),
 
                       // 注册账号
                       Container(
@@ -158,7 +158,7 @@ class _RegisterStep1ScreenState extends State<RegisterStep1Screen> {
                           ),
                         ),
                       ),
-                      const SizedBox(height: 80),
+                      const SizedBox(height: 55),
 
                       // 手机号输入
                       Center(
@@ -194,7 +194,9 @@ class _RegisterStep1ScreenState extends State<RegisterStep1Screen> {
                               child: Text(
                                 _canSendCode ? '获取验证码' : '$_countdown s',
                                 style: TextStyle(
-                                  color: _canSendCode ? Colors.blue : Colors.grey,
+                                  color: _canSendCode
+                                      ? Colors.blue
+                                      : Colors.grey,
                                   fontSize: 12,
                                 ),
                               ),
@@ -202,7 +204,7 @@ class _RegisterStep1ScreenState extends State<RegisterStep1Screen> {
                           ),
                         ),
                       ),
-                      const SizedBox(height: 40),
+                      const SizedBox(height: 30),
 
                       // 下一步按钮
                       GestureDetector(

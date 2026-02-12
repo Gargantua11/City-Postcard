@@ -98,6 +98,8 @@ class _CustomTextFieldState extends State<CustomTextField> {
                   decoration: InputDecoration(
                     border: InputBorder.none,
                     counterText: '',
+                    // Hide default FormField error text; we render a custom error below.
+                    errorStyle: const TextStyle(height: 0, fontSize: 0),
                     // 只有在没有错误且输入框为空时才显示hintText
                     hintText: (hasError || !isEmpty) ? null : widget.hintText,
                     hintStyle: const TextStyle(color: Colors.grey, fontSize: 14),
@@ -123,8 +125,12 @@ class _CustomTextFieldState extends State<CustomTextField> {
           ),
         ),
         // 显示验证错误信息
-        if (hasError)
-          Container(
+        Visibility(
+          visible: hasError,
+          maintainState: true,
+          maintainAnimation: true,
+          maintainSize: true,
+          child: Container(
             margin: const EdgeInsets.only(top: 5),
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
             decoration: BoxDecoration(
@@ -132,13 +138,14 @@ class _CustomTextFieldState extends State<CustomTextField> {
               borderRadius: BorderRadius.circular(8),
             ),
             child: Text(
-              _errorText!,
+              _errorText ?? '',
               style: const TextStyle(
                 color: Colors.red,
                 fontSize: 12,
               ),
             ),
           ),
+        ),
       ],
     );
   }

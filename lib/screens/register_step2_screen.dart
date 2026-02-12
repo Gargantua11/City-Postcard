@@ -122,7 +122,7 @@ class _RegisterStep2ScreenState extends State<RegisterStep2Screen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
-                      const SizedBox(height: 100),
+                      const SizedBox(height: 70),
 
                       // 设置密码
                       Container(
@@ -134,7 +134,7 @@ class _RegisterStep2ScreenState extends State<RegisterStep2Screen> {
                           ),
                         ),
                       ),
-                      const SizedBox(height: 80),
+                      const SizedBox(height: 56),
 
                       // 密码输入
                       Center(

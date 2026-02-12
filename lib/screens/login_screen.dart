@@ -100,7 +100,7 @@ class _LoginScreenState extends State<LoginScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  const SizedBox(height: 100),
+                  const SizedBox(height: 70),
 
                   // 欢迎登录
                   Container(
@@ -112,7 +112,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                     ),
                   ),
-                  const SizedBox(height: 50),
+                  const SizedBox(height: 55),
 
                   // 用户名输入
                   SizedBox(
@@ -124,7 +124,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       validator: _validateUsername,
                     ),
                   ),
-                  const SizedBox(height: 30),
+                  const SizedBox(height: 15),
 
                   // 密码输入
                   SizedBox(
@@ -152,7 +152,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ),
 
-                  const SizedBox(height: 30),
+                  const SizedBox(height: 15),
 
                   // 注册链接 - 自定义设计
                   Row(
@@ -183,7 +183,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     ],
                   ),
 
-                  const SizedBox(height: 5),
+                  const SizedBox(height: 15),
 
                   // 登录按钮
                   GestureDetector(
@@ -212,7 +212,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     ],
                   ),
 
-                  const Spacer(),
+                  const SizedBox(height: 20),
 
                   // 协议勾选 - 页面底部
                   Row(
