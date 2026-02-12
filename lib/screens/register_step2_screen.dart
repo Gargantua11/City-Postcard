@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'city_search_screen.dart';
 
 class RegisterStep2Screen extends StatefulWidget {
   final String phone;
@@ -16,6 +17,9 @@ class _RegisterStep2ScreenState extends State<RegisterStep2Screen> {
 
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
+
+  // 选中的城市
+  City? _selectedCity;
 
   @override
   void dispose() {
@@ -44,6 +48,24 @@ class _RegisterStep2ScreenState extends State<RegisterStep2Screen> {
       return '两次输入的密码不一致';
     }
     return null;
+  }
+
+  // 选择城市
+  void _selectCity() async {
+    final City? selected = await Navigator.push<City>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => CitySearchScreen(
+          selectedCity: _selectedCity?.name,
+        ),
+      ),
+    );
+
+    if (selected != null) {
+      setState(() {
+        _selectedCity = selected;
+      });
+    }
   }
 
   // 完成注册
@@ -97,7 +119,7 @@ class _RegisterStep2ScreenState extends State<RegisterStep2Screen> {
                 child: Form(
                   key: _formKey,
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
                       const SizedBox(height: 100),
 
@@ -114,87 +136,163 @@ class _RegisterStep2ScreenState extends State<RegisterStep2Screen> {
                       const SizedBox(height: 80),
 
                       // 密码输入
-                      Container(
-                        decoration: BoxDecoration(
-                          image: DecorationImage(
-                            image: AssetImage('assets/images/Group 21.png'),
-                            fit: BoxFit.contain,
-                          ),
-                        ),
-                        child: TextFormField(
-                          controller: _passwordController,
-                          obscureText: _obscurePassword,
-                          decoration: InputDecoration(
-                            border: InputBorder.none,
-                            hintText: '请设置6-24位密码',
-                            hintStyle: const TextStyle(
-                              color: Colors.grey,
-                              fontSize: 14,
+                      SizedBox(
+                        width: 300,
+                        child: Container(
+                          decoration: BoxDecoration(
+                            image: DecorationImage(
+                              image: AssetImage('assets/images/Group 21.png'),
+                              fit: BoxFit.contain,
                             ),
-                            suffixIcon: IconButton(
-                              onPressed: () {
-                                setState(() {
-                                  _obscurePassword = !_obscurePassword;
-                                });
-                              },
-                              icon: Icon(
-                                _obscurePassword
-                                    ? Icons.visibility_off
-                                    : Icons.visibility,
+                          ),
+                          child: TextFormField(
+                            controller: _passwordController,
+                            obscureText: _obscurePassword,
+                            decoration: InputDecoration(
+                              border: InputBorder.none,
+                              hintText: '请设置6-24位密码',
+                              hintStyle: const TextStyle(
                                 color: Colors.grey,
+                                fontSize: 14,
+                              ),
+                              suffixIcon: Padding(
+                                padding: const EdgeInsets.only(right: 20),
+                                child: IconButton(
+                                  onPressed: () {
+                                    setState(() {
+                                      _obscurePassword = !_obscurePassword;
+                                    });
+                                  },
+                                  icon: Icon(
+                                    _obscurePassword
+                                        ? Icons.visibility_off
+                                        : Icons.visibility,
+                                    color: Colors.grey,
+                                  ),
+                                ),
+                              ),
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 30,
+                                vertical: 18,
                               ),
                             ),
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 30,
-                              vertical: 18,
-                            ),
+                            validator: _validatePassword,
                           ),
-                          validator: _validatePassword,
                         ),
                       ),
                       const SizedBox(height: 30),
 
                       // 确认密码输入
-                      Container(
-                        decoration: BoxDecoration(
-                          image: DecorationImage(
-                            image: AssetImage('assets/images/Group 22.png'),
-                            fit: BoxFit.contain,
-                          ),
-                        ),
-                        child: TextFormField(
-                          controller: _confirmPasswordController,
-                          obscureText: _obscureConfirmPassword,
-                          decoration: InputDecoration(
-                            border: InputBorder.none,
-                            hintText: '请再次输入密码',
-                            hintStyle: const TextStyle(
-                              color: Colors.grey,
-                              fontSize: 14,
+                      SizedBox(
+                        width: 300,
+                        child: Container(
+                          decoration: BoxDecoration(
+                            image: DecorationImage(
+                              image: AssetImage('assets/images/Group 22.png'),
+                              fit: BoxFit.contain,
                             ),
-                            suffixIcon: IconButton(
-                              onPressed: () {
-                                setState(() {
-                                  _obscureConfirmPassword =
-                                      !_obscureConfirmPassword;
-                                });
-                              },
-                              icon: Icon(
-                                _obscureConfirmPassword
-                                    ? Icons.visibility_off
-                                    : Icons.visibility,
+                          ),
+                          child: TextFormField(
+                            controller: _confirmPasswordController,
+                            obscureText: _obscureConfirmPassword,
+                            decoration: InputDecoration(
+                              border: InputBorder.none,
+                              hintText: '请再次输入密码',
+                              hintStyle: const TextStyle(
                                 color: Colors.grey,
+                                fontSize: 14,
+                              ),
+                              suffixIcon: Padding(
+                                padding: const EdgeInsets.only(right: 20),
+                                child: IconButton(
+                                  onPressed: () {
+                                    setState(() {
+                                      _obscureConfirmPassword =
+                                          !_obscureConfirmPassword;
+                                    });
+                                  },
+                                  icon: Icon(
+                                    _obscureConfirmPassword
+                                        ? Icons.visibility_off
+                                        : Icons.visibility,
+                                    color: Colors.grey,
+                                  ),
+                                ),
+                              ),
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 30,
+                                vertical: 18,
                               ),
                             ),
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 30,
-                              vertical: 18,
-                            ),
+                            validator: _validateConfirmPassword,
                           ),
-                          validator: _validateConfirmPassword,
                         ),
                       ),
-                      const SizedBox(height: 40),
+                      const SizedBox(height: 30),
+
+                      // 城市选择按钮
+                      GestureDetector(
+                        onTap: _selectCity,
+                        child: Container(
+                          height: 50,
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(25),
+                            border: Border.all(color: Colors.grey.shade300, width: 1),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.05),
+                                blurRadius: 10,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 20),
+                            child: Row(
+                              children: [
+                                const Icon(
+                                  Icons.location_city,
+                                  color: Colors.blue,
+                                  size: 20,
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Text(
+                                    _selectedCity?.name ?? '请选择城市',
+                                    style: TextStyle(
+                                      fontSize: 15,
+                                      color: _selectedCity != null
+                                          ? Colors.black87
+                                          : Colors.grey,
+                                      fontWeight: _selectedCity != null
+                                          ? FontWeight.w500
+                                          : FontWeight.normal,
+                                    ),
+                                  ),
+                                ),
+                                if (_selectedCity != null) ...[
+                                  Text(
+                                    _selectedCity!.code,
+                                    style: const TextStyle(
+                                      fontSize: 13,
+                                      color: Colors.blue,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                ],
+                                Icon(
+                                  Icons.chevron_right,
+                                  color: Colors.grey.shade400,
+                                  size: 20,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 30),
 
                       // 完成按钮
                       GestureDetector(

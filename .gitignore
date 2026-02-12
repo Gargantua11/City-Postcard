@@ -43,3 +43,6 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+.claude/settings.local.json
+.trae/documents/Flutter城市明信片应用注册登录功能实现.md
+

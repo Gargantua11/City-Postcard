@@ -5,6 +5,7 @@ import './screens/login_screen.dart';
 import './screens/register_step1_screen.dart';
 import './screens/register_step2_screen.dart';
 import './screens/home_screen.dart';
+import './screens/city_search_screen.dart';
 import './services/auth_provider.dart';
 
 void main() {
@@ -26,12 +27,13 @@ class MyApp extends StatelessWidget {
           colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
           useMaterial3: true,
         ),
-        initialRoute: '/login',
+        initialRoute: '/register2',
         routes: {
           '/login': (context) => const LoginScreen(),
           '/register1': (context) => const RegisterStep1Screen(),
           '/register2': (context) => const RegisterStep2Screen(phone: ''),
           '/home': (context) => const HomeScreen(),
+          '/city_search': (context) => const CitySearchScreen(),
         },
       ),
     );

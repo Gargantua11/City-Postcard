@@ -19,7 +19,6 @@ class _RegisterStep1ScreenState extends State<RegisterStep1Screen> {
   int _countdown = 60;
 
   Timer? _timer;
-  // bool _agreedToTerms = false;
 
   @override
   void dispose() {
@@ -98,13 +97,6 @@ class _RegisterStep1ScreenState extends State<RegisterStep1Screen> {
       return;
     }
 
-    // if (!_agreedToTerms) {
-    //   ScaffoldMessenger.of(
-    //     context,
-    //   ).showSnackBar(const SnackBar(content: Text('请先同意用户协议和隐私政策')));
-    //   return;
-    // }
-
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -152,7 +144,7 @@ class _RegisterStep1ScreenState extends State<RegisterStep1Screen> {
                 child: Form(
                   key: _formKey,
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
                       const SizedBox(height: 100),
 
@@ -169,56 +161,59 @@ class _RegisterStep1ScreenState extends State<RegisterStep1Screen> {
                       const SizedBox(height: 80),
 
                       // 手机号输入
-                      Container(
-                        decoration: BoxDecoration(
-                          image: DecorationImage(
-                            image: AssetImage('assets/images/注册1-手机号.png'),
-                            fit: BoxFit.contain,
+                      SizedBox(
+                        width: 300,
+                        child: Container(
+                          decoration: BoxDecoration(
+                            image: DecorationImage(
+                              image: AssetImage('assets/images/注册1-手机号.png'),
+                              fit: BoxFit.contain,
+                            ),
                           ),
-                        ),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: TextFormField(
-                                controller: _phoneController,
-                                keyboardType: TextInputType.phone,
-                                decoration: InputDecoration(
-                                  border: InputBorder.none,
-                                  hintText: '请输入手机号',
-                                  hintStyle: const TextStyle(
-                                    color: Colors.grey,
-                                    fontSize: 14,
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: TextFormField(
+                                  controller: _phoneController,
+                                  keyboardType: TextInputType.phone,
+                                  decoration: InputDecoration(
+                                    border: InputBorder.none,
+                                    hintText: '请输入手机号',
+                                    hintStyle: const TextStyle(
+                                      color: Colors.grey,
+                                      fontSize: 14,
+                                    ),
+                                    contentPadding: const EdgeInsets.symmetric(
+                                      horizontal: 30,
+                                      vertical: 18,
+                                    ),
                                   ),
-                                  contentPadding: const EdgeInsets.symmetric(
-                                    horizontal: 30,
-                                    vertical: 18,
-                                  ),
-                                ),
-                                validator: _validatePhone,
-                              ),
-                            ),
-                            Container(
-                              width: 100,
-                              child: TextButton(
-                                onPressed: _canSendCode ? _sendCode : null,
-                                style: TextButton.styleFrom(
-                                  padding: EdgeInsets.zero,
-                                  minimumSize: Size.zero,
-                                  tapTargetSize:
-                                      MaterialTapTargetSize.shrinkWrap,
-                                ),
-                                child: Text(
-                                  _canSendCode ? '获取验证码' : '${_countdown}s',
-                                  style: TextStyle(
-                                    color: _canSendCode
-                                        ? Colors.blue
-                                        : Colors.grey,
-                                    fontSize: 12,
-                                  ),
+                                  validator: _validatePhone,
                                 ),
                               ),
-                            ),
-                          ],
+                              Container(
+                                width: 100,
+                                child: TextButton(
+                                  onPressed: _canSendCode ? _sendCode : null,
+                                  style: TextButton.styleFrom(
+                                    padding: EdgeInsets.zero,
+                                    minimumSize: Size.zero,
+                                    tapTargetSize:
+                                        MaterialTapTargetSize.shrinkWrap,
+                                  ),
+                                  child: Text(
+                                    _canSendCode ? '获取验证码' : '$_countdown s',
+                                    style: TextStyle(
+                                      color: _canSendCode
+                                          ? Colors.blue
+                                          : Colors.grey,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                       const SizedBox(height: 30),
@@ -269,76 +264,6 @@ class _RegisterStep1ScreenState extends State<RegisterStep1Screen> {
 
                       const Spacer(),
 
-                      // // 协议勾选 - 页面底部
-                      // Row(
-                      //   children: [
-                      //     Checkbox(
-                      //       value: _agreedToTerms,
-                      //       onChanged: (value) {
-                      //         setState(() {
-                      //           _agreedToTerms = value ?? false;
-                      //         });
-                      //       },
-                      //       activeColor: Colors.blue,
-                      //     ),
-                      //     Expanded(
-                      //       child: Wrap(
-                      //         children: [
-                      //           const Text(
-                      //             '我已阅读并同意',
-                      //             style: TextStyle(
-                      //               color: Colors.black87,
-                      //               fontSize: 12,
-                      //             ),
-                      //           ),
-                      //           TextButton(
-                      //             onPressed: () {
-                      //               // 打开用户协议
-                      //             },
-                      //             style: TextButton.styleFrom(
-                      //               padding: EdgeInsets.zero,
-                      //               minimumSize: Size.zero,
-                      //               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      //             ),
-                      //             child: const Text(
-                      //               '《用户协议》',
-                      //               style: TextStyle(
-                      //                 color: Colors.blue,
-                      //                 fontSize: 12,
-                      //                 decoration: TextDecoration.underline,
-                      //               ),
-                      //             ),
-                      //           ),
-                      //           const Text(
-                      //             '和',
-                      //             style: TextStyle(
-                      //               color: Colors.black87,
-                      //               fontSize: 12,
-                      //             ),
-                      //           ),
-                      //           TextButton(
-                      //             onPressed: () {
-                      //               // 打开隐私政策
-                      //             },
-                      //             style: TextButton.styleFrom(
-                      //               padding: EdgeInsets.zero,
-                      //               minimumSize: Size.zero,
-                      //               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      //             ),
-                      //             child: const Text(
-                      //               '《隐私政策》',
-                      //               style: TextStyle(
-                      //                 color: Colors.blue,
-                      //                 fontSize: 12,
-                      //                 decoration: TextDecoration.underline,
-                      //               ),
-                      //             ),
-                      //           ),
-                      //         ],
-                      //       ),
-                      //     ),
-                      //   ],
-                      // ),
                       const SizedBox(height: 20),
                     ],
                   ),
