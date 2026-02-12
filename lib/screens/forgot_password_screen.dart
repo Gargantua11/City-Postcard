@@ -159,13 +159,23 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
-                      const SizedBox(height: 50),
-                      const Text(
-                        '找回密码',
-                        style: TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.black87,
+                      const SizedBox(height: 30),
+                      // const Text(
+                      //   '找回密码',
+                      //   style: TextStyle(
+                      //     fontSize: 22,
+                      //     fontWeight: FontWeight.bold,
+                      //     color: Colors.black87,
+                      //   ),
+                      // ),
+                      Container(
+                        width: 150,
+                        height: 50,
+                        decoration: const BoxDecoration(
+                          image: DecorationImage(
+                            image: AssetImage('assets/images/找回密码.png'),
+                            fit: BoxFit.contain,
+                          ),
                         ),
                       ),
                       const SizedBox(height: 20),
