@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/auth_provider.dart';
+import '../widgets/custom_text_field.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -116,30 +117,11 @@ class _LoginScreenState extends State<LoginScreen> {
                   // 用户名输入
                   SizedBox(
                     width: 300,
-                    child: Container(
-                      decoration: BoxDecoration(
-                        image: DecorationImage(
-                          image: AssetImage('assets/images/登陆页面-账号.png'),
-                          fit: BoxFit.contain,
-                        ),
-                      ),
-                      child: TextFormField(
-                        controller: _usernameController,
-
-                        decoration: InputDecoration(
-                          border: InputBorder.none,
-                          hintText: '请输入用户名',
-                          hintStyle: const TextStyle(
-                            color: Colors.grey,
-                            fontSize: 14,
-                          ),
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 30,
-                            vertical: 18,
-                          ),
-                        ),
-                        validator: _validateUsername,
-                      ),
+                    child: CustomTextField(
+                      controller: _usernameController,
+                      hintText: '请输入用户名',
+                      prefixIcon: Icons.person,
+                      validator: _validateUsername,
                     ),
                   ),
                   const SizedBox(height: 30),
@@ -147,45 +129,25 @@ class _LoginScreenState extends State<LoginScreen> {
                   // 密码输入
                   SizedBox(
                     width: 300,
-                    child: Container(
-                      decoration: BoxDecoration(
-                        image: DecorationImage(
-                          image: AssetImage('assets/images/登陆页面-密码.png'),
-                          fit: BoxFit.contain,
+                    child: CustomTextField(
+                      controller: _passwordController,
+                      hintText: '请输入密码',
+                      obscureText: _obscurePassword,
+                      prefixIcon: Icons.lock,
+                      validator: _validatePassword,
+                      suffixIcon: IconButton(
+                        onPressed: () {
+                          setState(() {
+                            _obscurePassword = !_obscurePassword;
+                          });
+                        },
+                        icon: Icon(
+                          _obscurePassword
+                              ? Icons.visibility_off
+                              : Icons.visibility,
+                          color: Colors.grey,
+                          size: 20,
                         ),
-                      ),
-                      child: TextFormField(
-                        controller: _passwordController,
-                        obscureText: _obscurePassword,
-                        decoration: InputDecoration(
-                          border: InputBorder.none,
-                          hintText: '请输入密码',
-                          hintStyle: const TextStyle(
-                            color: Colors.grey,
-                            fontSize: 14,
-                          ),
-                          suffixIcon: Padding(
-                            padding: const EdgeInsets.only(right: 20),
-                            child: IconButton(
-                              onPressed: () {
-                                setState(() {
-                                  _obscurePassword = !_obscurePassword;
-                                });
-                              },
-                              icon: Icon(
-                                _obscurePassword
-                                    ? Icons.visibility_off
-                                    : Icons.visibility,
-                                color: Colors.grey,
-                              ),
-                            ),
-                          ),
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 30,
-                            vertical: 18,
-                          ),
-                        ),
-                        validator: _validatePassword,
                       ),
                     ),
                   ),
@@ -223,54 +185,17 @@ class _LoginScreenState extends State<LoginScreen> {
 
                   const SizedBox(height: 5),
 
-                  // 登录按钮 - 自定义设计
-                  Container(
-                    height: 50,
-                    width: 270,
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [Color(0xFF4A90E2), Color(0xFF357ABD)],
-                        begin: Alignment.centerLeft,
-                        end: Alignment.centerRight,
-                      ),
-                      borderRadius: BorderRadius.circular(25),
-                      boxShadow: [
-                        BoxShadow(
-                          color: const Color(0xFF4A90E2).withOpacity(0.3),
-                          offset: const Offset(0, 4),
-                          blurRadius: 12,
-                        ),
-                      ],
-                    ),
-                    child: ElevatedButton(
-                      onPressed: _isLoading ? null : _login,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.transparent,
-                        shadowColor: Colors.transparent,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(25),
+                  // 登录按钮
+                  GestureDetector(
+                    onTap: _isLoading ? null : _login,
+                    child: Container(
+                      height: 70,
+                      decoration: const BoxDecoration(
+                        image: DecorationImage(
+                          image: AssetImage('assets/images/登录按键.png'),
+                          fit: BoxFit.contain,
                         ),
                       ),
-                      child: _isLoading
-                          ? const SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                valueColor: AlwaysStoppedAnimation<Color>(
-                                  Colors.white,
-                                ),
-                              ),
-                            )
-                          : const Text(
-                              '登录',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
-                              ),
-                            ),
                     ),
                   ),
 

@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'register_step2_screen.dart';
-import 'login_screen.dart';
+import '../widgets/custom_text_field.dart';
 
 class RegisterStep1Screen extends StatefulWidget {
   const RegisterStep1Screen({super.key});
@@ -161,89 +161,45 @@ class _RegisterStep1ScreenState extends State<RegisterStep1Screen> {
                       const SizedBox(height: 80),
 
                       // 手机号输入
-                      SizedBox(
-                        width: 300,
-                        child: Container(
-                          decoration: BoxDecoration(
-                            image: DecorationImage(
-                              image: AssetImage('assets/images/注册1-手机号.png'),
-                              fit: BoxFit.contain,
-                            ),
-                          ),
-                          child: Row(
-                            children: [
-                              Expanded(
-                                child: TextFormField(
-                                  controller: _phoneController,
-                                  keyboardType: TextInputType.phone,
-                                  decoration: InputDecoration(
-                                    border: InputBorder.none,
-                                    hintText: '请输入手机号',
-                                    hintStyle: const TextStyle(
-                                      color: Colors.grey,
-                                      fontSize: 14,
-                                    ),
-                                    contentPadding: const EdgeInsets.symmetric(
-                                      horizontal: 30,
-                                      vertical: 18,
-                                    ),
-                                  ),
-                                  validator: _validatePhone,
-                                ),
-                              ),
-                              Container(
-                                width: 100,
-                                child: TextButton(
-                                  onPressed: _canSendCode ? _sendCode : null,
-                                  style: TextButton.styleFrom(
-                                    padding: EdgeInsets.zero,
-                                    minimumSize: Size.zero,
-                                    tapTargetSize:
-                                        MaterialTapTargetSize.shrinkWrap,
-                                  ),
-                                  child: Text(
-                                    _canSendCode ? '获取验证码' : '$_countdown s',
-                                    style: TextStyle(
-                                      color: _canSendCode
-                                          ? Colors.blue
-                                          : Colors.grey,
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ],
+                      Center(
+                        child: SizedBox(
+                          width: 300,
+                          child: CustomTextField(
+                            controller: _phoneController,
+                            hintText: '请输入手机号',
+                            keyboardType: TextInputType.phone,
+                            validator: _validatePhone,
                           ),
                         ),
                       ),
                       const SizedBox(height: 30),
 
                       // 验证码输入
-                      Container(
-                        decoration: BoxDecoration(
-                          image: DecorationImage(
-                            image: AssetImage('assets/images/注册1-验证码.png'),
-                            fit: BoxFit.contain,
-                          ),
-                        ),
-                        child: TextFormField(
-                          controller: _codeController,
-                          keyboardType: TextInputType.number,
-                          maxLength: 6,
-                          decoration: InputDecoration(
-                            border: InputBorder.none,
-                            counterText: '',
+                      Center(
+                        child: SizedBox(
+                          width: 300,
+                          child: CustomTextField(
+                            controller: _codeController,
                             hintText: '请输入验证码',
-                            hintStyle: const TextStyle(
-                              color: Colors.grey,
-                              fontSize: 14,
-                            ),
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 30,
-                              vertical: 18,
+                            keyboardType: TextInputType.number,
+                            maxLength: 6,
+                            validator: _validateCode,
+                            suffixIcon: TextButton(
+                              onPressed: _canSendCode ? _sendCode : null,
+                              style: TextButton.styleFrom(
+                                padding: EdgeInsets.zero,
+                                minimumSize: Size.zero,
+                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              ),
+                              child: Text(
+                                _canSendCode ? '获取验证码' : '$_countdown s',
+                                style: TextStyle(
+                                  color: _canSendCode ? Colors.blue : Colors.grey,
+                                  fontSize: 12,
+                                ),
+                              ),
                             ),
                           ),
-                          validator: _validateCode,
                         ),
                       ),
                       const SizedBox(height: 40),

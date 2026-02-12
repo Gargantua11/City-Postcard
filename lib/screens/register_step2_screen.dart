@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'city_search_screen.dart';
+import '../widgets/custom_text_field.dart';
 
 class RegisterStep2Screen extends StatefulWidget {
   final String phone;
@@ -136,158 +137,129 @@ class _RegisterStep2ScreenState extends State<RegisterStep2Screen> {
                       const SizedBox(height: 80),
 
                       // 密码输入
-                      SizedBox(
-                        width: 300,
-                        child: Container(
-                          decoration: BoxDecoration(
-                            image: DecorationImage(
-                              image: AssetImage('assets/images/Group 21.png'),
-                              fit: BoxFit.contain,
-                            ),
-                          ),
-                          child: TextFormField(
+                      Center(
+                        child: SizedBox(
+                          width: 300,
+                          child: CustomTextField(
                             controller: _passwordController,
+                            hintText: '请设置6-24位密码',
                             obscureText: _obscurePassword,
-                            decoration: InputDecoration(
-                              border: InputBorder.none,
-                              hintText: '请设置6-24位密码',
-                              hintStyle: const TextStyle(
+                            prefixIcon: Icons.lock,
+                            validator: _validatePassword,
+                            suffixIcon: IconButton(
+                              onPressed: () {
+                                setState(() {
+                                  _obscurePassword = !_obscurePassword;
+                                });
+                              },
+                              icon: Icon(
+                                _obscurePassword
+                                    ? Icons.visibility_off
+                                    : Icons.visibility,
                                 color: Colors.grey,
-                                fontSize: 14,
-                              ),
-                              suffixIcon: Padding(
-                                padding: const EdgeInsets.only(right: 20),
-                                child: IconButton(
-                                  onPressed: () {
-                                    setState(() {
-                                      _obscurePassword = !_obscurePassword;
-                                    });
-                                  },
-                                  icon: Icon(
-                                    _obscurePassword
-                                        ? Icons.visibility_off
-                                        : Icons.visibility,
-                                    color: Colors.grey,
-                                  ),
-                                ),
-                              ),
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 30,
-                                vertical: 18,
+                                size: 20,
                               ),
                             ),
-                            validator: _validatePassword,
                           ),
                         ),
                       ),
                       const SizedBox(height: 30),
 
                       // 确认密码输入
-                      SizedBox(
-                        width: 300,
-                        child: Container(
-                          decoration: BoxDecoration(
-                            image: DecorationImage(
-                              image: AssetImage('assets/images/Group 22.png'),
-                              fit: BoxFit.contain,
-                            ),
-                          ),
-                          child: TextFormField(
+                      Center(
+                        child: SizedBox(
+                          width: 300,
+                          child: CustomTextField(
                             controller: _confirmPasswordController,
+                            hintText: '请再次输入密码',
                             obscureText: _obscureConfirmPassword,
-                            decoration: InputDecoration(
-                              border: InputBorder.none,
-                              hintText: '请再次输入密码',
-                              hintStyle: const TextStyle(
+                            prefixIcon: Icons.lock_outline,
+                            validator: _validateConfirmPassword,
+                            suffixIcon: IconButton(
+                              onPressed: () {
+                                setState(() {
+                                  _obscureConfirmPassword =
+                                      !_obscureConfirmPassword;
+                                });
+                              },
+                              icon: Icon(
+                                _obscureConfirmPassword
+                                    ? Icons.visibility_off
+                                    : Icons.visibility,
                                 color: Colors.grey,
-                                fontSize: 14,
-                              ),
-                              suffixIcon: Padding(
-                                padding: const EdgeInsets.only(right: 20),
-                                child: IconButton(
-                                  onPressed: () {
-                                    setState(() {
-                                      _obscureConfirmPassword =
-                                          !_obscureConfirmPassword;
-                                    });
-                                  },
-                                  icon: Icon(
-                                    _obscureConfirmPassword
-                                        ? Icons.visibility_off
-                                        : Icons.visibility,
-                                    color: Colors.grey,
-                                  ),
-                                ),
-                              ),
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 30,
-                                vertical: 18,
+                                size: 20,
                               ),
                             ),
-                            validator: _validateConfirmPassword,
                           ),
                         ),
                       ),
                       const SizedBox(height: 30),
 
                       // 城市选择按钮
-                      GestureDetector(
-                        onTap: _selectCity,
-                        child: Container(
-                          height: 50,
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(25),
-                            border: Border.all(color: Colors.grey.shade300, width: 1),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.05),
-                                blurRadius: 10,
-                                offset: const Offset(0, 2),
-                              ),
-                            ],
-                          ),
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 20),
-                            child: Row(
-                              children: [
-                                const Icon(
-                                  Icons.location_city,
-                                  color: Colors.blue,
-                                  size: 20,
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Text(
-                                    _selectedCity?.name ?? '请选择城市',
-                                    style: TextStyle(
-                                      fontSize: 15,
-                                      color: _selectedCity != null
-                                          ? Colors.black87
-                                          : Colors.grey,
-                                      fontWeight: _selectedCity != null
-                                          ? FontWeight.w500
-                                          : FontWeight.normal,
-                                    ),
+                      Center(
+                        child: SizedBox(
+                          width: 300,
+                          child: GestureDetector(
+                            onTap: _selectCity,
+                            child: Container(
+                              height: 50,
+                              decoration: BoxDecoration(
+                                color: const Color.fromARGB(255, 231, 242, 231),
+                                borderRadius: BorderRadius.circular(15),
+                                border: Border.all(
+                                    color: const Color(0xFF90EE90), width: 1),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withValues(alpha: 0.05),
+                                    blurRadius: 10,
+                                    offset: const Offset(0, 2),
                                   ),
-                                ),
-                                if (_selectedCity != null) ...[
-                                  Text(
-                                    _selectedCity!.code,
-                                    style: const TextStyle(
-                                      fontSize: 13,
-                                      color: Colors.blue,
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
                                 ],
-                                Icon(
-                                  Icons.chevron_right,
-                                  color: Colors.grey.shade400,
-                                  size: 20,
+                              ),
+                              child: Padding(
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 20),
+                                child: Row(
+                                  children: [
+                                    const Icon(
+                                      Icons.location_city,
+                                      color: Colors.grey,
+                                      size: 20,
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Text(
+                                        _selectedCity?.name ?? '请选择城市',
+                                        style: TextStyle(
+                                          fontSize: 15,
+                                          color: _selectedCity != null
+                                              ? Colors.black87
+                                              : Colors.grey,
+                                          fontWeight: _selectedCity != null
+                                              ? FontWeight.w500
+                                              : FontWeight.normal,
+                                        ),
+                                      ),
+                                    ),
+                                    if (_selectedCity != null) ...[
+                                      Text(
+                                        _selectedCity!.code,
+                                        style: const TextStyle(
+                                          fontSize: 13,
+                                          color: Colors.blue,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                    ],
+                                    Icon(
+                                      Icons.chevron_right,
+                                      color: Colors.grey.shade400,
+                                      size: 20,
+                                    ),
+                                  ],
                                 ),
-                              ],
+                              ),
                             ),
                           ),
                         ),
