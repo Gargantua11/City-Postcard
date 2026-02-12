@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import './screens/login_screen.dart';
 import './screens/register_step1_screen.dart';
 import './screens/register_step2_screen.dart';
+import './screens/forgot_password_screen.dart';
 import './screens/home_screen.dart';
 import './screens/city_search_screen.dart';
 import './services/auth_provider.dart';
@@ -32,6 +33,7 @@ class MyApp extends StatelessWidget {
           '/login': (context) => const LoginScreen(),
           '/register1': (context) => const RegisterStep1Screen(),
           '/register2': (context) => const RegisterStep2Screen(phone: ''),
+          '/forgot_password': (context) => const ForgotPasswordScreen(),
           '/home': (context) => const HomeScreen(),
           '/city_search': (context) => const CitySearchScreen(),
         },

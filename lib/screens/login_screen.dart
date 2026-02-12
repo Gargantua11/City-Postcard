@@ -205,9 +205,19 @@ class _LoginScreenState extends State<LoginScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const Text(
-                        '忘记密码？',
-                        style: TextStyle(color: Colors.blue, fontSize: 14),
+                      TextButton(
+                        onPressed: () {
+                          Navigator.pushNamed(context, '/forgot_password');
+                        },
+                        style: TextButton.styleFrom(
+                          padding: EdgeInsets.zero,
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        child: const Text(
+                          '忘记密码？',
+                          style: TextStyle(color: Colors.blue, fontSize: 14),
+                        ),
                       ),
                     ],
                   ),
