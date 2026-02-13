@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import '../models/user.dart';
 import './auth_service.dart';
 import './storage_service.dart';
@@ -16,7 +16,6 @@ class AuthProvider extends ChangeNotifier {
   String? get error => _error;
   bool get isAuthenticated => _user != null;
 
-  // 初始化，检查本地存储的用户信息
   Future<void> init() async {
     _isLoading = true;
     notifyListeners();
@@ -35,7 +34,6 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
-  // 注册
   Future<Map<String, dynamic>?> register(
     String username,
     String password,
@@ -53,6 +51,16 @@ class AuthProvider extends ChangeNotifier {
         confirmPassword,
         cityCode,
       );
+
+      if (result == null) {
+        _error = _authService.lastError ?? '注册失败，请稍后重试';
+        return null;
+      }
+
+      if (result['code'] != 0) {
+        _error = result['msg']?.toString() ?? _authService.lastError ?? '注册失败';
+      }
+
       return result;
     } catch (e) {
       _error = '注册失败: $e';
@@ -64,7 +72,6 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
-  // 登录
   Future<bool> login(String username, String password) async {
     _isLoading = true;
     _error = null;
@@ -76,10 +83,10 @@ class AuthProvider extends ChangeNotifier {
         _user = user;
         await _storageService.saveUser(user);
         return true;
-      } else {
-        _error = '登录失败，请检查用户名和密码';
-        return false;
       }
+
+      _error = _authService.lastError ?? '登录失败，请检查用户名和密码';
+      return false;
     } catch (e) {
       _error = '登录失败: $e';
       print('登录失败: $e');
@@ -90,7 +97,6 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
-  // 验证码登录
   Future<bool> loginWithCode(String phone, String code) async {
     _isLoading = true;
     _error = null;
@@ -102,10 +108,10 @@ class AuthProvider extends ChangeNotifier {
         _user = user;
         await _storageService.saveUser(user);
         return true;
-      } else {
-        _error = '登录失败，请检查验证码';
-        return false;
       }
+
+      _error = '登录失败，请检查验证码';
+      return false;
     } catch (e) {
       _error = '登录失败: $e';
       print('登录失败: $e');
@@ -116,7 +122,6 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
-  // 登出
   Future<void> logout() async {
     _isLoading = true;
     notifyListeners();
@@ -136,7 +141,6 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
-  // 清除错误信息
   void clearError() {
     _error = null;
     notifyListeners();
