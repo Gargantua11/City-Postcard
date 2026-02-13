@@ -1,6 +1,6 @@
 {
-    "name": "setup",
-    "short_name": "setup",
+    "name": "city_postcard",
+    "short_name": "city_postcard",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

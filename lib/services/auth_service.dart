@@ -4,6 +4,9 @@ import '../models/user.dart';
 
 class AuthService {
   static const String _baseUrl = 'http://localhost:8080'; // 后端API地址
+  String? _lastError;
+
+  String? get lastError => _lastError;
 
   // 发送验证码
   Future<bool> sendVerificationCode(String phone) async {
@@ -38,6 +41,7 @@ class AuthService {
     String confirmPassword,
     int? cityCode,
   ) async {
+    _lastError = null;
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/register'),
@@ -53,8 +57,13 @@ class AuthService {
       final data = jsonDecode(response.body);
       print('注册响应: $data');
 
+      if (data['code'] != 0) {
+        _lastError = data['msg']?.toString() ?? '注册失败';
+      }
+
       return data;
     } catch (e) {
+      _lastError = '网络异常，请稍后重试';
       print('注册失败: $e');
       return null;
     }
@@ -62,6 +71,7 @@ class AuthService {
 
   // 登录
   Future<User?> login(String username, String password) async {
+    _lastError = null;
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/login'),
@@ -71,6 +81,11 @@ class AuthService {
 
       final data = jsonDecode(response.body);
       print('登录响应: $data');
+
+      if (data['code'] != 0) {
+        _lastError = data['msg']?.toString() ?? '登录失败';
+        return null;
+      }
 
       if (data['code'] == 0 && data['data'] != null) {
         return User(
@@ -83,8 +98,10 @@ class AuthService {
           expiresInSeconds: data['data']['expiresInSeconds'],
         );
       }
+      _lastError = '登录响应缺少data';
       return null;
     } catch (e) {
+      _lastError = '网络异常，请稍后重试';
       print('登录失败: $e');
       return null;
     }
@@ -116,6 +133,7 @@ class AuthService {
 
   // 登出
   Future<bool> logout(String token) async {
+    _lastError = null;
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/logout'),
@@ -128,8 +146,13 @@ class AuthService {
       final data = jsonDecode(response.body);
       print('登出响应: $data');
 
+      if (data['code'] != 0) {
+        _lastError = data['msg']?.toString() ?? '登出失败';
+      }
+
       return data['code'] == 0;
     } catch (e) {
+      _lastError = '网络异常，请稍后重试';
       print('登出失败: $e');
       return false;
     }

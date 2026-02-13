@@ -43,7 +43,7 @@ class PostcardHotComment {
   }
 }
 
-/// 明信片展示对象，字段对齐文档 4.1 讨论区明信片列表 records[]。
+/// 明信片展示对象
 class PostcardDisplayCardData {
   final int id;
   final String username;
@@ -85,10 +85,7 @@ class PostcardDisplayCardData {
   }
 }
 
-/// 方形明信片展示卡片。
-/// - 整体 1:1，圆角 10
-/// - 上部：左图右信息
-/// - 下部：点赞按钮 + 热评（单行省略）
+/// 方形明信片展示卡片
 class PostcardDisplayCard extends StatelessWidget {
   final PostcardDisplayCardData data;
   final bool liked;
