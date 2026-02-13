@@ -7,6 +7,7 @@ import './screens/register_step2_screen.dart';
 import './screens/forgot_password_screen.dart';
 import './screens/home_screen.dart';
 import './screens/city_search_screen.dart';
+import './screens/comment_section_screen.dart';
 import './services/auth_provider.dart';
 
 void main() {
@@ -28,7 +29,7 @@ class MyApp extends StatelessWidget {
           colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
           useMaterial3: true,
         ),
-        initialRoute: '/login',
+        initialRoute: '/home',
         routes: {
           '/login': (context) => const LoginScreen(),
           '/register1': (context) => const RegisterStep1Screen(),
@@ -36,6 +37,7 @@ class MyApp extends StatelessWidget {
           '/forgot_password': (context) => const ForgotPasswordScreen(),
           '/home': (context) => const HomeScreen(),
           '/city_search': (context) => const CitySearchScreen(),
+          '/comment_section': (context) => const CommentSectionScreen(),
         },
       ),
     );
