@@ -113,6 +113,7 @@ class _RegisterStep1ScreenState extends State<RegisterStep1Screen> {
           image: DecorationImage(
             image: AssetImage('assets/images/注册1-背景.png'),
             fit: BoxFit.cover,
+            filterQuality: FilterQuality.high,
           ),
         ),
         child: Stack(
@@ -132,6 +133,7 @@ class _RegisterStep1ScreenState extends State<RegisterStep1Screen> {
                     image: DecorationImage(
                       image: AssetImage('assets/images/注册1-返回.png'),
                       fit: BoxFit.contain,
+                      filterQuality: FilterQuality.high,
                     ),
                   ),
                 ),
@@ -155,6 +157,7 @@ class _RegisterStep1ScreenState extends State<RegisterStep1Screen> {
                           image: DecorationImage(
                             image: AssetImage('assets/images/注册1-注册账号.png'),
                             fit: BoxFit.contain,
+                            filterQuality: FilterQuality.high,
                           ),
                         ),
                       ),
@@ -215,6 +218,7 @@ class _RegisterStep1ScreenState extends State<RegisterStep1Screen> {
                             image: DecorationImage(
                               image: AssetImage('assets/images/注册1-下一步.png'),
                               fit: BoxFit.contain,
+                              filterQuality: FilterQuality.high,
                             ),
                           ),
                         ),

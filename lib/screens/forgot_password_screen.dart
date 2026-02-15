@@ -128,6 +128,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
           image: DecorationImage(
             image: AssetImage('assets/images/注册1-背景.png'),
             fit: BoxFit.cover,
+            filterQuality: FilterQuality.high,
           ),
         ),
         child: Stack(
@@ -146,6 +147,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                     image: DecorationImage(
                       image: AssetImage('assets/images/注册2-返回.png'),
                       fit: BoxFit.contain,
+                      filterQuality: FilterQuality.high,
                     ),
                   ),
                 ),
@@ -175,6 +177,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                           image: DecorationImage(
                             image: AssetImage('assets/images/找回密码.png'),
                             fit: BoxFit.contain,
+                            filterQuality: FilterQuality.high,
                           ),
                         ),
                       ),
@@ -289,6 +292,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                             image: DecorationImage(
                               image: AssetImage('assets/images/注册2-完成.png'),
                               fit: BoxFit.contain,
+                              filterQuality: FilterQuality.high,
                             ),
                           ),
                         ),

@@ -142,6 +142,7 @@ class _RegisterStep2ScreenState extends State<RegisterStep2Screen> {
           image: DecorationImage(
             image: AssetImage('assets/images/注册2-背景.png'),
             fit: BoxFit.cover,
+            filterQuality: FilterQuality.high,
           ),
         ),
         child: Stack(
@@ -160,6 +161,7 @@ class _RegisterStep2ScreenState extends State<RegisterStep2Screen> {
                     image: DecorationImage(
                       image: AssetImage('assets/images/注册1-返回.png'),
                       fit: BoxFit.contain,
+                      filterQuality: FilterQuality.high,
                     ),
                   ),
                 ),
@@ -180,6 +182,7 @@ class _RegisterStep2ScreenState extends State<RegisterStep2Screen> {
                           image: DecorationImage(
                             image: AssetImage('assets/images/注册2-设置密码.png'),
                             fit: BoxFit.contain,
+                            filterQuality: FilterQuality.high,
                           ),
                         ),
                       ),
@@ -342,6 +345,7 @@ class _RegisterStep2ScreenState extends State<RegisterStep2Screen> {
                                   image: DecorationImage(
                                     image: AssetImage('assets/images/注册2-完成.png'),
                                     fit: BoxFit.contain,
+                                    filterQuality: FilterQuality.high,
                                   ),
                                 ),
                                 child: SizedBox.expand(),

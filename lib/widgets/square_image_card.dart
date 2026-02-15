@@ -49,6 +49,7 @@ class SquareImageCard extends StatelessWidget {
               ? Image.asset(
                   imagePath,
                   fit: BoxFit.cover,
+                  filterQuality: FilterQuality.high,
                   errorBuilder: (context, error, stackTrace) {
                     return Container(
                       color: Colors.grey.shade100,

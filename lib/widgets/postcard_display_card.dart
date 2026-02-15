@@ -221,6 +221,7 @@ class _PostcardImage extends StatelessWidget {
             : Image.network(
                 imageUrl,
                 fit: BoxFit.cover,
+                filterQuality: FilterQuality.high,
                 errorBuilder: (_, _, _) => const SizedBox.expand(),
                 loadingBuilder: (context, child, progress) {
                   if (progress == null) return child;

@@ -1,8 +1,9 @@
 ﻿import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../services/edited_postcard_service.dart';
+import '../widgets/app_bottom_nav_bar.dart';
 
-/// 首页：首张卡片用于新增明信片，后续卡片按编辑时间倒序展示。
+/// 首页：首张卡片用于新增明信片，后续卡片按编辑时间倒序展示
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -55,7 +56,7 @@ class _HomeScreenState extends State<HomeScreen> {
             const Text(
               '城市明信片',
               style: TextStyle(
-                fontSize: 52,
+                fontSize: 40,
                 fontWeight: FontWeight.w500,
                 color: Colors.black,
                 letterSpacing: 2,
@@ -137,76 +138,19 @@ class _HomeBottomNavigationBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
-      top: false,
-      child: Container(
-        height: 76,
-        color: Colors.white,
-        padding: const EdgeInsets.symmetric(horizontal: 30),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            GestureDetector(
-              onTap: () {
-                debugPrint('切换到首页');
-              },
-              child: Container(
-                width: 50,
-                height: 50,
-                decoration: const BoxDecoration(
-                  image: DecorationImage(
-                    image: AssetImage('assets/images/首页-首页.png'),
-                    fit: BoxFit.contain,
-                  ),
-                ),
-              ),
-            ),
-            GestureDetector(
-              onTap: () {
-                debugPrint('切换到地图');
-              },
-              child: Container(
-                width: 50,
-                height: 50,
-                decoration: const BoxDecoration(
-                  image: DecorationImage(
-                    image: AssetImage('assets/images/首页-地图.png'),
-                    fit: BoxFit.contain,
-                  ),
-                ),
-              ),
-            ),
-            GestureDetector(
-              onTap: onCommentTap,
-              child: Container(
-                width: 50,
-                height: 50,
-                decoration: const BoxDecoration(
-                  image: DecorationImage(
-                    image: AssetImage('assets/images/首页-讨论区.png'),
-                    fit: BoxFit.contain,
-                  ),
-                ),
-              ),
-            ),
-            GestureDetector(
-              onTap: () {
-                debugPrint('切换到我的');
-              },
-              child: Container(
-                width: 50,
-                height: 50,
-                decoration: const BoxDecoration(
-                  image: DecorationImage(
-                    image: AssetImage('assets/images/首页-我的.png'),
-                    fit: BoxFit.contain,
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
+    return AppBottomNavBar(
+      currentTab: AppTab.home,
+      backgroundColor: Colors.white,
+      onHomeTap: () {
+        debugPrint('当前在首页');
+      },
+      onMapTap: () {
+        debugPrint('切换到地图');
+      },
+      onCommentTap: onCommentTap,
+      onProfileTap: () {
+        debugPrint('切换到我的');
+      },
     );
   }
 }
@@ -301,6 +245,7 @@ class _PostcardImage extends StatelessWidget {
       return Image.asset(
         imageSource,
         fit: BoxFit.cover,
+        filterQuality: FilterQuality.high,
         errorBuilder: (_, _, _) => _buildFallback(),
       );
     }
@@ -313,6 +258,7 @@ class _PostcardImage extends StatelessWidget {
     return Image.network(
       imageSource,
       fit: BoxFit.cover,
+      filterQuality: FilterQuality.high,
       errorBuilder: (_, _, _) => _buildFallback(),
       loadingBuilder: (context, child, progress) {
         if (progress == null) return child;

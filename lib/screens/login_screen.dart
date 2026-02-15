@@ -90,6 +90,7 @@ class _LoginScreenState extends State<LoginScreen> {
           image: DecorationImage(
             image: AssetImage('assets/images/登陆页面-背景.png'),
             fit: BoxFit.cover,
+            filterQuality: FilterQuality.high,
           ),
         ),
         child: SafeArea(
@@ -109,6 +110,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       image: DecorationImage(
                         image: AssetImage('assets/images/欢迎登录.png'),
                         fit: BoxFit.contain,
+                        filterQuality: FilterQuality.high,
                       ),
                     ),
                   ),
@@ -194,6 +196,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         image: DecorationImage(
                           image: AssetImage('assets/images/登录按键.png'),
                           fit: BoxFit.contain,
+                          filterQuality: FilterQuality.high,
                         ),
                       ),
                     ),
