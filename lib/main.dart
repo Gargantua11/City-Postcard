@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import './screens/login_screen.dart';
@@ -8,6 +8,7 @@ import './screens/forgot_password_screen.dart';
 import './screens/home_screen.dart';
 import './screens/city_search_screen.dart';
 import './screens/comment_section_screen.dart';
+import './screens/postcard_edit_screen.dart';
 import './services/auth_provider.dart';
 
 void main() {
@@ -38,8 +39,10 @@ class MyApp extends StatelessWidget {
           '/home': (context) => const HomeScreen(),
           '/city_search': (context) => const CitySearchScreen(),
           '/comment_section': (context) => const CommentSectionScreen(),
+          '/postcard_edit': (context) => const PostcardEditScreen(),
         },
       ),
     );
   }
 }
+

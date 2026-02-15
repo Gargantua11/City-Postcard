@@ -1,298 +1,337 @@
 ﻿import 'package:flutter/material.dart';
-import '../widgets/postcard_display_card.dart';
+import 'package:intl/intl.dart';
+import '../services/edited_postcard_service.dart';
 
-/// 主页屏幕
-/// 可滚动页面，顶部有城市明信片装饰，右侧有搜索框，底部有固定导航栏
-class HomeScreen extends StatelessWidget {
+/// 首页：首张卡片用于新增明信片，后续卡片按编辑时间倒序展示。
+class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
-  static const List<PostcardDisplayCardData> _sampleCards = [
-    PostcardDisplayCardData(
-      id: 15,
-      username: 'test03',
-      avatar: null,
-      imageUrl: '',
-      createdAt: '2026-02-08T11:00:00',
-      address: '济南市历下区',
-      likeCount: 126,
-      commentCount: 12,
-      hotComment: PostcardHotComment(
-        id: 9,
-        userId: 8,
-        username: 'sentimental0610',
-        avatar: null,
-        content: '板凳，大家好这是第二条评论',
-        createdAt: '2026-02-06T23:20:51',
-        likeCount: 0,
-        liked: false,
-        hotScore: 0.0,
-        cursor: '2026-02-06 23:20:51_9',
-      ),
-    ),
-    PostcardDisplayCardData(
-      id: 14,
-      username: 'test01',
-      avatar: null,
-      imageUrl: '',
-      createdAt: '2026-02-07T20:10:00',
-      address: '长沙市天心区',
-      likeCount: 88,
-      commentCount: 6,
-      hotComment: PostcardHotComment(
-        id: 8,
-        userId: 8,
-        username: 'sentimental0610',
-        avatar: null,
-        content: '大家好这是第一条评论，沙发',
-        createdAt: '2026-02-06T23:19:48',
-        likeCount: 0,
-        liked: false,
-        hotScore: 0.0,
-        cursor: '2026-02-06 23:19:48_8',
-      ),
-    ),
-    PostcardDisplayCardData(
-      id: 13,
-      username: 'river_walker',
-      avatar: null,
-      imageUrl: '',
-      createdAt: '2026-02-06T18:30:00',
-      address: '重庆市南岸区',
-      likeCount: 54,
-      commentCount: 2,
-      hotComment: null,
-    ),
-    PostcardDisplayCardData(
-      id: 12,
-      username: 'wanderer',
-      avatar: null,
-      imageUrl: '',
-      createdAt: '2026-02-05T09:12:00',
-      address: '青岛市市南区',
-      likeCount: 132,
-      commentCount: 20,
-      hotComment: PostcardHotComment(
-        id: 21,
-        userId: 2,
-        username: 'momo',
-        avatar: null,
-        content: '这个构图太有电影感了，色调也非常舒服，求拍摄机位！',
-        createdAt: '2026-02-05T10:12:00',
-        likeCount: 5,
-        liked: false,
-        hotScore: 9.4,
-        cursor: '2026-02-05 10:12:00_21',
-      ),
-    ),
-  ];
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  final EditedPostcardService _editedPostcardService = EditedPostcardService();
+
+  List<EditedPostcard> _editedPostcards = const [];
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadEditedPostcards();
+  }
+
+  Future<void> _loadEditedPostcards() async {
+    final postcards = await _editedPostcardService.getEditedPostcards();
+    if (!mounted) return;
+    setState(() {
+      _editedPostcards = postcards;
+      _isLoading = false;
+    });
+  }
+
+  Future<void> _openPostcardEditor() async {
+    final result = await Navigator.pushNamed(context, '/postcard_edit');
+    if (result == true) {
+      await _loadEditedPostcards();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Stack(
-        children: [
-          // 主体内容区域（可滚动）
-          SingleChildScrollView(
-            padding: const EdgeInsets.only(
-              top: 40,
-              bottom: 80, // 为底部导航栏留出空间
-              left: 20,
-              right: 20,
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                // 顶部装饰
-                Container(
-                  height: 24,
-                  decoration: const BoxDecoration(
-                    image: DecorationImage(
-                      image: AssetImage('assets/images/城市明信片.png'),
-                      fit: BoxFit.contain,
-                    ),
-                  ),
-                ),
-
-                const SizedBox(height: 20),
-
-                // 右侧搜索框
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: Transform.translate(
-                    offset: const Offset(40, 0),
-                    child: Container(
-                      width: 150,
-                      height: 30,
-                      decoration: const BoxDecoration(
-                        image: DecorationImage(
-                          image: AssetImage('assets/images/首页-搜索框.png'),
-                          fit: BoxFit.contain,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-
-                const SizedBox(height: 20),
-
-                // 示例内容
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(15),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.1),
-                        blurRadius: 5,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
-                  ),
-                  child: const Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '欢迎来到城市明信片',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      SizedBox(height: 10),
-                      Text(
-                        '在这里，你可以分享城市的美好时光，体验不同城市的独特魅力，与其他用户交流互动。',
-                        style: TextStyle(fontSize: 14, color: Colors.grey),
-                      ),
-                    ],
-                  ),
-                ),
-
-                const SizedBox(height: 20),
-
-                // 明信片展示卡片（方形 + 上下结构）
-                LayoutBuilder(
-                  builder: (context, constraints) {
-                    const spacing = 12.0;
-                    final cardWidth = (constraints.maxWidth - spacing) / 2;
-                    return Wrap(
-                      spacing: spacing,
-                      runSpacing: spacing,
-                      children: _sampleCards.map((item) {
-                        return SizedBox(
-                          width: cardWidth,
-                          child: PostcardDisplayCard(
-                            data: item,
-                            liked: item.id % 2 == 0,
-                            onLikeTap: () {
-                              debugPrint('POST /postcard/${item.id}/like');
-                            },
-                            onCommentTap: () {
-                              debugPrint(
-                                'GET /postcard/${item.id}/comments?sort=hot&size=10',
-                              );
-                            },
-                          ),
-                        );
-                      }).toList(),
-                    );
-                  },
-                ),
-
-                // 更多内容，确保页面可滚动
-                const SizedBox(height: 200),
-              ],
-            ),
-          ),
-
-          // 底部固定导航栏
-          Positioned(
-            bottom: 0,
-            left: 0,
-            right: 0,
-            child: Container(
-              height: 70,
-              color: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 30),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  // 首页按钮
-                  GestureDetector(
-                    onTap: () {
-                      // 切换到首页
-                      debugPrint('切换到首页');
-                    },
-                    child: Container(
-                      width: 50,
-                      height: 50,
-                      decoration: const BoxDecoration(
-                        image: DecorationImage(
-                          image: AssetImage('assets/images/首页-首页.png'),
-                          fit: BoxFit.contain,
-                        ),
-                      ),
-                    ),
-                  ),
-
-                  // 地图按钮
-                  GestureDetector(
-                    onTap: () {
-                      // 切换到地图
-                      debugPrint('切换到地图');
-                    },
-                    child: Container(
-                      width: 50,
-                      height: 50,
-                      decoration: const BoxDecoration(
-                        image: DecorationImage(
-                          image: AssetImage('assets/images/首页-地图.png'),
-                          fit: BoxFit.contain,
-                        ),
-                      ),
-                    ),
-                  ),
-
-                  // 讨论区按钮
-                  GestureDetector(
-                    onTap: () {
-                      Navigator.pushNamed(context, '/comment_section');
-                    },
-                    child: Container(
-                      width: 50,
-                      height: 50,
-                      decoration: const BoxDecoration(
-                        image: DecorationImage(
-                          image: AssetImage('assets/images/首页-讨论区.png'),
-                          fit: BoxFit.contain,
-                        ),
-                      ),
-                    ),
-                  ),
-
-                  // 我的按钮
-                  GestureDetector(
-                    onTap: () {
-                      // 切换到我的
-                      debugPrint('切换到我的');
-                    },
-                    child: Container(
-                      width: 50,
-                      height: 50,
-                      decoration: const BoxDecoration(
-                        image: DecorationImage(
-                          image: AssetImage('assets/images/首页-我的.png'),
-                          fit: BoxFit.contain,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
+      backgroundColor: const Color(0xFFEDEDED),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.only(
+          top: 56,
+          bottom: 24,
+          left: 20,
+          right: 20,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            const Text(
+              '城市明信片',
+              style: TextStyle(
+                fontSize: 52,
+                fontWeight: FontWeight.w500,
+                color: Colors.black,
+                letterSpacing: 2,
               ),
             ),
+            const SizedBox(height: 20),
+            Align(
+              alignment: Alignment.centerRight,
+              child: GestureDetector(
+                onTap: () => Navigator.pushNamed(context, '/city_search'),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE9EEDB),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: const Color(0xFFB8BDAE)),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Color(0x1A000000),
+                        blurRadius: 8,
+                        offset: Offset(0, 3),
+                      ),
+                    ],
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.search, size: 18, color: Colors.black87),
+                      SizedBox(width: 4),
+                      Text(
+                        '搜索',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w500,
+                          color: Colors.black87,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 22),
+            _AddPostcardCard(onTap: _openPostcardEditor),
+            const SizedBox(height: 22),
+            if (_isLoading)
+              const Padding(
+                padding: EdgeInsets.all(24),
+                child: CircularProgressIndicator(),
+              )
+            else if (_editedPostcards.isNotEmpty)
+              Column(
+                children: _editedPostcards
+                    .map(
+                      (item) => Padding(
+                        padding: const EdgeInsets.only(bottom: 22),
+                        child: _EditedPostcardCard(item: item),
+                      ),
+                    )
+                    .toList(),
+              ),
+          ],
+        ),
+      ),
+      bottomNavigationBar: _HomeBottomNavigationBar(
+        onCommentTap: () => Navigator.pushNamed(context, '/comment_section'),
+      ),
+    );
+  }
+}
+
+class _HomeBottomNavigationBar extends StatelessWidget {
+  final VoidCallback onCommentTap;
+
+  const _HomeBottomNavigationBar({required this.onCommentTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      top: false,
+      child: Container(
+        height: 76,
+        color: Colors.white,
+        padding: const EdgeInsets.symmetric(horizontal: 30),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            GestureDetector(
+              onTap: () {
+                debugPrint('切换到首页');
+              },
+              child: Container(
+                width: 50,
+                height: 50,
+                decoration: const BoxDecoration(
+                  image: DecorationImage(
+                    image: AssetImage('assets/images/首页-首页.png'),
+                    fit: BoxFit.contain,
+                  ),
+                ),
+              ),
+            ),
+            GestureDetector(
+              onTap: () {
+                debugPrint('切换到地图');
+              },
+              child: Container(
+                width: 50,
+                height: 50,
+                decoration: const BoxDecoration(
+                  image: DecorationImage(
+                    image: AssetImage('assets/images/首页-地图.png'),
+                    fit: BoxFit.contain,
+                  ),
+                ),
+              ),
+            ),
+            GestureDetector(
+              onTap: onCommentTap,
+              child: Container(
+                width: 50,
+                height: 50,
+                decoration: const BoxDecoration(
+                  image: DecorationImage(
+                    image: AssetImage('assets/images/首页-讨论区.png'),
+                    fit: BoxFit.contain,
+                  ),
+                ),
+              ),
+            ),
+            GestureDetector(
+              onTap: () {
+                debugPrint('切换到我的');
+              },
+              child: Container(
+                width: 50,
+                height: 50,
+                decoration: const BoxDecoration(
+                  image: DecorationImage(
+                    image: AssetImage('assets/images/首页-我的.png'),
+                    fit: BoxFit.contain,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AddPostcardCard extends StatelessWidget {
+  final VoidCallback onTap;
+
+  const _AddPostcardCard({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        height: 200,
+        width: double.infinity,
+        decoration: BoxDecoration(
+          color: const Color(0xFFCBE6BB),
+          borderRadius: BorderRadius.circular(32),
+          border: Border.all(color: const Color(0xFF9EB694)),
+        ),
+        child: Center(
+          child: Container(
+            width: 108,
+            height: 108,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(color: Colors.black, width: 7),
+            ),
+            child: const Icon(Icons.add, size: 72, color: Colors.black),
           ),
-        ],
+        ),
+      ),
+    );
+  }
+}
+
+class _EditedPostcardCard extends StatelessWidget {
+  final EditedPostcard item;
+
+  const _EditedPostcardCard({required this.item});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 200,
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: const Color(0xFFCBE6BB),
+        borderRadius: BorderRadius.circular(32),
+        border: Border.all(color: const Color(0xFF9EB694)),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(31),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            _PostcardImage(imageSource: item.imageUrl),
+            Positioned(
+              right: 12,
+              bottom: 12,
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.45),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Text(
+                  DateFormat('yyyy-MM-dd HH:mm').format(item.editedAt),
+                  style: const TextStyle(color: Colors.white, fontSize: 12),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PostcardImage extends StatelessWidget {
+  final String imageSource;
+
+  const _PostcardImage({required this.imageSource});
+
+  @override
+  Widget build(BuildContext context) {
+    if (imageSource.startsWith('assets/')) {
+      return Image.asset(
+        imageSource,
+        fit: BoxFit.cover,
+        errorBuilder: (_, _, _) => _buildFallback(),
+      );
+    }
+
+    final uri = Uri.tryParse(imageSource);
+    if (uri == null || (!uri.isScheme('http') && !uri.isScheme('https'))) {
+      return _buildFallback();
+    }
+
+    return Image.network(
+      imageSource,
+      fit: BoxFit.cover,
+      errorBuilder: (_, _, _) => _buildFallback(),
+      loadingBuilder: (context, child, progress) {
+        if (progress == null) return child;
+        return _buildFallback(showProgress: true);
+      },
+    );
+  }
+
+  Widget _buildFallback({bool showProgress = false}) {
+    return ColoredBox(
+      color: const Color(0xFFCBE6BB),
+      child: Center(
+        child: showProgress
+            ? const CircularProgressIndicator(strokeWidth: 2)
+            : const Icon(
+                Icons.image_not_supported_outlined,
+                size: 36,
+                color: Color(0xFF6E7E68),
+              ),
       ),
     );
   }
