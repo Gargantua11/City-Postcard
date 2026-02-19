@@ -9,7 +9,11 @@ import './screens/home_screen.dart';
 import './screens/city_search_screen.dart';
 import './screens/comment_section_screen.dart';
 import './screens/postcard_edit_screen.dart';
+<<<<<<< HEAD
 import './screens/map_screen.dart';
+=======
+import './screens/profile_screen.dart';
+>>>>>>> 0614ffe7117c3b692eeccd1414438b9464a1261d
 import './services/auth_provider.dart';
 
 void main() {
@@ -41,7 +45,11 @@ class MyApp extends StatelessWidget {
           '/city_search': (context) => const CitySearchScreen(),
           '/comment_section': (context) => const CommentSectionScreen(),
           '/postcard_edit': (context) => const PostcardEditScreen(),
+<<<<<<< HEAD
           '/map': (context) => const MapScreen(),
+=======
+          '/profile': (context) => const ProfileScreen(),
+>>>>>>> 0614ffe7117c3b692eeccd1414438b9464a1261d
         },
       ),
     );

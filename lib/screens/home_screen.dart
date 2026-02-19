@@ -159,9 +159,7 @@ class _HomeBottomNavigationBar extends StatelessWidget {
         _navigateToMapScreen(context);
       },
       onCommentTap: onCommentTap,
-      onProfileTap: () {
-        debugPrint('切换到我的');
-      },
+      onProfileTap: () => Navigator.pushNamed(context, '/profile'),
     );
   }
 
