@@ -51,7 +51,9 @@ class _RegisterStep2ScreenState extends State<RegisterStep2Screen> {
       return '请设置密码';
     }
 
-    final passwordRegExp = RegExp(r'^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d@$!%*#?&]{6,24}$');
+    final passwordRegExp = RegExp(
+      r'^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d@$!%*#?&]{6,24}$',
+    );
     if (!passwordRegExp.hasMatch(value)) {
       return '密码需6-24位，且同时包含字母和数字';
     }
@@ -77,9 +79,8 @@ class _RegisterStep2ScreenState extends State<RegisterStep2Screen> {
     final City? selected = await Navigator.push<City>(
       context,
       MaterialPageRoute(
-        builder: (context) => CitySearchScreen(
-          selectedCity: _selectedCity?.name,
-        ),
+        builder: (context) =>
+            CitySearchScreen(selectedCity: _selectedCity?.name),
       ),
     );
 
@@ -95,7 +96,9 @@ class _RegisterStep2ScreenState extends State<RegisterStep2Screen> {
       return;
     }
 
-    final cityCode = _selectedCity == null ? null : int.tryParse(_selectedCity!.code);
+    final cityCode = _selectedCity == null
+        ? null
+        : int.tryParse(_selectedCity!.code);
 
     setState(() {
       _isSubmitting = true;
@@ -175,7 +178,7 @@ class _RegisterStep2ScreenState extends State<RegisterStep2Screen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
-                      const SizedBox(height: 70),
+                      const SizedBox(height: 30),
                       Container(
                         height: 30,
                         decoration: const BoxDecoration(
@@ -190,9 +193,12 @@ class _RegisterStep2ScreenState extends State<RegisterStep2Screen> {
                       if (widget.phone.isNotEmpty)
                         Text(
                           '已验证手机号：${widget.phone}',
-                          style: const TextStyle(color: Colors.black54, fontSize: 13),
+                          style: const TextStyle(
+                            color: Colors.black54,
+                            fontSize: 13,
+                          ),
                         ),
-                      const SizedBox(height: 18),
+                      const SizedBox(height: 15),
                       Center(
                         child: SizedBox(
                           width: 300,
@@ -223,7 +229,9 @@ class _RegisterStep2ScreenState extends State<RegisterStep2Screen> {
                                 });
                               },
                               icon: Icon(
-                                _obscurePassword ? Icons.visibility_off : Icons.visibility,
+                                _obscurePassword
+                                    ? Icons.visibility_off
+                                    : Icons.visibility,
                                 color: Colors.grey,
                                 size: 20,
                               ),
@@ -286,7 +294,9 @@ class _RegisterStep2ScreenState extends State<RegisterStep2Screen> {
                                 ],
                               ),
                               child: Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 20),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 20,
+                                ),
                                 child: Row(
                                   children: [
                                     const Icon(
@@ -343,7 +353,9 @@ class _RegisterStep2ScreenState extends State<RegisterStep2Screen> {
                               const DecoratedBox(
                                 decoration: BoxDecoration(
                                   image: DecorationImage(
-                                    image: AssetImage('assets/images/注册2-完成.png'),
+                                    image: AssetImage(
+                                      'assets/images/注册2-完成.png',
+                                    ),
                                     fit: BoxFit.contain,
                                     filterQuality: FilterQuality.high,
                                   ),
