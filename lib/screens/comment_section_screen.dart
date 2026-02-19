@@ -137,9 +137,7 @@ class _CommentSectionScreenState extends State<CommentSectionScreen> {
         onCommentTap: () {
           debugPrint('当前在讨论区');
         },
-        onProfileTap: () {
-          debugPrint('切换到我的');
-        },
+        onProfileTap: () => Navigator.pushNamed(context, '/profile'),
       ),
     );
   }

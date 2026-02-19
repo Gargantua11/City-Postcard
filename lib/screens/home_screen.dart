@@ -148,9 +148,7 @@ class _HomeBottomNavigationBar extends StatelessWidget {
         debugPrint('切换到地图');
       },
       onCommentTap: onCommentTap,
-      onProfileTap: () {
-        debugPrint('切换到我的');
-      },
+      onProfileTap: () => Navigator.pushNamed(context, '/profile'),
     );
   }
 }

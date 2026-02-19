@@ -9,6 +9,7 @@ import './screens/home_screen.dart';
 import './screens/city_search_screen.dart';
 import './screens/comment_section_screen.dart';
 import './screens/postcard_edit_screen.dart';
+import './screens/profile_screen.dart';
 import './services/auth_provider.dart';
 
 void main() {
@@ -40,9 +41,9 @@ class MyApp extends StatelessWidget {
           '/city_search': (context) => const CitySearchScreen(),
           '/comment_section': (context) => const CommentSectionScreen(),
           '/postcard_edit': (context) => const PostcardEditScreen(),
+          '/profile': (context) => const ProfileScreen(),
         },
       ),
     );
   }
 }
-
