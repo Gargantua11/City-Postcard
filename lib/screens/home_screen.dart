@@ -2,6 +2,8 @@
 import 'package:intl/intl.dart';
 import '../services/edited_postcard_service.dart';
 import '../widgets/app_bottom_nav_bar.dart';
+// 导入 MapScreen
+import 'map_screen.dart';
 
 /// 首页：首张卡片用于新增明信片，后续卡片按编辑时间倒序展示
 class HomeScreen extends StatefulWidget {
@@ -37,6 +39,14 @@ class _HomeScreenState extends State<HomeScreen> {
     if (result == true) {
       await _loadEditedPostcards();
     }
+  }
+
+  /// 跳转到地图页面
+  void _navigateToMapScreen() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const MapScreen()),
+    );
   }
 
   @override
@@ -145,12 +155,21 @@ class _HomeBottomNavigationBar extends StatelessWidget {
         debugPrint('当前在首页');
       },
       onMapTap: () {
-        debugPrint('切换到地图');
+        // 使用新添加的方法跳转到地图页面
+        _navigateToMapScreen(context);
       },
       onCommentTap: onCommentTap,
       onProfileTap: () {
         debugPrint('切换到我的');
       },
+    );
+  }
+
+  /// 跳转到地图页面
+  void _navigateToMapScreen(BuildContext context) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const MapScreen()),
     );
   }
 }
