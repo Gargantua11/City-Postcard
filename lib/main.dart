@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import './screens/login_screen.dart';
@@ -11,6 +11,9 @@ import './screens/comment_section_screen.dart';
 import './screens/postcard_edit_screen.dart';
 import './screens/map_screen.dart';
 import './screens/profile_screen.dart';
+import './screens/add_screen.dart';
+import './screens/search_index.dart';
+import './screens/search_screen.dart';
 import './services/auth_provider.dart';
 
 void main() {
@@ -44,6 +47,9 @@ class MyApp extends StatelessWidget {
           '/postcard_edit': (context) => const PostcardEditScreen(),
           '/map': (context) => const MapScreen(),
           '/profile': (context) => const ProfileScreen(),
+          '/add': (context) => const AddIndexPage(),
+          '/search_index': (context) => const SearchIndexScreen(),
+          '/search_screen': (context) => const SearchScreen(),
         },
       ),
     );
