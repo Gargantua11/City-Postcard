@@ -4,16 +4,30 @@ import 'package:shared_preferences/shared_preferences.dart';
 class EditedPostcard {
   final String imageUrl;
   final DateTime editedAt;
+  final double? latitude;
+  final double? longitude;
+  final String? cityName;
+  final String? provinceName;
 
   const EditedPostcard({
     required this.imageUrl,
     required this.editedAt,
+    this.latitude,
+    this.longitude,
+    this.cityName,
+    this.provinceName,
   });
 
   Map<String, dynamic> toJson() {
     return {
       'imageUrl': imageUrl,
       'editedAt': editedAt.toIso8601String(),
+      if (latitude != null) 'latitude': latitude,
+      if (longitude != null) 'longitude': longitude,
+      if (cityName != null && cityName!.trim().isNotEmpty)
+        'cityName': cityName!.trim(),
+      if (provinceName != null && provinceName!.trim().isNotEmpty)
+        'provinceName': provinceName!.trim(),
     };
   }
 
@@ -23,6 +37,10 @@ class EditedPostcard {
     return EditedPostcard(
       imageUrl: json['imageUrl']?.toString() ?? '',
       editedAt: parsedTime ?? DateTime.now(),
+      latitude: _toDouble(json['latitude']),
+      longitude: _toDouble(json['longitude']),
+      cityName: _toNullableTrimmedString(json['cityName']),
+      provinceName: _toNullableTrimmedString(json['provinceName']),
     );
   }
 }
@@ -44,9 +62,7 @@ class EditedPostcardService {
         if (item is Map<String, dynamic>) {
           postcards.add(EditedPostcard.fromJson(item));
         } else if (item is Map) {
-          postcards.add(
-            EditedPostcard.fromJson(item.cast<String, dynamic>()),
-          );
+          postcards.add(EditedPostcard.fromJson(item.cast<String, dynamic>()));
         }
       }
 
@@ -57,20 +73,44 @@ class EditedPostcardService {
     }
   }
 
-  Future<void> addEditedPostcard(String imageUrl) async {
+  Future<void> addEditedPostcard(
+    String imageUrl, {
+    double? latitude,
+    double? longitude,
+    String? cityName,
+    String? provinceName,
+  }) async {
     final postcards = await getEditedPostcards();
     postcards.insert(
       0,
-      EditedPostcard(imageUrl: imageUrl.trim(), editedAt: DateTime.now()),
+      EditedPostcard(
+        imageUrl: imageUrl.trim(),
+        editedAt: DateTime.now(),
+        latitude: latitude,
+        longitude: longitude,
+        cityName: cityName?.trim(),
+        provinceName: provinceName?.trim(),
+      ),
     );
     await _savePostcards(postcards);
   }
 
   Future<void> _savePostcards(List<EditedPostcard> postcards) async {
     final prefs = await SharedPreferences.getInstance();
-    final encoded = jsonEncode(
-      postcards.map((item) => item.toJson()).toList(),
-    );
+    final encoded = jsonEncode(postcards.map((item) => item.toJson()).toList());
     await prefs.setString(_storageKey, encoded);
   }
+}
+
+double? _toDouble(dynamic value) {
+  if (value == null) return null;
+  if (value is double) return value;
+  if (value is int) return value.toDouble();
+  return double.tryParse(value.toString());
+}
+
+String? _toNullableTrimmedString(dynamic value) {
+  final text = value?.toString().trim() ?? '';
+  if (text.isEmpty) return null;
+  return text;
 }
