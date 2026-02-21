@@ -9,7 +9,7 @@ class SearchScreen extends StatelessWidget {
       appBar: AppBar(
         title: Text('搜索'),
         leading: IconButton(
-          icon: Image.asset('assets/images/搜索/返回.png'), // 替换为实际的返回图标路径
+          icon: Image.asset('assets/images/search/返回.png'), // 替换为实际的返回图标路径
           onPressed: () {
             Navigator.pop(context);
           },
@@ -27,7 +27,7 @@ class SearchScreen extends StatelessWidget {
                 ),
                 suffixIcon: IconButton(
                   icon: Image.asset(
-                    'assets/images/搜索/搜索框.png',
+                    'assets/images/search/搜索框.png',
                   ), // 替换为实际的搜索按钮图标路径
                   onPressed: () {
                     // 处理搜索逻辑

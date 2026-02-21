@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'city_search_screen.dart';
 import '../services/auth_provider.dart';
@@ -143,7 +143,7 @@ class _RegisterStep2ScreenState extends State<RegisterStep2Screen> {
       body: Container(
         decoration: const BoxDecoration(
           image: DecorationImage(
-            image: AssetImage('assets/images/注册2-背景.png'),
+            image: AssetImage('assets/images/auth/注册2-背景.png'),
             fit: BoxFit.cover,
             filterQuality: FilterQuality.high,
           ),
@@ -162,7 +162,7 @@ class _RegisterStep2ScreenState extends State<RegisterStep2Screen> {
                   height: 30,
                   decoration: const BoxDecoration(
                     image: DecorationImage(
-                      image: AssetImage('assets/images/注册1-返回.png'),
+                      image: AssetImage('assets/images/auth/注册1-返回.png'),
                       fit: BoxFit.contain,
                       filterQuality: FilterQuality.high,
                     ),
@@ -183,7 +183,7 @@ class _RegisterStep2ScreenState extends State<RegisterStep2Screen> {
                         height: 30,
                         decoration: const BoxDecoration(
                           image: DecorationImage(
-                            image: AssetImage('assets/images/注册2-设置密码.png'),
+                            image: AssetImage('assets/images/auth/注册2-设置密码.png'),
                             fit: BoxFit.contain,
                             filterQuality: FilterQuality.high,
                           ),
@@ -354,7 +354,7 @@ class _RegisterStep2ScreenState extends State<RegisterStep2Screen> {
                                 decoration: BoxDecoration(
                                   image: DecorationImage(
                                     image: AssetImage(
-                                      'assets/images/注册2-完成.png',
+                                      'assets/images/auth/注册2-完成.png',
                                     ),
                                     fit: BoxFit.contain,
                                     filterQuality: FilterQuality.high,

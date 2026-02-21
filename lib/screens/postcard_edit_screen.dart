@@ -12,7 +12,7 @@ class PostcardEditScreen extends StatefulWidget {
 }
 
 class _PostcardEditScreenState extends State<PostcardEditScreen> {
-  static const String _defaultPreviewAsset = 'assets/images/编辑-开始定制.png';
+  static const String _defaultPreviewAsset = 'assets/images/edit/编辑-开始定制.png';
 
   final EditedPostcardService _editedPostcardService = EditedPostcardService();
   City? _selectedCity;
@@ -148,13 +148,13 @@ class _PostcardEditScreenState extends State<PostcardEditScreen> {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           _AssetTapButton(
-                            assetPath: 'assets/images/编辑-返回.png',
+                            assetPath: 'assets/images/edit/编辑-返回.png',
                             width: topButtonWidth,
                             height: topButtonHeight,
                             onTap: _undo,
                           ),
                           _AssetTapButton(
-                            assetPath: 'assets/images/编辑-分享.png',
+                            assetPath: 'assets/images/edit/编辑-分享.png',
                             width: topButtonWidth,
                             height: topButtonHeight,
                             onTap: _share,
@@ -175,21 +175,21 @@ class _PostcardEditScreenState extends State<PostcardEditScreen> {
                           Column(
                             children: [
                               _AssetTapButton(
-                                assetPath: 'assets/images/编辑-添加元素.png',
+                                assetPath: 'assets/images/edit/编辑-添加元素.png',
                                 width: actionWidth,
                                 height: actionHeight,
-                                onTap: () => _onActionTap('添加元素'),
+                                onTap: () => Navigator.pushNamed(context, '/add'),
                               ),
                               SizedBox(height: 14 * scale),
                               _AssetTapButton(
-                                assetPath: 'assets/images/编辑-动态效果.png',
+                                assetPath: 'assets/images/edit/编辑-动态效果.png',
                                 width: actionWidth,
                                 height: actionHeight,
                                 onTap: () => _onActionTap('动态效果'),
                               ),
                               SizedBox(height: 14 * scale),
                               _AssetTapButton(
-                                assetPath: 'assets/images/编辑-地点标注.png',
+                                assetPath: 'assets/images/edit/编辑-地点标注.png',
                                 width: actionWidth,
                                 height: actionHeight,
                                 onTap: _selectLocationTag,
@@ -198,7 +198,7 @@ class _PostcardEditScreenState extends State<PostcardEditScreen> {
                           ),
                           SizedBox(width: actionGap),
                           _AssetTapButton(
-                            assetPath: 'assets/images/编辑-热门模板.png',
+                            assetPath: 'assets/images/edit/编辑-热门模板.png',
                             width: actionWidth,
                             height: templateHeight,
                             onTap: () => _onActionTap('热门模板'),
@@ -221,7 +221,7 @@ class _PostcardEditScreenState extends State<PostcardEditScreen> {
                       ),
                       SizedBox(height: 30 * scale),
                       _AssetTapButton(
-                        assetPath: 'assets/images/编辑-保存.png',
+                        assetPath: 'assets/images/edit/编辑-保存.png',
                         width: saveWidth,
                         height: saveHeight,
                         onTap: _isSaving ? null : _savePostcard,

@@ -13,7 +13,7 @@ class MapScreen extends StatefulWidget {
 }
 
 class _MapScreenState extends State<MapScreen> {
-  static const String _headerAsset = 'assets/images/\u5730\u56FE.png';
+  static const String _headerAsset = 'assets/images/map/地图.png';
 
   final EditedPostcardService _editedPostcardService = EditedPostcardService();
 
@@ -151,9 +151,9 @@ class _MapScreenState extends State<MapScreen> {
     }
     final normalizedCityCode = _normalizeCityCode(cityCode);
     if (normalizedCityCode != null) {
-      return '\u4EE3\u7801$normalizedCityCode';
+      return '代码$normalizedCityCode';
     }
-    return '\u672A\u77E5\u57CE\u5E02';
+    return '未知城市';
   }
 
   String? _normalizeProvinceName(String? raw) {
@@ -164,15 +164,7 @@ class _MapScreenState extends State<MapScreen> {
     final alias = _provinceAlias[text];
     if (alias != null) return alias;
 
-    const suffixes = [
-      '\u7279\u522B\u884C\u653F\u533A',
-      '\u58EE\u65CF\u81EA\u6CBB\u533A',
-      '\u56DE\u65CF\u81EA\u6CBB\u533A',
-      '\u7EF4\u543E\u5C14\u81EA\u6CBB\u533A',
-      '\u81EA\u6CBB\u533A',
-      '\u7701',
-      '\u5E02',
-    ];
+    const suffixes = ['特别行政区', '壮族自治区', '回族自治区', '维吾尔自治区', '自治区', '省', '市'];
 
     for (final suffix in suffixes) {
       if (text.endsWith(suffix) && text.length > suffix.length) {
@@ -189,14 +181,7 @@ class _MapScreenState extends State<MapScreen> {
     var text = raw.trim();
     if (text.isEmpty) return null;
 
-    const suffixes = [
-      '\u81EA\u6CBB\u5DDE',
-      '\u5730\u533A',
-      '\u7701\u76F4\u8F96\u53BF\u7EA7\u884C\u653F\u533A\u5212',
-      '\u7701\u76F4\u8F96\u884C\u653F\u5355\u4F4D',
-      '\u76DF',
-      '\u5E02',
-    ];
+    const suffixes = ['自治州', '地区', '省直辖县级行政区划', '省直辖行政单位', '盟', '市'];
 
     for (final suffix in suffixes) {
       if (text.endsWith(suffix) && text.length > suffix.length) {
@@ -307,7 +292,7 @@ class _MapScreenState extends State<MapScreen> {
               fit: BoxFit.contain,
               filterQuality: FilterQuality.high,
               errorBuilder: (_, _, _) => const Text(
-                '\u5730\u56FE',
+                '地图',
                 style: TextStyle(
                   fontSize: 30,
                   fontWeight: FontWeight.w700,
@@ -323,7 +308,7 @@ class _MapScreenState extends State<MapScreen> {
             child: IconButton(
               onPressed: _isLoading ? null : _loadMapData,
               icon: const Icon(Icons.refresh_rounded),
-              tooltip: '\u5237\u65B0\u5730\u56FE',
+              tooltip: '刷新地图',
             ),
           ),
         ],
@@ -334,7 +319,8 @@ class _MapScreenState extends State<MapScreen> {
   Widget _buildMapCard() {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        //地图卡片底色
+        color: const Color(0xFF3A3F47),
         borderRadius: BorderRadius.circular(18),
         border: Border.all(color: const Color(0xFFE2E7EF)),
         boxShadow: const [
@@ -363,12 +349,14 @@ class _MapScreenState extends State<MapScreen> {
                 },
                 markers: _buildMarkerGroups(),
                 theme: InteractiveMapTheme(
-                  defaultCountryColor: const Color(0xFFE8EDF4),
+                  // 省份默认颜色
+                  defaultCountryColor: const Color.fromARGB(255, 170, 172, 174),
                   defaultSelectedCountryColor: const Color(0xFF88B6FF),
                   borderColor: Colors.white,
                   borderWidth: 1.2,
                   selectedBorderWidth: 1.8,
-                  backgroundColor: Colors.transparent,
+                  // 地图主题背景
+                  backgroundColor: const Color(0xFF3A3F47),
                   mappingCode: _buildProvinceColorMap(),
                 ),
                 loadingBuilder: (_) =>
@@ -400,10 +388,10 @@ class _MapScreenState extends State<MapScreen> {
         : (_citySpotsByProvince[selectedProvinceCode]?.length ?? 0);
 
     final text = _isLoading
-        ? '\u6B63\u5728\u8BFB\u53D6\u5DF2\u7F16\u8F91\u660E\u4FE1\u7247\u5730\u70B9...'
+        ? '正在读取已编辑明信片地点...'
         : selectedProvinceName != null
-        ? '\u5F53\u524D\u9009\u4E2D\uff1A$selectedProvinceName\uff0C\u5DF2\u6807\u6CE8 $selectedProvinceCityCount \u4E2A\u57CE\u5E02'
-        : '\u5DF2\u70B9\u4EAE $provinceCount \u4E2A\u7701\u4EFD\uff0c\u6807\u6CE8 $cityCount \u4E2A\u57CE\u5E02';
+        ? '当前选中：$selectedProvinceName，已标注 $selectedProvinceCityCount 个城市'
+        : '已点亮 $provinceCount 个省份，标注 $cityCount 个城市';
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16),
@@ -438,7 +426,7 @@ class _MapScreenState extends State<MapScreen> {
         height: 34,
         child: Center(
           child: Text(
-            '\u6682\u65E0\u70B9\u4EAE\u7701\u4EFD',
+            '暂无点亮省份',
             style: TextStyle(fontSize: 12, color: Color(0xFF7A8291)),
           ),
         ),
@@ -505,7 +493,7 @@ class _MapScreenState extends State<MapScreen> {
         height: 34,
         child: Center(
           child: Text(
-            '\u6682\u65E0\u57CE\u5E02\u6807\u6CE8',
+            '暂无城市标注',
             style: TextStyle(fontSize: 12, color: Color(0xFF7A8291)),
           ),
         ),
@@ -513,8 +501,8 @@ class _MapScreenState extends State<MapScreen> {
     }
 
     final title = selectedProvinceName == null
-        ? '\u5DF2\u6807\u6CE8\u57CE\u5E02'
-        : '$selectedProvinceName \u57CE\u5E02';
+        ? '已标注城市'
+        : '$selectedProvinceName 城市';
 
     return Column(
       children: [
@@ -595,40 +583,40 @@ class _CitySpot {
 }
 
 const Map<String, String> _provinceCodeByName = {
-  '\u5317\u4EAC': 'CN-11',
-  '\u5929\u6D25': 'CN-12',
-  '\u6CB3\u5317': 'CN-13',
-  '\u5C71\u897F': 'CN-14',
-  '\u5185\u8499\u53E4': 'CN-15',
-  '\u8FBD\u5B81': 'CN-21',
-  '\u5409\u6797': 'CN-22',
-  '\u9ED1\u9F99\u6C5F': 'CN-23',
-  '\u4E0A\u6D77': 'CN-31',
-  '\u6C5F\u82CF': 'CN-32',
-  '\u6D59\u6C5F': 'CN-33',
-  '\u5B89\u5FBD': 'CN-34',
-  '\u798F\u5EFA': 'CN-35',
-  '\u6C5F\u897F': 'CN-36',
-  '\u5C71\u4E1C': 'CN-37',
-  '\u6CB3\u5357': 'CN-41',
-  '\u6E56\u5317': 'CN-42',
-  '\u6E56\u5357': 'CN-43',
-  '\u5E7F\u4E1C': 'CN-44',
-  '\u5E7F\u897F': 'CN-45',
-  '\u6D77\u5357': 'CN-46',
-  '\u91CD\u5E86': 'CN-50',
-  '\u56DB\u5DDD': 'CN-51',
-  '\u8D35\u5DDE': 'CN-52',
-  '\u4E91\u5357': 'CN-53',
-  '\u897F\u85CF': 'CN-54',
-  '\u9655\u897F': 'CN-61',
-  '\u7518\u8083': 'CN-62',
-  '\u9752\u6D77': 'CN-63',
-  '\u5B81\u590F': 'CN-64',
-  '\u65B0\u7586': 'CN-65',
-  '\u53F0\u6E7E': 'CN-71',
-  '\u9999\u6E2F': 'CN-91',
-  '\u6FB3\u95E8': 'CN-92',
+  '北京': 'CN-11',
+  '天津': 'CN-12',
+  '河北': 'CN-13',
+  '山西': 'CN-14',
+  '内蒙古': 'CN-15',
+  '辽宁': 'CN-21',
+  '吉林': 'CN-22',
+  '黑龙江': 'CN-23',
+  '上海': 'CN-31',
+  '江苏': 'CN-32',
+  '浙江': 'CN-33',
+  '安徽': 'CN-34',
+  '福建': 'CN-35',
+  '江西': 'CN-36',
+  '山东': 'CN-37',
+  '河南': 'CN-41',
+  '湖北': 'CN-42',
+  '湖南': 'CN-43',
+  '广东': 'CN-44',
+  '广西': 'CN-45',
+  '海南': 'CN-46',
+  '重庆': 'CN-50',
+  '四川': 'CN-51',
+  '贵州': 'CN-52',
+  '云南': 'CN-53',
+  '西藏': 'CN-54',
+  '陕西': 'CN-61',
+  '甘肃': 'CN-62',
+  '青海': 'CN-63',
+  '宁夏': 'CN-64',
+  '新疆': 'CN-65',
+  '台湾': 'CN-71',
+  '香港': 'CN-91',
+  '澳门': 'CN-92',
 };
 
 const Map<String, String> _provinceCodeByCityPrefix = {
@@ -671,99 +659,99 @@ const Map<String, String> _provinceCodeByCityPrefix = {
 };
 
 const Map<String, String> _provinceNameByCode = {
-  'CN-11': '\u5317\u4EAC',
-  'CN-12': '\u5929\u6D25',
-  'CN-13': '\u6CB3\u5317',
-  'CN-14': '\u5C71\u897F',
-  'CN-15': '\u5185\u8499\u53E4',
-  'CN-21': '\u8FBD\u5B81',
-  'CN-22': '\u5409\u6797',
-  'CN-23': '\u9ED1\u9F99\u6C5F',
-  'CN-31': '\u4E0A\u6D77',
-  'CN-32': '\u6C5F\u82CF',
-  'CN-33': '\u6D59\u6C5F',
-  'CN-34': '\u5B89\u5FBD',
-  'CN-35': '\u798F\u5EFA',
-  'CN-36': '\u6C5F\u897F',
-  'CN-37': '\u5C71\u4E1C',
-  'CN-41': '\u6CB3\u5357',
-  'CN-42': '\u6E56\u5317',
-  'CN-43': '\u6E56\u5357',
-  'CN-44': '\u5E7F\u4E1C',
-  'CN-45': '\u5E7F\u897F',
-  'CN-46': '\u6D77\u5357',
-  'CN-50': '\u91CD\u5E86',
-  'CN-51': '\u56DB\u5DDD',
-  'CN-52': '\u8D35\u5DDE',
-  'CN-53': '\u4E91\u5357',
-  'CN-54': '\u897F\u85CF',
-  'CN-61': '\u9655\u897F',
-  'CN-62': '\u7518\u8083',
-  'CN-63': '\u9752\u6D77',
-  'CN-64': '\u5B81\u590F',
-  'CN-65': '\u65B0\u7586',
-  'CN-71': '\u53F0\u6E7E',
-  'CN-91': '\u9999\u6E2F',
-  'CN-92': '\u6FB3\u95E8',
+  'CN-11': '北京',
+  'CN-12': '天津',
+  'CN-13': '河北',
+  'CN-14': '山西',
+  'CN-15': '内蒙古',
+  'CN-21': '辽宁',
+  'CN-22': '吉林',
+  'CN-23': '黑龙江',
+  'CN-31': '上海',
+  'CN-32': '江苏',
+  'CN-33': '浙江',
+  'CN-34': '安徽',
+  'CN-35': '福建',
+  'CN-36': '江西',
+  'CN-37': '山东',
+  'CN-41': '河南',
+  'CN-42': '湖北',
+  'CN-43': '湖南',
+  'CN-44': '广东',
+  'CN-45': '广西',
+  'CN-46': '海南',
+  'CN-50': '重庆',
+  'CN-51': '四川',
+  'CN-52': '贵州',
+  'CN-53': '云南',
+  'CN-54': '西藏',
+  'CN-61': '陕西',
+  'CN-62': '甘肃',
+  'CN-63': '青海',
+  'CN-64': '宁夏',
+  'CN-65': '新疆',
+  'CN-71': '台湾',
+  'CN-91': '香港',
+  'CN-92': '澳门',
 };
 
 const Map<String, String> _provinceAlias = {
-  '\u5185\u8499\u53E4\u81EA\u6CBB\u533A': '\u5185\u8499\u53E4',
-  '\u897F\u85CF\u81EA\u6CBB\u533A': '\u897F\u85CF',
-  '\u5E7F\u897F\u58EE\u65CF\u81EA\u6CBB\u533A': '\u5E7F\u897F',
-  '\u5B81\u590F\u56DE\u65CF\u81EA\u6CBB\u533A': '\u5B81\u590F',
-  '\u65B0\u7586\u7EF4\u543E\u5C14\u81EA\u6CBB\u533A': '\u65B0\u7586',
-  '\u9999\u6E2F\u7279\u522B\u884C\u653F\u533A': '\u9999\u6E2F',
-  '\u6FB3\u95E8\u7279\u522B\u884C\u653F\u533A': '\u6FB3\u95E8',
-  '\u53F0\u6E7E\u7701': '\u53F0\u6E7E',
-  '\u5E7F\u897F\u58EE\u65CF': '\u5E7F\u897F',
-  '\u5B81\u590F\u56DE\u65CF': '\u5B81\u590F',
-  '\u65B0\u7586\u7EF4\u543E\u5C14': '\u65B0\u7586',
+  '内蒙古自治区': '内蒙古',
+  '西藏自治区': '西藏',
+  '广西壮族自治区': '广西',
+  '宁夏回族自治区': '宁夏',
+  '新疆维吾尔自治区': '新疆',
+  '香港特别行政区': '香港',
+  '澳门特别行政区': '澳门',
+  '台湾省': '台湾',
+  '广西壮族': '广西',
+  '宁夏回族': '宁夏',
+  '新疆维吾尔': '新疆',
 };
 
 const Map<String, String> _provinceByCity = {
-  '\u5317\u4EAC': '\u5317\u4EAC',
-  '\u5929\u6D25': '\u5929\u6D25',
-  '\u4E0A\u6D77': '\u4E0A\u6D77',
-  '\u91CD\u5E86': '\u91CD\u5E86',
-  '\u5E7F\u5DDE': '\u5E7F\u4E1C',
-  '\u6DF1\u5733': '\u5E7F\u4E1C',
-  '\u73E0\u6D77': '\u5E7F\u4E1C',
-  '\u4E1C\u839E': '\u5E7F\u4E1C',
-  '\u4F5B\u5C71': '\u5E7F\u4E1C',
-  '\u676D\u5DDE': '\u6D59\u6C5F',
-  '\u5B81\u6CE2': '\u6D59\u6C5F',
-  '\u5357\u4EAC': '\u6C5F\u82CF',
-  '\u82CF\u5DDE': '\u6C5F\u82CF',
-  '\u6210\u90FD': '\u56DB\u5DDD',
-  '\u6B66\u6C49': '\u6E56\u5317',
-  '\u897F\u5B89': '\u9655\u897F',
-  '\u957F\u6C99': '\u6E56\u5357',
-  '\u90D1\u5DDE': '\u6CB3\u5357',
-  '\u6D4E\u5357': '\u5C71\u4E1C',
-  '\u9752\u5C9B': '\u5C71\u4E1C',
-  '\u53A6\u95E8': '\u798F\u5EFA',
-  '\u798F\u5DDE': '\u798F\u5EFA',
-  '\u6606\u660E': '\u4E91\u5357',
-  '\u8D35\u9633': '\u8D35\u5DDE',
-  '\u5357\u5B81': '\u5E7F\u897F',
-  '\u6D77\u53E3': '\u6D77\u5357',
-  '\u4E09\u4E9A': '\u6D77\u5357',
-  '\u4E4C\u9C81\u6728\u9F50': '\u65B0\u7586',
-  '\u62C9\u8428': '\u897F\u85CF',
-  '\u547C\u548C\u6D69\u7279': '\u5185\u8499\u53E4',
-  '\u6C88\u9633': '\u8FBD\u5B81',
-  '\u957F\u6625': '\u5409\u6797',
-  '\u54C8\u5C14\u6EE8': '\u9ED1\u9F99\u6C5F',
-  '\u5408\u80A5': '\u5B89\u5FBD',
-  '\u5357\u660C': '\u6C5F\u897F',
-  '\u77F3\u5BB6\u5E84': '\u6CB3\u5317',
-  '\u592A\u539F': '\u5C71\u897F',
-  '\u5170\u5DDE': '\u7518\u8083',
-  '\u897F\u5B81': '\u9752\u6D77',
-  '\u94F6\u5DDD': '\u5B81\u590F',
-  '\u53F0\u5317': '\u53F0\u6E7E',
-  '\u9AD8\u96C4': '\u53F0\u6E7E',
-  '\u9999\u6E2F': '\u9999\u6E2F',
-  '\u6FB3\u95E8': '\u6FB3\u95E8',
+  '北京': '北京',
+  '天津': '天津',
+  '上海': '上海',
+  '重庆': '重庆',
+  '广州': '广东',
+  '深圳': '广东',
+  '珠海': '广东',
+  '东莞': '广东',
+  '佛山': '广东',
+  '杭州': '浙江',
+  '宁波': '浙江',
+  '南京': '江苏',
+  '苏州': '江苏',
+  '成都': '四川',
+  '武汉': '湖北',
+  '西安': '陕西',
+  '长沙': '湖南',
+  '郑州': '河南',
+  '济南': '山东',
+  '青岛': '山东',
+  '厦门': '福建',
+  '福州': '福建',
+  '昆明': '云南',
+  '贵阳': '贵州',
+  '南宁': '广西',
+  '海口': '海南',
+  '三亚': '海南',
+  '乌鲁木齐': '新疆',
+  '拉萨': '西藏',
+  '呼和浩特': '内蒙古',
+  '沈阳': '辽宁',
+  '长春': '吉林',
+  '哈尔滨': '黑龙江',
+  '合肥': '安徽',
+  '南昌': '江西',
+  '石家庄': '河北',
+  '太原': '山西',
+  '兰州': '甘肃',
+  '西宁': '青海',
+  '银川': '宁夏',
+  '台北': '台湾',
+  '高雄': '台湾',
+  '香港': '香港',
+  '澳门': '澳门',
 };

@@ -32,7 +32,7 @@ class ProfileScreen extends StatelessWidget {
                           children: [
                             Positioned.fill(
                               child: Image.asset(
-                                'assets/images/用户-画面.png',
+                                'assets/images/profile/用户-画面.png',
                                 fit: BoxFit.fill,
                                 filterQuality: FilterQuality.high,
                               ),
@@ -110,7 +110,7 @@ class ProfileScreen extends StatelessWidget {
           Navigator.pushNamed(context, '/home');
         },
         onMapTap: () {
-          debugPrint('切换到地图');
+          Navigator.pushNamed(context, '/map');
         },
         onCommentTap: () {
           Navigator.pushNamed(context, '/comment_section');

@@ -19,59 +19,59 @@ class _SearchIndexScreenState extends State<SearchIndexScreen> {
 
   // 分类数据
   final List<Map<String, dynamic>> _categories = [
-    {'name': '马年元素', 'icon': 'assets/images/搜索元素/马年元素.png'},
-    {'name': '新年元素', 'icon': 'assets/images/搜索元素/新年元素.png'},
-    {'name': '季节元素', 'icon': 'assets/images/搜索元素/季节元素.png'},
+    {'name': '马年元素', 'icon': 'assets/images/search_elements/马年元素.png'},
+    {'name': '新年元素', 'icon': 'assets/images/search_elements/新年元素.png'},
+    {'name': '季节元素', 'icon': 'assets/images/search_elements/季节元素.png'},
   ];
 
   // 每个分类下的具体元素
   final Map<String, List<Map<String, dynamic>>> _elementsByCategory = {
     '马年元素': [
-      {'name': '马踏飞燕', 'icon': 'assets/images/添加元素/马踏飞燕.png'},
-      {'name': '骏马', 'icon': 'assets/images/添加元素/骏马.png'},
-      {'name': '马鞍', 'icon': 'assets/images/添加元素/马鞍.png'},
-      {'name': '马蹄', 'icon': 'assets/images/添加元素/马蹄.png'},
+      {'name': '马踏飞燕', 'icon': 'assets/images/add_elements/马踏飞燕.png'},
+      {'name': '骏马', 'icon': 'assets/images/add_elements/骏马.png'},
+      {'name': '马鞍', 'icon': 'assets/images/add_elements/马鞍.png'},
+      {'name': '马蹄', 'icon': 'assets/images/add_elements/马蹄.png'},
     ],
     '新年元素': [
-      {'name': '烟花', 'icon': 'assets/images/添加元素/烟花.png'},
-      {'name': '灯笼', 'icon': 'assets/images/添加元素/灯笼.png'},
-      {'name': '春联', 'icon': 'assets/images/添加元素/春联.png'},
-      {'name': '鞭炮', 'icon': 'assets/images/添加元素/鞭炮.png'},
+      {'name': '烟花', 'icon': 'assets/images/add_elements/烟花.png'},
+      {'name': '灯笼', 'icon': 'assets/images/add_elements/灯笼.png'},
+      {'name': '春联', 'icon': 'assets/images/add_elements/春联.png'},
+      {'name': '鞭炮', 'icon': 'assets/images/add_elements/鞭炮.png'},
     ],
     '季节元素': [
-      {'name': '梅花', 'icon': 'assets/images/添加元素/梅花.png'},
-      {'name': '雪花', 'icon': 'assets/images/添加元素/雪花.png'},
-      {'name': '绿叶', 'icon': 'assets/images/添加元素/绿叶.png'},
-      {'name': '枫叶', 'icon': 'assets/images/添加元素/枫叶.png'},
+      {'name': '梅花', 'icon': 'assets/images/add_elements/梅花.png'},
+      {'name': '雪花', 'icon': 'assets/images/add_elements/雪花.png'},
+      {'name': '绿叶', 'icon': 'assets/images/add_elements/绿叶.png'},
+      {'name': '枫叶', 'icon': 'assets/images/add_elements/枫叶.png'},
     ],
   };
 
   // 常用元素（合并所有分类的前几个元素）
   final List<Map<String, dynamic>> _commonElements = [
-    {'name': '烟花', 'icon': 'assets/images/添加元素/烟花.png'},
-    {'name': '马踏飞燕', 'icon': 'assets/images/添加元素/马踏飞燕.png'},
-    {'name': '骏马', 'icon': 'assets/images/添加元素/骏马.png'},
-    {'name': '灯笼', 'icon': 'assets/images/添加元素/灯笼.png'},
+    {'name': '烟花', 'icon': 'assets/images/add_elements/烟花.png'},
+    {'name': '马踏飞燕', 'icon': 'assets/images/add_elements/马踏飞燕.png'},
+    {'name': '骏马', 'icon': 'assets/images/add_elements/骏马.png'},
+    {'name': '灯笼', 'icon': 'assets/images/add_elements/灯笼.png'},
   ];
 
   // 热门元素
   final List<Map<String, dynamic>> _hotElements = [
-    {'name': '烟花', 'icon': 'assets/images/添加元素/烟花.png'},
-    {'name': '梅花', 'icon': 'assets/images/添加元素/梅花.png'},
-    {'name': '骏马', 'icon': 'assets/images/添加元素/骏马.png'},
-    {'name': '雪花', 'icon': 'assets/images/添加元素/雪花.png'},
+    {'name': '烟花', 'icon': 'assets/images/add_elements/烟花.png'},
+    {'name': '梅花', 'icon': 'assets/images/add_elements/梅花.png'},
+    {'name': '骏马', 'icon': 'assets/images/add_elements/骏马.png'},
+    {'name': '雪花', 'icon': 'assets/images/add_elements/雪花.png'},
   ];
 
   // 热搜元素
   final List<Map<String, dynamic>> _hotSearchElements = [
-    {'name': '烟花', 'icon': 'assets/images/添加元素/烟花.png'},
-    {'name': '马踏飞燕', 'icon': 'assets/images/添加元素/马踏飞燕.png'},
-    {'name': '骏马', 'icon': 'assets/images/添加元素/骏马.png'},
-    {'name': '梅花', 'icon': 'assets/images/添加元素/梅花.png'},
-    {'name': '雪花', 'icon': 'assets/images/添加元素/雪花.png'},
-    {'name': '绿叶', 'icon': 'assets/images/添加元素/绿叶.png'},
-    {'name': '枫叶', 'icon': 'assets/images/添加元素/枫叶.png'},
-    {'name': '灯笼', 'icon': 'assets/images/添加元素/灯笼.png'},
+    {'name': '烟花', 'icon': 'assets/images/add_elements/烟花.png'},
+    {'name': '马踏飞燕', 'icon': 'assets/images/add_elements/马踏飞燕.png'},
+    {'name': '骏马', 'icon': 'assets/images/add_elements/骏马.png'},
+    {'name': '梅花', 'icon': 'assets/images/add_elements/梅花.png'},
+    {'name': '雪花', 'icon': 'assets/images/add_elements/雪花.png'},
+    {'name': '绿叶', 'icon': 'assets/images/add_elements/绿叶.png'},
+    {'name': '枫叶', 'icon': 'assets/images/add_elements/枫叶.png'},
+    {'name': '灯笼', 'icon': 'assets/images/add_elements/灯笼.png'},
   ];
 
   @override
@@ -106,7 +106,7 @@ class _SearchIndexScreenState extends State<SearchIndexScreen> {
         content: Row(
           children: [
             Image.asset(
-              'assets/images/添加元素/应用.png',
+              'assets/images/add_elements/应用.png',
               width: 20,
               height: 20,
               fit: BoxFit.contain,
@@ -145,7 +145,7 @@ class _SearchIndexScreenState extends State<SearchIndexScreen> {
               Navigator.pop(context);
             },
             child: Image.asset(
-              'assets/images/搜索元素/返回.png',
+              'assets/images/search_elements/返回.png',
               width: 24,
               height: 24,
               fit: BoxFit.contain,
@@ -158,7 +158,7 @@ class _SearchIndexScreenState extends State<SearchIndexScreen> {
           Expanded(
             child: Center(
               child: Image.asset(
-                'assets/images/搜索元素/元素搜索.png',
+                'assets/images/search_elements/元素搜索.png',
                 height: 28,
                 fit: BoxFit.contain,
               ),
@@ -187,7 +187,7 @@ class _SearchIndexScreenState extends State<SearchIndexScreen> {
             const SizedBox(width: 12),
             // 搜索图标
             Image.asset(
-              'assets/images/搜索元素/搜索.png',
+              'assets/images/search_elements/搜索.png',
               width: 20,
               height: 20,
               fit: BoxFit.contain,
@@ -223,7 +223,7 @@ class _SearchIndexScreenState extends State<SearchIndexScreen> {
                 child: Padding(
                   padding: const EdgeInsets.only(right: 12),
                   child: Image.asset(
-                    'assets/images/搜索元素/删除.png',
+                    'assets/images/search_elements/删除.png',
                     width: 18,
                     height: 18,
                     fit: BoxFit.contain,
@@ -265,7 +265,7 @@ class _SearchIndexScreenState extends State<SearchIndexScreen> {
             children: [
               // 模块图标
               Image.asset(
-                'assets/images/搜索元素/$moduleIcon.png',
+                'assets/images/search_elements/$moduleIcon.png',
                 width: 24,
                 height: 24,
                 fit: BoxFit.contain,
@@ -378,7 +378,7 @@ class _SearchIndexScreenState extends State<SearchIndexScreen> {
               const SizedBox(width: 10),
               // 分类名称
               Image.asset(
-                'assets/images/搜索元素/$categoryName.png',
+                'assets/images/search_elements/$categoryName.png',
                 height: 22,
                 fit: BoxFit.contain,
               ),
@@ -519,3 +519,4 @@ class _SearchIndexScreenState extends State<SearchIndexScreen> {
     );
   }
 }
+

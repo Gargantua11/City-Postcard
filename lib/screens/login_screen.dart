@@ -88,7 +88,7 @@ class _LoginScreenState extends State<LoginScreen> {
       body: Container(
         decoration: BoxDecoration(
           image: DecorationImage(
-            image: AssetImage('assets/images/登陆页面-背景.png'),
+            image: AssetImage('assets/images/auth/登陆页面-背景.png'),
             fit: BoxFit.cover,
             filterQuality: FilterQuality.high,
           ),
@@ -108,7 +108,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     height: 30,
                     decoration: const BoxDecoration(
                       image: DecorationImage(
-                        image: AssetImage('assets/images/欢迎登录.png'),
+                        image: AssetImage('assets/images/auth/欢迎登录.png'),
                         fit: BoxFit.contain,
                         filterQuality: FilterQuality.high,
                       ),
@@ -194,7 +194,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       height: 70,
                       decoration: const BoxDecoration(
                         image: DecorationImage(
-                          image: AssetImage('assets/images/登录按键.png'),
+                          image: AssetImage('assets/images/auth/登录按键.png'),
                           fit: BoxFit.contain,
                           filterQuality: FilterQuality.high,
                         ),

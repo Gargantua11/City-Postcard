@@ -32,28 +32,28 @@ class AppBottomNavBar extends StatelessWidget {
           children: [
             Expanded(
               child: _NavItem(
-                iconAsset: 'assets/images/首页-首页（无色）.png',
+                iconAsset: 'assets/images/navigation/首页-首页（无色）.png',
                 active: currentTab == AppTab.home,
                 onTap: onHomeTap,
               ),
             ),
             Expanded(
               child: _NavItem(
-                iconAsset: 'assets/images/首页-地图.png',
+                iconAsset: 'assets/images/navigation/首页-地图.png',
                 active: currentTab == AppTab.map,
                 onTap: onMapTap,
               ),
             ),
             Expanded(
               child: _NavItem(
-                iconAsset: 'assets/images/首页-讨论区.png',
+                iconAsset: 'assets/images/navigation/首页-讨论区.png',
                 active: currentTab == AppTab.comment,
                 onTap: onCommentTap,
               ),
             ),
             Expanded(
               child: _NavItem(
-                iconAsset: 'assets/images/首页-我的.png',
+                iconAsset: 'assets/images/navigation/首页-我的.png',
                 active: currentTab == AppTab.profile,
                 onTap: onProfileTap,
               ),
@@ -70,11 +70,7 @@ class _NavItem extends StatelessWidget {
   final bool active;
   final VoidCallback? onTap;
 
-  const _NavItem({
-    required this.iconAsset,
-    required this.active,
-    this.onTap,
-  });
+  const _NavItem({required this.iconAsset, required this.active, this.onTap});
 
   @override
   Widget build(BuildContext context) {

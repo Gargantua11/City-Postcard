@@ -132,7 +132,7 @@ class _CommentSectionScreenState extends State<CommentSectionScreen> {
           }
         },
         onMapTap: () {
-          debugPrint('切换到地图');
+          Navigator.pushNamed(context, '/map');
         },
         onCommentTap: () {
           debugPrint('当前在讨论区');

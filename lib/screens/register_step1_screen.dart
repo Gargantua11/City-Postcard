@@ -111,7 +111,7 @@ class _RegisterStep1ScreenState extends State<RegisterStep1Screen> {
       body: Container(
         decoration: BoxDecoration(
           image: DecorationImage(
-            image: AssetImage('assets/images/注册1-背景.png'),
+            image: AssetImage('assets/images/auth/注册1-背景.png'),
             fit: BoxFit.cover,
             filterQuality: FilterQuality.high,
           ),
@@ -131,7 +131,7 @@ class _RegisterStep1ScreenState extends State<RegisterStep1Screen> {
                   height: 30,
                   decoration: const BoxDecoration(
                     image: DecorationImage(
-                      image: AssetImage('assets/images/注册1-返回.png'),
+                      image: AssetImage('assets/images/auth/注册1-返回.png'),
                       fit: BoxFit.contain,
                       filterQuality: FilterQuality.high,
                     ),
@@ -155,7 +155,7 @@ class _RegisterStep1ScreenState extends State<RegisterStep1Screen> {
                         height: 30,
                         decoration: const BoxDecoration(
                           image: DecorationImage(
-                            image: AssetImage('assets/images/注册1-注册账号.png'),
+                            image: AssetImage('assets/images/auth/注册1-注册账号.png'),
                             fit: BoxFit.contain,
                             filterQuality: FilterQuality.high,
                           ),
@@ -216,7 +216,7 @@ class _RegisterStep1ScreenState extends State<RegisterStep1Screen> {
                           height: 70,
                           decoration: const BoxDecoration(
                             image: DecorationImage(
-                              image: AssetImage('assets/images/注册1-下一步.png'),
+                              image: AssetImage('assets/images/auth/注册1-下一步.png'),
                               fit: BoxFit.contain,
                               filterQuality: FilterQuality.high,
                             ),

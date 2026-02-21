@@ -89,9 +89,9 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
 
     _startCountdown();
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('\u9a8c\u8bc1\u7801\u5df2\u53d1\u9001')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('验证码已发送')));
   }
 
   void _startCountdown() {
@@ -126,7 +126,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       body: Container(
         decoration: BoxDecoration(
           image: DecorationImage(
-            image: AssetImage('assets/images/注册1-背景.png'),
+            image: AssetImage('assets/images/auth/注册1-背景.png'),
             fit: BoxFit.cover,
             filterQuality: FilterQuality.high,
           ),
@@ -145,7 +145,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                   height: 30,
                   decoration: const BoxDecoration(
                     image: DecorationImage(
-                      image: AssetImage('assets/images/注册2-返回.png'),
+                      image: AssetImage('assets/images/auth/注册2-返回.png'),
                       fit: BoxFit.contain,
                       filterQuality: FilterQuality.high,
                     ),
@@ -175,7 +175,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                         height: 50,
                         decoration: const BoxDecoration(
                           image: DecorationImage(
-                            image: AssetImage('assets/images/找回密码.png'),
+                            image: AssetImage('assets/images/auth/找回密码.png'),
                             fit: BoxFit.contain,
                             filterQuality: FilterQuality.high,
                           ),
@@ -212,9 +212,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                                 tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                               ),
                               child: Text(
-                                _canSendCode
-                                    ? '\u83b7\u53d6\u9a8c\u8bc1\u7801'
-                                    : '$_countdown s',
+                                _canSendCode ? '获取验证码' : '$_countdown s',
                                 style: TextStyle(
                                   color: _canSendCode
                                       ? Colors.blue
@@ -290,7 +288,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                           height: 70,
                           decoration: const BoxDecoration(
                             image: DecorationImage(
-                              image: AssetImage('assets/images/注册2-完成.png'),
+                              image: AssetImage('assets/images/auth/注册2-完成.png'),
                               fit: BoxFit.contain,
                               filterQuality: FilterQuality.high,
                             ),
