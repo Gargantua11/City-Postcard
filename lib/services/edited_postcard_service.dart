@@ -7,6 +7,7 @@ class EditedPostcard {
   final double? latitude;
   final double? longitude;
   final String? cityName;
+  final String? cityCode;
   final String? provinceName;
 
   const EditedPostcard({
@@ -15,6 +16,7 @@ class EditedPostcard {
     this.latitude,
     this.longitude,
     this.cityName,
+    this.cityCode,
     this.provinceName,
   });
 
@@ -26,6 +28,8 @@ class EditedPostcard {
       if (longitude != null) 'longitude': longitude,
       if (cityName != null && cityName!.trim().isNotEmpty)
         'cityName': cityName!.trim(),
+      if (cityCode != null && cityCode!.trim().isNotEmpty)
+        'cityCode': cityCode!.trim(),
       if (provinceName != null && provinceName!.trim().isNotEmpty)
         'provinceName': provinceName!.trim(),
     };
@@ -40,6 +44,7 @@ class EditedPostcard {
       latitude: _toDouble(json['latitude']),
       longitude: _toDouble(json['longitude']),
       cityName: _toNullableTrimmedString(json['cityName']),
+      cityCode: _toNullableCodeString(json['cityCode']),
       provinceName: _toNullableTrimmedString(json['provinceName']),
     );
   }
@@ -78,6 +83,7 @@ class EditedPostcardService {
     double? latitude,
     double? longitude,
     String? cityName,
+    String? cityCode,
     String? provinceName,
   }) async {
     final postcards = await getEditedPostcards();
@@ -89,6 +95,7 @@ class EditedPostcardService {
         latitude: latitude,
         longitude: longitude,
         cityName: cityName?.trim(),
+        cityCode: _toNullableCodeString(cityCode),
         provinceName: provinceName?.trim(),
       ),
     );
@@ -113,4 +120,12 @@ String? _toNullableTrimmedString(dynamic value) {
   final text = value?.toString().trim() ?? '';
   if (text.isEmpty) return null;
   return text;
+}
+
+String? _toNullableCodeString(dynamic value) {
+  final text = value?.toString().trim() ?? '';
+  if (text.isEmpty) return null;
+  final digits = text.replaceAll(RegExp(r'[^0-9]'), '');
+  if (digits.isEmpty) return null;
+  return digits;
 }

@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+
+import '../data/city_code_center.dart';
 import '../services/edited_postcard_service.dart';
+import 'city_search_screen.dart';
 
 class PostcardEditScreen extends StatefulWidget {
   const PostcardEditScreen({super.key});
@@ -12,17 +15,63 @@ class _PostcardEditScreenState extends State<PostcardEditScreen> {
   static const String _defaultPreviewAsset = 'assets/images/编辑-开始定制.png';
 
   final EditedPostcardService _editedPostcardService = EditedPostcardService();
+  City? _selectedCity;
   bool _isSaving = false;
 
   Future<void> _savePostcard() async {
     if (_isSaving) return;
     setState(() => _isSaving = true);
 
-    await _editedPostcardService.addEditedPostcard(_defaultPreviewAsset);
+    final cityCode = _normalizeCityCode(_selectedCity?.code);
+    final cityName = _selectedCity?.name.trim();
+    final provinceName = _resolveProvinceNameFromCityCode(cityCode);
+    final coordinate = cityCode == null ? null : kCityCodeCoordinates[cityCode];
+
+    await _editedPostcardService.addEditedPostcard(
+      _defaultPreviewAsset,
+      cityName: (cityName == null || cityName.isEmpty) ? null : cityName,
+      cityCode: cityCode,
+      provinceName: provinceName,
+      latitude: coordinate?.latitude,
+      longitude: coordinate?.longitude,
+    );
 
     if (!mounted) return;
     setState(() => _isSaving = false);
+
+    if (cityName != null && cityName.isNotEmpty) {
+      _showHint('已保存并标注：$cityName');
+    }
     Navigator.pop(context, true);
+  }
+
+  Future<void> _selectLocationTag() async {
+    if (_isSaving) return;
+
+    final selectedCity = await Navigator.push<City>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => CitySearchScreen(selectedCity: _selectedCity?.name),
+      ),
+    );
+
+    if (!mounted || selectedCity == null) return;
+    setState(() => _selectedCity = selectedCity);
+    _showHint('已标注地点：${selectedCity.name}');
+  }
+
+  String? _normalizeCityCode(String? raw) {
+    if (raw == null) return null;
+    final trimmed = raw.trim();
+    if (trimmed.isEmpty) return null;
+    final digits = trimmed.replaceAll(RegExp(r'[^0-9]'), '');
+    if (digits.isEmpty) return null;
+    return digits;
+  }
+
+  String? _resolveProvinceNameFromCityCode(String? cityCode) {
+    if (cityCode == null || cityCode.length < 2) return null;
+    return _provinceNameByPrefix[cityCode.substring(0, 2)];
   }
 
   void _showHint(String message) {
@@ -43,7 +92,7 @@ class _PostcardEditScreenState extends State<PostcardEditScreen> {
   }
 
   void _onActionTap(String title) {
-    _showHint([title, '功能开发中'].join(' '));
+    _showHint('$title 功能开发中');
   }
 
   @override
@@ -143,7 +192,7 @@ class _PostcardEditScreenState extends State<PostcardEditScreen> {
                                 assetPath: 'assets/images/编辑-地点标注.png',
                                 width: actionWidth,
                                 height: actionHeight,
-                                onTap: () => _onActionTap('地点标注'),
+                                onTap: _selectLocationTag,
                               ),
                             ],
                           ),
@@ -156,7 +205,21 @@ class _PostcardEditScreenState extends State<PostcardEditScreen> {
                           ),
                         ],
                       ),
-                      SizedBox(height: 44 * scale),
+                      SizedBox(height: 14 * scale),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          _selectedCity == null
+                              ? '未标注地点'
+                              : '已标注地点：${_selectedCity!.name} (${_selectedCity!.code})',
+                          style: TextStyle(
+                            fontSize: 13 * scale,
+                            color: const Color(0xFF3F4E63),
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                      SizedBox(height: 30 * scale),
                       _AssetTapButton(
                         assetPath: 'assets/images/编辑-保存.png',
                         width: saveWidth,
@@ -185,6 +248,43 @@ class _PostcardEditScreenState extends State<PostcardEditScreen> {
     );
   }
 }
+
+const Map<String, String> _provinceNameByPrefix = {
+  '11': '北京',
+  '12': '天津',
+  '13': '河北',
+  '14': '山西',
+  '15': '内蒙古',
+  '21': '辽宁',
+  '22': '吉林',
+  '23': '黑龙江',
+  '31': '上海',
+  '32': '江苏',
+  '33': '浙江',
+  '34': '安徽',
+  '35': '福建',
+  '36': '江西',
+  '37': '山东',
+  '41': '河南',
+  '42': '湖北',
+  '43': '湖南',
+  '44': '广东',
+  '45': '广西',
+  '46': '海南',
+  '50': '重庆',
+  '51': '四川',
+  '52': '贵州',
+  '53': '云南',
+  '54': '西藏',
+  '61': '陕西',
+  '62': '甘肃',
+  '63': '青海',
+  '64': '宁夏',
+  '65': '新疆',
+  '71': '台湾',
+  '81': '香港',
+  '82': '澳门',
+};
 
 class _AssetTapButton extends StatelessWidget {
   final String assetPath;
