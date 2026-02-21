@@ -2,8 +2,6 @@
 import 'package:intl/intl.dart';
 import '../services/edited_postcard_service.dart';
 import '../widgets/app_bottom_nav_bar.dart';
-// 导入 MapScreen
-import 'map_screen.dart';
 
 /// 首页：首张卡片用于新增明信片，后续卡片按编辑时间倒序展示
 class HomeScreen extends StatefulWidget {
@@ -41,14 +39,6 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  /// 跳转到地图页面
-  void _navigateToMapScreen() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => const MapScreen()),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -75,38 +65,38 @@ class _HomeScreenState extends State<HomeScreen> {
             const SizedBox(height: 20),
             Align(
               alignment: Alignment.centerRight,
-              child: GestureDetector(
-                onTap: () => Navigator.pushNamed(context, '/city_search'),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 8,
-                  ),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFE9EEDB),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: const Color(0xFFB8BDAE)),
-                    boxShadow: const [
-                      BoxShadow(
-                        color: Color(0x1A000000),
-                        blurRadius: 8,
-                        offset: Offset(0, 3),
-                      ),
-                    ],
-                  ),
-                  child: const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.search, size: 18, color: Colors.black87),
-                      SizedBox(width: 4),
-                      Text(
-                        '搜索',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w500,
-                          color: Colors.black87,
-                        ),
-                      ),
+	              child: GestureDetector(
+	                onTap: () => Navigator.pushNamed(context, '/city_search'),
+	                child: Container(
+	                  padding: const EdgeInsets.symmetric(
+	                    horizontal: 9.33,
+	                    vertical: 5.33,
+	                  ),
+	                  decoration: BoxDecoration(
+	                    color: const Color(0xFFE9EEDB),
+	                    borderRadius: BorderRadius.circular(13.33),
+	                    border: Border.all(color: const Color(0xFFB8BDAE)),
+	                    boxShadow: const [
+	                      BoxShadow(
+	                        color: Color(0x1A000000),
+	                        blurRadius: 5.33,
+	                        offset: Offset(0, 2),
+	                      ),
+	                    ],
+	                  ),
+	                  child: const Row(
+	                    mainAxisSize: MainAxisSize.min,
+	                    children: [
+	                      Icon(Icons.search, size: 12, color: Colors.black87),
+	                      SizedBox(width: 2.67),
+	                      Text(
+	                        '搜索',
+	                        style: TextStyle(
+	                          fontSize: 12,
+	                          fontWeight: FontWeight.w500,
+	                          color: Colors.black87,
+	                        ),
+	                      ),
                     ],
                   ),
                 ),
@@ -134,40 +124,20 @@ class _HomeScreenState extends State<HomeScreen> {
           ],
         ),
       ),
-      bottomNavigationBar: _HomeBottomNavigationBar(
-        onCommentTap: () => Navigator.pushNamed(context, '/comment_section'),
+      bottomNavigationBar: AppBottomNavBar(
+        currentTab: AppTab.home,
+        backgroundColor: Colors.white,
+        onHomeTap: () {
+          debugPrint('当前在首页');
+        },
+        onMapTap: () {
+          Navigator.pushNamed(context, '/map');
+        },
+        onCommentTap: () {
+          Navigator.pushNamed(context, '/comment_section');
+        },
+        onProfileTap: () => Navigator.pushNamed(context, '/profile'),
       ),
-    );
-  }
-}
-
-class _HomeBottomNavigationBar extends StatelessWidget {
-  final VoidCallback onCommentTap;
-
-  const _HomeBottomNavigationBar({required this.onCommentTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return AppBottomNavBar(
-      currentTab: AppTab.home,
-      backgroundColor: Colors.white,
-      onHomeTap: () {
-        debugPrint('当前在首页');
-      },
-      onMapTap: () {
-        // 使用新添加的方法跳转到地图页面
-        _navigateToMapScreen(context);
-      },
-      onCommentTap: onCommentTap,
-      onProfileTap: () => Navigator.pushNamed(context, '/profile'),
-    );
-  }
-
-  /// 跳转到地图页面
-  void _navigateToMapScreen(BuildContext context) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => const MapScreen()),
     );
   }
 }

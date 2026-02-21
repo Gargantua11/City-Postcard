@@ -320,7 +320,7 @@ class _MapScreenState extends State<MapScreen> {
     return Container(
       decoration: BoxDecoration(
         //地图卡片底色
-        color: const Color(0xFF3A3F47),
+        color: const Color(0xFFCBE6BB),
         borderRadius: BorderRadius.circular(18),
         border: Border.all(color: const Color(0xFFE2E7EF)),
         boxShadow: const [
@@ -356,7 +356,7 @@ class _MapScreenState extends State<MapScreen> {
                   borderWidth: 1.2,
                   selectedBorderWidth: 1.8,
                   // 地图主题背景
-                  backgroundColor: const Color(0xFF3A3F47),
+                  backgroundColor: const Color(0xFFCBE6BB),
                   mappingCode: _buildProvinceColorMap(),
                 ),
                 loadingBuilder: (_) =>
@@ -397,7 +397,7 @@ class _MapScreenState extends State<MapScreen> {
       margin: const EdgeInsets.symmetric(horizontal: 16),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: const Color(0xFFCBE6BB),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: const Color(0xFFE0E4EA)),
       ),
