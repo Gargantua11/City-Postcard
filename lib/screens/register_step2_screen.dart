@@ -6,8 +6,13 @@ import '../widgets/custom_text_field.dart';
 
 class RegisterStep2Screen extends StatefulWidget {
   final String phone;
+  final String regToken;
 
-  const RegisterStep2Screen({super.key, required this.phone});
+  const RegisterStep2Screen({
+    super.key,
+    required this.phone,
+    required this.regToken,
+  });
 
   @override
   State<RegisterStep2Screen> createState() => _RegisterStep2ScreenState();
@@ -95,6 +100,12 @@ class _RegisterStep2ScreenState extends State<RegisterStep2Screen> {
     if (_isSubmitting || !_formKey.currentState!.validate()) {
       return;
     }
+    if (widget.regToken.trim().isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('注册凭证已失效，请重新获取验证码')));
+      return;
+    }
 
     final cityCode = _selectedCity == null
         ? null
@@ -106,9 +117,11 @@ class _RegisterStep2ScreenState extends State<RegisterStep2Screen> {
 
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     final result = await authProvider.register(
+      widget.phone,
       _usernameController.text.trim(),
       _passwordController.text,
       _confirmPasswordController.text,
+      widget.regToken,
       cityCode,
     );
 
@@ -183,7 +196,9 @@ class _RegisterStep2ScreenState extends State<RegisterStep2Screen> {
                         height: 30,
                         decoration: const BoxDecoration(
                           image: DecorationImage(
-                            image: AssetImage('assets/images/auth/注册2-设置密码.png'),
+                            image: AssetImage(
+                              'assets/images/auth/注册2-设置密码.png',
+                            ),
                             fit: BoxFit.contain,
                             filterQuality: FilterQuality.high,
                           ),

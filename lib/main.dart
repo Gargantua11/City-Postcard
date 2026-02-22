@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import './screens/login_screen.dart';
@@ -39,7 +39,8 @@ class MyApp extends StatelessWidget {
         routes: {
           '/login': (context) => const LoginScreen(),
           '/register1': (context) => const RegisterStep1Screen(),
-          '/register2': (context) => const RegisterStep2Screen(phone: ''),
+          '/register2': (context) =>
+              const RegisterStep2Screen(phone: '', regToken: ''),
           '/forgot_password': (context) => const ForgotPasswordScreen(),
           '/home': (context) => const HomeScreen(),
           '/city_search': (context) => const CitySearchScreen(),

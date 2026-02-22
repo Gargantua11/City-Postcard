@@ -48,3 +48,12 @@ app.*.map.json
 
 .trae/documents/plan_20260213_091754.md
 docs/
+apifox_doc_urls.txt
+apifox_endpoints.csv
+apifox_endpoints.json
+apifox_paths.txt
+apifox_shared_doc.html
+apifox_endpoints_with_samples.json
+apifox_forget_verify.html
+apifox_login.html
+apifox_register_verify.html

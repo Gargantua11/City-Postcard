@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import '../models/user.dart';
 import './auth_service.dart';
 import './storage_service.dart';
@@ -35,9 +35,11 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<Map<String, dynamic>?> register(
+    String phone,
     String username,
     String password,
     String confirmPassword,
+    String regToken,
     int? cityCode,
   ) async {
     _isLoading = true;
@@ -46,9 +48,11 @@ class AuthProvider extends ChangeNotifier {
 
     try {
       final result = await _authService.register(
+        phone,
         username,
         password,
         confirmPassword,
+        regToken,
         cityCode,
       );
 

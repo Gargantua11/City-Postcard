@@ -1,6 +1,6 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import '../services/auth_provider.dart';
 import '../widgets/custom_text_field.dart';
 
@@ -12,7 +12,7 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final _usernameController = TextEditingController();
+  final _phoneController = TextEditingController();
   final _passwordController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
 
@@ -22,20 +22,22 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   void dispose() {
-    _usernameController.dispose();
+    _phoneController.dispose();
     _passwordController.dispose();
     super.dispose();
   }
 
-  // 用户名验证
-  String? _validateUsername(String? value) {
-    if (value == null || value.isEmpty) {
-      return '请输入用户名';
+  String? _validatePhone(String? value) {
+    final text = value?.trim() ?? '';
+    if (text.isEmpty) {
+      return '请输入手机号';
+    }
+    if (!RegExp(r'^1[3-9]\d{9}$').hasMatch(text)) {
+      return '请输入正确的手机号';
     }
     return null;
   }
 
-  // 密码验证
   String? _validatePassword(String? value) {
     if (value == null || value.isEmpty) {
       return '请输入密码';
@@ -43,8 +45,8 @@ class _LoginScreenState extends State<LoginScreen> {
     return null;
   }
 
-  // 登录
   Future<void> _login() async {
+    if (_isLoading) return;
     if (!_formKey.currentState!.validate()) {
       return;
     }
@@ -62,9 +64,15 @@ class _LoginScreenState extends State<LoginScreen> {
 
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     final success = await authProvider.login(
-      _usernameController.text.trim(),
+      _phoneController.text.trim(),
       _passwordController.text,
     );
+
+    if (!mounted) return;
+
+    setState(() {
+      _isLoading = false;
+    });
 
     if (success) {
       ScaffoldMessenger.of(
@@ -73,233 +81,119 @@ class _LoginScreenState extends State<LoginScreen> {
       Navigator.pushReplacementNamed(context, '/home');
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(authProvider.error ?? '登录失败，请检查用户名和密码')),
+        SnackBar(content: Text(authProvider.error ?? '登录失败，请检查手机号和密码')),
       );
     }
-
-    setState(() {
-      _isLoading = false;
-    });
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Container(
-        decoration: BoxDecoration(
-          image: DecorationImage(
-            image: AssetImage('assets/images/auth/登陆页面-背景.png'),
-            fit: BoxFit.cover,
-            filterQuality: FilterQuality.high,
-          ),
-        ),
-        child: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.all(20.0),
+      appBar: AppBar(title: const Text('登录')),
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
             child: Form(
               key: _formKey,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  const SizedBox(height: 70),
-
-                  // 欢迎登录
-                  Container(
-                    height: 30,
-                    decoration: const BoxDecoration(
-                      image: DecorationImage(
-                        image: AssetImage('assets/images/auth/欢迎登录.png'),
-                        fit: BoxFit.contain,
-                        filterQuality: FilterQuality.high,
-                      ),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 360),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    CustomTextField(
+                      controller: _phoneController,
+                      hintText: '请输入手机号',
+                      keyboardType: TextInputType.phone,
+                      prefixIcon: Icons.phone,
+                      validator: _validatePhone,
+                      enabled: !_isLoading,
                     ),
-                  ),
-                  const SizedBox(height: 55),
-
-                  // 用户名输入
-                  SizedBox(
-                    width: 300,
-                    child: CustomTextField(
-                      controller: _usernameController,
-                      hintText: '请输入用户名',
-                      prefixIcon: Icons.person,
-                      validator: _validateUsername,
-                    ),
-                  ),
-                  const SizedBox(height: 15),
-
-                  // 密码输入
-                  SizedBox(
-                    width: 300,
-                    child: CustomTextField(
+                    const SizedBox(height: 14),
+                    CustomTextField(
                       controller: _passwordController,
                       hintText: '请输入密码',
                       obscureText: _obscurePassword,
                       prefixIcon: Icons.lock,
                       validator: _validatePassword,
+                      enabled: !_isLoading,
                       suffixIcon: IconButton(
-                        onPressed: () {
-                          setState(() {
-                            _obscurePassword = !_obscurePassword;
-                          });
-                        },
+                        onPressed: _isLoading
+                            ? null
+                            : () {
+                                setState(() {
+                                  _obscurePassword = !_obscurePassword;
+                                });
+                              },
                         icon: Icon(
                           _obscurePassword
                               ? Icons.visibility_off
                               : Icons.visibility,
-                          color: Colors.grey,
-                          size: 20,
                         ),
                       ),
                     ),
-                  ),
-
-                  const SizedBox(height: 15),
-
-                  // 注册链接 - 自定义设计
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Text(
-                        '没有账号？',
-                        style: TextStyle(color: Colors.black87, fontSize: 14),
-                      ),
-                      TextButton(
-                        onPressed: () {
-                          Navigator.pushReplacementNamed(context, '/register1');
-                        },
-                        style: TextButton.styleFrom(
-                          padding: EdgeInsets.zero,
-                          minimumSize: Size.zero,
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Checkbox(
+                          value: _agreedToTerms,
+                          onChanged: _isLoading
+                              ? null
+                              : (value) {
+                                  setState(() {
+                                    _agreedToTerms = value ?? false;
+                                  });
+                                },
                         ),
-                        child: const Text(
-                          '点击注册',
-                          style: TextStyle(
-                            color: Color(0xFF4A90E2),
-                            fontSize: 14,
-                            fontWeight: FontWeight.bold,
+                        const Expanded(
+                          child: Text(
+                            '我已阅读并同意用户协议和隐私政策',
+                            style: TextStyle(fontSize: 12),
                           ),
                         ),
-                      ),
-                    ],
-                  ),
-
-                  const SizedBox(height: 15),
-
-                  // 登录按钮
-                  GestureDetector(
-                    onTap: _isLoading ? null : _login,
-                    child: Container(
-                      height: 70,
-                      decoration: const BoxDecoration(
-                        image: DecorationImage(
-                          image: AssetImage('assets/images/auth/登录按键.png'),
-                          fit: BoxFit.contain,
-                          filterQuality: FilterQuality.high,
-                        ),
-                      ),
+                      ],
                     ),
-                  ),
-
-                  const SizedBox(height: 5),
-
-                  // 找回密码 - 纯文本
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      TextButton(
-                        onPressed: () {
-                          Navigator.pushNamed(context, '/forgot_password');
-                        },
-                        style: TextButton.styleFrom(
-                          padding: EdgeInsets.zero,
-                          minimumSize: Size.zero,
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    const SizedBox(height: 8),
+                    FilledButton(
+                      onPressed: _isLoading ? null : _login,
+                      child: _isLoading
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Text('登录'),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        TextButton(
+                          onPressed: _isLoading
+                              ? null
+                              : () {
+                                  Navigator.pushReplacementNamed(
+                                    context,
+                                    '/register1',
+                                  );
+                                },
+                          child: const Text('注册账号'),
                         ),
-                        child: const Text(
-                          '忘记密码？',
-                          style: TextStyle(color: Colors.blue, fontSize: 14),
+                        TextButton(
+                          onPressed: _isLoading
+                              ? null
+                              : () {
+                                  Navigator.pushNamed(
+                                    context,
+                                    '/forgot_password',
+                                  );
+                                },
+                          child: const Text('忘记密码'),
                         ),
-                      ),
-                    ],
-                  ),
-
-                  const SizedBox(height: 20),
-
-                  // 协议勾选 - 页面底部
-                  Row(
-                    children: [
-                      Checkbox(
-                        value: _agreedToTerms,
-                        onChanged: (value) {
-                          setState(() {
-                            _agreedToTerms = value ?? false;
-                          });
-                        },
-                        activeColor: Colors.blue,
-                      ),
-                      Expanded(
-                        child: Wrap(
-                          children: [
-                            const Text(
-                              '我已阅读并同意',
-                              style: TextStyle(
-                                color: Colors.black87,
-                                fontSize: 12,
-                              ),
-                            ),
-                            TextButton(
-                              onPressed: () {
-                                // 打开用户协议
-                              },
-                              style: TextButton.styleFrom(
-                                padding: EdgeInsets.zero,
-                                minimumSize: Size.zero,
-                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                              ),
-                              child: const Text(
-                                '《用户协议》',
-                                style: TextStyle(
-                                  color: Colors.blue,
-                                  fontSize: 12,
-                                  decoration: TextDecoration.underline,
-                                ),
-                              ),
-                            ),
-                            const Text(
-                              '和',
-                              style: TextStyle(
-                                color: Colors.black87,
-                                fontSize: 12,
-                              ),
-                            ),
-                            TextButton(
-                              onPressed: () {
-                                // 打开隐私政策
-                              },
-                              style: TextButton.styleFrom(
-                                padding: EdgeInsets.zero,
-                                minimumSize: Size.zero,
-                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                              ),
-                              child: const Text(
-                                '《隐私政策》',
-                                style: TextStyle(
-                                  color: Colors.blue,
-                                  fontSize: 12,
-                                  decoration: TextDecoration.underline,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-
-                  const SizedBox(height: 20),
-                ],
+                      ],
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
