@@ -30,11 +30,11 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
 
   @override
   void dispose() {
-    _timer?.cancel();
     _phoneController.dispose();
     _codeController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
+    _timer?.cancel();
     super.dispose();
   }
 
@@ -205,109 +205,203 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('找回密码'),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => Navigator.pushReplacementNamed(context, '/login'),
+      body: Container(
+        decoration: const BoxDecoration(
+          image: DecorationImage(
+            image: AssetImage('assets/images/auth/注册1-背景.png'),
+            fit: BoxFit.cover,
+            filterQuality: FilterQuality.high,
+          ),
         ),
-      ),
-      body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-            child: Form(
-              key: _formKey,
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 360),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    CustomTextField(
-                      controller: _phoneController,
-                      hintText: '请输入手机号',
-                      keyboardType: TextInputType.phone,
-                      validator: _validatePhone,
-                      enabled: !_isSubmitting,
+        child: Stack(
+          children: [
+            Positioned(
+              top: 20,
+              left: 5,
+              child: GestureDetector(
+                onTap: () {
+                  Navigator.pushReplacementNamed(context, '/login');
+                },
+                child: Container(
+                  width: 80,
+                  height: 30,
+                  decoration: const BoxDecoration(
+                    image: DecorationImage(
+                      image: AssetImage('assets/images/auth/注册2-返回.png'),
+                      fit: BoxFit.contain,
+                      filterQuality: FilterQuality.high,
                     ),
-                    const SizedBox(height: 14),
-                    CustomTextField(
-                      controller: _codeController,
-                      hintText: '请输入验证码',
-                      keyboardType: TextInputType.number,
-                      maxLength: 6,
-                      validator: _validateCode,
-                      enabled: !_isSubmitting,
-                      suffixIcon: TextButton(
-                        onPressed: (_canSendCode && !_isSubmitting)
-                            ? _sendCode
-                            : null,
-                        child: Text(_canSendCode ? '获取验证码' : '${_countdown}s'),
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-                    CustomTextField(
-                      controller: _passwordController,
-                      hintText: '请输入新密码',
-                      obscureText: _obscurePassword,
-                      prefixIcon: Icons.lock,
-                      validator: _validatePassword,
-                      enabled: !_isSubmitting,
-                      suffixIcon: IconButton(
-                        onPressed: _isSubmitting
-                            ? null
-                            : () {
-                                setState(() {
-                                  _obscurePassword = !_obscurePassword;
-                                });
-                              },
-                        icon: Icon(
-                          _obscurePassword
-                              ? Icons.visibility_off
-                              : Icons.visibility,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-                    CustomTextField(
-                      controller: _confirmPasswordController,
-                      hintText: '请再次输入密码',
-                      obscureText: _obscureConfirmPassword,
-                      prefixIcon: Icons.lock_outline,
-                      validator: _validateConfirmPassword,
-                      enabled: !_isSubmitting,
-                      suffixIcon: IconButton(
-                        onPressed: _isSubmitting
-                            ? null
-                            : () {
-                                setState(() {
-                                  _obscureConfirmPassword =
-                                      !_obscureConfirmPassword;
-                                });
-                              },
-                        icon: Icon(
-                          _obscureConfirmPassword
-                              ? Icons.visibility_off
-                              : Icons.visibility,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    FilledButton(
-                      onPressed: _isSubmitting ? null : _resetPassword,
-                      child: _isSubmitting
-                          ? const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Text('重置密码'),
-                    ),
-                  ],
+                  ),
                 ),
               ),
             ),
-          ),
+            SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      const SizedBox(height: 30),
+                      Container(
+                        width: 150,
+                        height: 50,
+                        decoration: const BoxDecoration(
+                          image: DecorationImage(
+                            image: AssetImage('assets/images/auth/找回密码.png'),
+                            fit: BoxFit.contain,
+                            filterQuality: FilterQuality.high,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      Center(
+                        child: SizedBox(
+                          width: 300,
+                          child: CustomTextField(
+                            controller: _phoneController,
+                            hintText: '请输入手机号',
+                            keyboardType: TextInputType.phone,
+                            validator: _validatePhone,
+                            enabled: !_isSubmitting,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 15),
+                      Center(
+                        child: SizedBox(
+                          width: 300,
+                          child: CustomTextField(
+                            controller: _codeController,
+                            hintText: '请输入验证码',
+                            keyboardType: TextInputType.number,
+                            maxLength: 6,
+                            validator: _validateCode,
+                            enabled: !_isSubmitting,
+                            suffixIcon: TextButton(
+                              onPressed: (_canSendCode && !_isSubmitting)
+                                  ? _sendCode
+                                  : null,
+                              style: TextButton.styleFrom(
+                                padding: EdgeInsets.zero,
+                                minimumSize: Size.zero,
+                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              ),
+                              child: Text(
+                                _canSendCode ? '获取验证码' : '等待${_countdown}s',
+                                style: TextStyle(
+                                  color: _canSendCode
+                                      ? Colors.blue
+                                      : Colors.grey,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 15),
+                      Center(
+                        child: SizedBox(
+                          width: 300,
+                          child: CustomTextField(
+                            controller: _passwordController,
+                            hintText: '请输入新密码',
+                            obscureText: _obscurePassword,
+                            prefixIcon: Icons.lock,
+                            validator: _validatePassword,
+                            enabled: !_isSubmitting,
+                            suffixIcon: IconButton(
+                              onPressed: _isSubmitting
+                                  ? null
+                                  : () {
+                                      setState(() {
+                                        _obscurePassword = !_obscurePassword;
+                                      });
+                                    },
+                              icon: Icon(
+                                _obscurePassword
+                                    ? Icons.visibility_off
+                                    : Icons.visibility,
+                                color: Colors.grey,
+                                size: 20,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 15),
+                      Center(
+                        child: SizedBox(
+                          width: 300,
+                          child: CustomTextField(
+                            controller: _confirmPasswordController,
+                            hintText: '请再次输入密码',
+                            obscureText: _obscureConfirmPassword,
+                            prefixIcon: Icons.lock_outline,
+                            validator: _validateConfirmPassword,
+                            enabled: !_isSubmitting,
+                            suffixIcon: IconButton(
+                              onPressed: _isSubmitting
+                                  ? null
+                                  : () {
+                                      setState(() {
+                                        _obscureConfirmPassword =
+                                            !_obscureConfirmPassword;
+                                      });
+                                    },
+                              icon: Icon(
+                                _obscureConfirmPassword
+                                    ? Icons.visibility_off
+                                    : Icons.visibility,
+                                color: Colors.grey,
+                                size: 20,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 15),
+                      GestureDetector(
+                        onTap: _isSubmitting ? null : _resetPassword,
+                        child: SizedBox(
+                          height: 70,
+                          child: Stack(
+                            alignment: Alignment.center,
+                            children: [
+                              const DecoratedBox(
+                                decoration: BoxDecoration(
+                                  image: DecorationImage(
+                                    image: AssetImage(
+                                      'assets/images/auth/注册2-完成.png',
+                                    ),
+                                    fit: BoxFit.contain,
+                                    filterQuality: FilterQuality.high,
+                                  ),
+                                ),
+                                child: SizedBox.expand(),
+                              ),
+                              if (_isSubmitting)
+                                const SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );

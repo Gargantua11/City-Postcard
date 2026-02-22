@@ -101,27 +101,17 @@ class _CommentSectionScreenState extends State<CommentSectionScreen> {
                   76 + bottomInset + 108,
                 ),
                 children: [
-                  Row(
-                    children: [
-                      const Expanded(
-                        child: Center(
-                          child: Text(
-                            '讨论区',
-                            style: TextStyle(
-                              fontSize: 42,
-                              fontWeight: FontWeight.w700,
-                              color: Colors.black,
-                            ),
-                          ),
-                        ),
+                  const Center(
+                    child: Text(
+                      '讨论区',
+                      style: TextStyle(
+                        fontSize: 46,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.black,
                       ),
-                      IconButton(
-                        onPressed: _isLoading ? null : _loadPosts,
-                        icon: const Icon(Icons.refresh_rounded),
-                      ),
-                    ],
+                    ),
                   ),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 14),
                   Row(
                     children: [
                       Expanded(
@@ -137,19 +127,19 @@ class _CommentSectionScreenState extends State<CommentSectionScreen> {
                             controller: _searchController,
                             decoration: const InputDecoration(
                               border: InputBorder.none,
-                              hintText: '输入昵称 / 地点 / 热评关键字',
+                              hintText: '输入昵称、地点或热评',
                               hintStyle: TextStyle(
                                 color: Color(0xFFA7AEA2),
-                                fontSize: 14,
+                                fontSize: 16,
                               ),
                               isCollapsed: true,
                             ),
-                            style: const TextStyle(fontSize: 14),
+                            style: const TextStyle(fontSize: 16),
                           ),
                         ),
                       ),
                       const SizedBox(width: 8),
-                      const Icon(Icons.search, size: 30, color: Colors.black87),
+                      const Icon(Icons.search, size: 34, color: Colors.black87),
                     ],
                   ),
                   const SizedBox(height: 20),
@@ -159,14 +149,17 @@ class _CommentSectionScreenState extends State<CommentSectionScreen> {
                       child: Center(child: CircularProgressIndicator()),
                     )
                   else if (_errorMessage != null)
-                    _ErrorCard(message: _errorMessage!, onRetry: _loadPosts)
+                    _ErrorSection(message: _errorMessage!, onRetry: _loadPosts)
                   else if (_visiblePosts.isEmpty)
                     const Padding(
                       padding: EdgeInsets.symmetric(vertical: 40),
                       child: Center(
                         child: Text(
                           '暂无帖子',
-                          style: TextStyle(color: Color(0xFF6D7680)),
+                          style: TextStyle(
+                            color: Color(0xFF6D7680),
+                            fontSize: 14,
+                          ),
                         ),
                       ),
                     )
@@ -202,10 +195,14 @@ class _CommentSectionScreenState extends State<CommentSectionScreen> {
         currentTab: AppTab.comment,
         backgroundColor: const Color(0xFFE7E7E7),
         onHomeTap: () {
-          Navigator.pushReplacementNamed(context, '/home');
+          if (Navigator.of(context).canPop()) {
+            Navigator.of(context).pop();
+          } else {
+            Navigator.pushNamed(context, '/home');
+          }
         },
         onMapTap: () {
-          Navigator.pushReplacementNamed(context, '/map');
+          Navigator.pushNamed(context, '/map');
         },
         onCommentTap: () {},
         onProfileTap: () => Navigator.pushNamed(context, '/profile'),
@@ -214,8 +211,8 @@ class _CommentSectionScreenState extends State<CommentSectionScreen> {
   }
 }
 
-class _ErrorCard extends StatelessWidget {
-  const _ErrorCard({required this.message, required this.onRetry});
+class _ErrorSection extends StatelessWidget {
+  const _ErrorSection({required this.message, required this.onRetry});
 
   final String message;
   final VoidCallback onRetry;
@@ -233,8 +230,8 @@ class _ErrorCard extends StatelessWidget {
         children: [
           Text(
             message,
-            style: const TextStyle(fontSize: 14, color: Color(0xFF43505C)),
             textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 14, color: Color(0xFF43505C)),
           ),
           const SizedBox(height: 10),
           OutlinedButton(onPressed: onRetry, child: const Text('重试')),
@@ -271,7 +268,7 @@ class _DiscussionPostCard extends StatelessWidget {
         children: [
           LayoutBuilder(
             builder: (context, constraints) {
-              const sideWidth = 96.0;
+              const sideWidth = 88.0;
               const gap = 12.0;
               final imageWidth = constraints.maxWidth - sideWidth - gap;
               final imageHeight = imageWidth / _postcardAspectRatio;
@@ -284,7 +281,7 @@ class _DiscussionPostCard extends StatelessWidget {
                       width: imageWidth,
                       height: imageHeight,
                       child: ClipRRect(
-                        borderRadius: BorderRadius.circular(6),
+                        borderRadius: BorderRadius.circular(4),
                         child: _PostImage(imageUrl: item.imageUrl),
                       ),
                     ),
@@ -293,10 +290,12 @@ class _DiscussionPostCard extends StatelessWidget {
                       width: sideWidth,
                       height: imageHeight,
                       child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          _UserAvatar(url: item.avatar),
-                          const SizedBox(height: 6),
+                          const CircleAvatar(
+                            radius: 16,
+                            backgroundColor: Color(0xFFD2D2D2),
+                          ),
+                          const SizedBox(height: 5),
                           Text(
                             item.username,
                             maxLines: 1,
@@ -304,10 +303,9 @@ class _DiscussionPostCard extends StatelessWidget {
                             style: const TextStyle(
                               fontSize: 12,
                               color: Color(0xFF111111),
-                              fontWeight: FontWeight.w600,
                             ),
                           ),
-                          const SizedBox(height: 3),
+                          const SizedBox(height: 2),
                           Text(
                             DateFormat('MM-dd HH:mm').format(item.createdAt),
                             style: const TextStyle(
@@ -315,7 +313,7 @@ class _DiscussionPostCard extends StatelessWidget {
                               color: Color(0xFF1D1D1D),
                             ),
                           ),
-                          const SizedBox(height: 3),
+                          const SizedBox(height: 2),
                           Text(
                             item.address,
                             maxLines: 1,
@@ -326,30 +324,22 @@ class _DiscussionPostCard extends StatelessWidget {
                             ),
                           ),
                           const Spacer(),
-                          Row(
-                            children: [
-                              const Icon(
-                                Icons.favorite_border,
-                                size: 14,
-                                color: Color(0xFF3A3A3A),
+                          Container(
+                            width: 34,
+                            height: 34,
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              border: Border.all(
+                                color: const Color(0xFF3A3A3A),
+                                width: 2.5,
                               ),
-                              const SizedBox(width: 2),
-                              Text(
-                                '${item.likeCount}',
-                                style: const TextStyle(fontSize: 11),
-                              ),
-                              const SizedBox(width: 8),
-                              const Icon(
-                                Icons.chat_bubble_outline_rounded,
-                                size: 14,
-                                color: Color(0xFF3A3A3A),
-                              ),
-                              const SizedBox(width: 2),
-                              Text(
-                                '${item.commentCount}',
-                                style: const TextStyle(fontSize: 11),
-                              ),
-                            ],
+                              borderRadius: BorderRadius.circular(17),
+                            ),
+                            child: const Icon(
+                              Icons.chat_bubble_outline_rounded,
+                              size: 19,
+                              color: Color(0xFF3A3A3A),
+                            ),
                           ),
                         ],
                       ),
@@ -406,31 +396,6 @@ class _PostImage extends StatelessWidget {
         if (progress == null) return child;
         return const ColoredBox(color: Color(0xFFD2D2D2));
       },
-    );
-  }
-}
-
-class _UserAvatar extends StatelessWidget {
-  const _UserAvatar({this.url});
-
-  final String? url;
-
-  @override
-  Widget build(BuildContext context) {
-    final safeUrl = url?.trim() ?? '';
-    if (safeUrl.isEmpty) {
-      return const CircleAvatar(
-        radius: 16,
-        backgroundColor: Color(0xFFD2D2D2),
-        child: Icon(Icons.person, size: 14, color: Color(0xFF666666)),
-      );
-    }
-
-    return CircleAvatar(
-      radius: 16,
-      backgroundColor: const Color(0xFFD2D2D2),
-      backgroundImage: NetworkImage(safeUrl),
-      onBackgroundImageError: (_, _) {},
     );
   }
 }

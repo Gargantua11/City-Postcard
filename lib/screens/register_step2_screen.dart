@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'city_search_screen.dart';
+
 import '../services/auth_provider.dart';
 import '../widgets/custom_text_field.dart';
+import 'city_search_screen.dart';
 
 class RegisterStep2Screen extends StatefulWidget {
   final String phone;
@@ -77,11 +78,9 @@ class _RegisterStep2ScreenState extends State<RegisterStep2Screen> {
   }
 
   Future<void> _selectCity() async {
-    if (_isSubmitting) {
-      return;
-    }
+    if (_isSubmitting) return;
 
-    final City? selected = await Navigator.push<City>(
+    final selected = await Navigator.push<City>(
       context,
       MaterialPageRoute(
         builder: (context) =>
@@ -89,11 +88,10 @@ class _RegisterStep2ScreenState extends State<RegisterStep2Screen> {
       ),
     );
 
-    if (selected != null) {
-      setState(() {
-        _selectedCity = selected;
-      });
-    }
+    if (!mounted || selected == null) return;
+    setState(() {
+      _selectedCity = selected;
+    });
   }
 
   Future<void> _complete() async {
@@ -125,9 +123,7 @@ class _RegisterStep2ScreenState extends State<RegisterStep2Screen> {
       cityCode,
     );
 
-    if (!mounted) {
-      return;
-    }
+    if (!mounted) return;
 
     setState(() {
       _isSubmitting = false;
@@ -175,7 +171,7 @@ class _RegisterStep2ScreenState extends State<RegisterStep2Screen> {
                   height: 30,
                   decoration: const BoxDecoration(
                     image: DecorationImage(
-                      image: AssetImage('assets/images/auth/注册1-返回.png'),
+                      image: AssetImage('assets/images/auth/注册2-返回.png'),
                       fit: BoxFit.contain,
                       filterQuality: FilterQuality.high,
                     ),
@@ -185,7 +181,7 @@ class _RegisterStep2ScreenState extends State<RegisterStep2Screen> {
             ),
             SafeArea(
               child: Padding(
-                padding: const EdgeInsets.all(20.0),
+                padding: const EdgeInsets.all(20),
                 child: Form(
                   key: _formKey,
                   child: Column(
@@ -238,11 +234,13 @@ class _RegisterStep2ScreenState extends State<RegisterStep2Screen> {
                             validator: _validatePassword,
                             enabled: !_isSubmitting,
                             suffixIcon: IconButton(
-                              onPressed: () {
-                                setState(() {
-                                  _obscurePassword = !_obscurePassword;
-                                });
-                              },
+                              onPressed: _isSubmitting
+                                  ? null
+                                  : () {
+                                      setState(() {
+                                        _obscurePassword = !_obscurePassword;
+                                      });
+                                    },
                               icon: Icon(
                                 _obscurePassword
                                     ? Icons.visibility_off
@@ -266,12 +264,14 @@ class _RegisterStep2ScreenState extends State<RegisterStep2Screen> {
                             validator: _validateConfirmPassword,
                             enabled: !_isSubmitting,
                             suffixIcon: IconButton(
-                              onPressed: () {
-                                setState(() {
-                                  _obscureConfirmPassword =
-                                      !_obscureConfirmPassword;
-                                });
-                              },
+                              onPressed: _isSubmitting
+                                  ? null
+                                  : () {
+                                      setState(() {
+                                        _obscureConfirmPassword =
+                                            !_obscureConfirmPassword;
+                                      });
+                                    },
                               icon: Icon(
                                 _obscureConfirmPassword
                                     ? Icons.visibility_off
@@ -288,7 +288,7 @@ class _RegisterStep2ScreenState extends State<RegisterStep2Screen> {
                         child: SizedBox(
                           width: 300,
                           child: GestureDetector(
-                            onTap: _selectCity,
+                            onTap: _isSubmitting ? null : _selectCity,
                             child: Container(
                               height: 50,
                               decoration: BoxDecoration(

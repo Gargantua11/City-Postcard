@@ -1,7 +1,8 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
+
 import '../models/user.dart';
-import './auth_service.dart';
-import './storage_service.dart';
+import 'auth_service.dart';
+import 'storage_service.dart';
 
 class AuthProvider extends ChangeNotifier {
   User? _user;
@@ -27,7 +28,7 @@ class AuthProvider extends ChangeNotifier {
       }
     } catch (e) {
       _error = '初始化认证状态失败';
-      print('初始化认证状态失败: $e');
+      debugPrint('初始化认证状态失败: $e');
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -61,14 +62,16 @@ class AuthProvider extends ChangeNotifier {
         return null;
       }
 
-      if (result['code'] != 0) {
+      final code = _toInt(result['code']);
+      final success = code == null || code == 0 || code == 200;
+      if (!success) {
         _error = result['msg']?.toString() ?? _authService.lastError ?? '注册失败';
       }
 
       return result;
     } catch (e) {
       _error = '注册失败: $e';
-      print('注册失败: $e');
+      debugPrint('注册失败: $e');
       return null;
     } finally {
       _isLoading = false;
@@ -76,24 +79,24 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
-  Future<bool> login(String username, String password) async {
+  Future<bool> login(String phone, String password) async {
     _isLoading = true;
     _error = null;
     notifyListeners();
 
     try {
-      final user = await _authService.login(username, password);
+      final user = await _authService.login(phone, password);
       if (user != null) {
         _user = user;
         await _storageService.saveUser(user);
         return true;
       }
 
-      _error = _authService.lastError ?? '登录失败，请检查用户名和密码';
+      _error = _authService.lastError ?? '登录失败，请检查手机号和密码';
       return false;
     } catch (e) {
       _error = '登录失败: $e';
-      print('登录失败: $e');
+      debugPrint('登录失败: $e');
       return false;
     } finally {
       _isLoading = false;
@@ -114,11 +117,11 @@ class AuthProvider extends ChangeNotifier {
         return true;
       }
 
-      _error = '登录失败，请检查验证码';
+      _error = _authService.lastError ?? '登录失败，请检查验证码';
       return false;
     } catch (e) {
       _error = '登录失败: $e';
-      print('登录失败: $e');
+      debugPrint('登录失败: $e');
       return false;
     } finally {
       _isLoading = false;
@@ -138,7 +141,7 @@ class AuthProvider extends ChangeNotifier {
       _user = null;
     } catch (e) {
       _error = '登出失败';
-      print('登出失败: $e');
+      debugPrint('登出失败: $e');
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -148,5 +151,11 @@ class AuthProvider extends ChangeNotifier {
   void clearError() {
     _error = null;
     notifyListeners();
+  }
+
+  int? _toInt(dynamic value) {
+    if (value is int) return value;
+    if (value is String) return int.tryParse(value);
+    return null;
   }
 }

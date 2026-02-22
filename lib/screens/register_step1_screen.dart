@@ -28,9 +28,9 @@ class _RegisterStep1ScreenState extends State<RegisterStep1Screen> {
 
   @override
   void dispose() {
-    _timer?.cancel();
     _phoneController.dispose();
     _codeController.dispose();
+    _timer?.cancel();
     super.dispose();
   }
 
@@ -51,7 +51,7 @@ class _RegisterStep1ScreenState extends State<RegisterStep1Screen> {
       return '请输入验证码';
     }
     if (text.length != 6) {
-      return '验证码应为6位';
+      return '验证码为6位数字';
     }
     return null;
   }
@@ -122,9 +122,7 @@ class _RegisterStep1ScreenState extends State<RegisterStep1Screen> {
 
   Future<void> _nextStep() async {
     if (_isVerifying || _isSendingCode) return;
-    if (!_formKey.currentState!.validate()) {
-      return;
-    }
+    if (!_formKey.currentState!.validate()) return;
 
     final phone = _phoneController.text.trim();
     final verifyCode = _codeController.text.trim();
@@ -159,69 +157,151 @@ class _RegisterStep1ScreenState extends State<RegisterStep1Screen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('注册 - 第一步'),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => Navigator.pushReplacementNamed(context, '/login'),
+      body: Container(
+        decoration: const BoxDecoration(
+          image: DecorationImage(
+            image: AssetImage('assets/images/auth/注册1-背景.png'),
+            fit: BoxFit.cover,
+            filterQuality: FilterQuality.high,
+          ),
         ),
-      ),
-      body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-            child: Form(
-              key: _formKey,
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 360),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    CustomTextField(
-                      controller: _phoneController,
-                      hintText: '请输入手机号',
-                      keyboardType: TextInputType.phone,
-                      validator: _validatePhone,
-                      enabled: !_isVerifying,
+        child: Stack(
+          children: [
+            Positioned(
+              top: 20,
+              left: 5,
+              child: GestureDetector(
+                onTap: () {
+                  Navigator.pushReplacementNamed(context, '/login');
+                },
+                child: Container(
+                  width: 80,
+                  height: 30,
+                  decoration: const BoxDecoration(
+                    image: DecorationImage(
+                      image: AssetImage('assets/images/auth/注册1-返回.png'),
+                      fit: BoxFit.contain,
+                      filterQuality: FilterQuality.high,
                     ),
-                    const SizedBox(height: 16),
-                    CustomTextField(
-                      controller: _codeController,
-                      hintText: '请输入验证码',
-                      keyboardType: TextInputType.number,
-                      maxLength: 6,
-                      validator: _validateCode,
-                      enabled: !_isVerifying,
-                      suffixIcon: TextButton(
-                        onPressed:
-                            (_canSendCode && !_isSendingCode && !_isVerifying)
-                            ? _sendCode
-                            : null,
-                        child: Text(
-                          _canSendCode
-                              ? (_isSendingCode ? '发送中...' : '获取验证码')
-                              : '${_countdown}s',
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    FilledButton(
-                      onPressed: (_isVerifying || _isSendingCode)
-                          ? null
-                          : _nextStep,
-                      child: _isVerifying
-                          ? const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Text('下一步'),
-                    ),
-                  ],
+                  ),
                 ),
               ),
             ),
-          ),
+            SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      const SizedBox(height: 70),
+                      Container(
+                        height: 30,
+                        decoration: const BoxDecoration(
+                          image: DecorationImage(
+                            image: AssetImage(
+                              'assets/images/auth/注册1-注册账号.png',
+                            ),
+                            fit: BoxFit.contain,
+                            filterQuality: FilterQuality.high,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 55),
+                      Center(
+                        child: SizedBox(
+                          width: 300,
+                          child: CustomTextField(
+                            controller: _phoneController,
+                            hintText: '请输入手机号',
+                            keyboardType: TextInputType.phone,
+                            validator: _validatePhone,
+                            enabled: !_isVerifying,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 30),
+                      Center(
+                        child: SizedBox(
+                          width: 300,
+                          child: CustomTextField(
+                            controller: _codeController,
+                            hintText: '请输入验证码',
+                            keyboardType: TextInputType.number,
+                            maxLength: 6,
+                            validator: _validateCode,
+                            enabled: !_isVerifying,
+                            suffixIcon: TextButton(
+                              onPressed:
+                                  (_canSendCode &&
+                                      !_isSendingCode &&
+                                      !_isVerifying)
+                                  ? _sendCode
+                                  : null,
+                              style: TextButton.styleFrom(
+                                padding: EdgeInsets.zero,
+                                minimumSize: Size.zero,
+                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              ),
+                              child: Text(
+                                _canSendCode
+                                    ? (_isSendingCode ? '发送中...' : '获取验证码')
+                                    : '等待${_countdown}s',
+                                style: TextStyle(
+                                  color: _canSendCode
+                                      ? Colors.blue
+                                      : Colors.grey,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 30),
+                      GestureDetector(
+                        onTap: (_isVerifying || _isSendingCode)
+                            ? null
+                            : _nextStep,
+                        child: SizedBox(
+                          height: 70,
+                          child: Stack(
+                            alignment: Alignment.center,
+                            children: [
+                              const DecoratedBox(
+                                decoration: BoxDecoration(
+                                  image: DecorationImage(
+                                    image: AssetImage(
+                                      'assets/images/auth/注册1-下一步.png',
+                                    ),
+                                    fit: BoxFit.contain,
+                                    filterQuality: FilterQuality.high,
+                                  ),
+                                ),
+                                child: SizedBox.expand(),
+                              ),
+                              if (_isVerifying)
+                                const SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const Spacer(),
+                      const SizedBox(height: 20),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );

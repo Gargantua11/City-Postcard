@@ -14,16 +14,17 @@ class MapScreen extends StatefulWidget {
 }
 
 class _MapScreenState extends State<MapScreen> {
+  static const String _headerAsset = 'assets/images/map/地图.png';
+
   final MapBackendService _mapService = MapBackendService();
 
   bool _isLoading = true;
   String? _errorMessage;
-  String? _selectedProvinceCode;
   String? _loadingProvinceCode;
-
-  Set<String> _litProvinceCodes = const <String>{};
-  Map<String, List<_CitySpot>> _citySpotsByProvince =
-      const <String, List<_CitySpot>>{};
+  Set<String> _litProvinceCodes = const {};
+  Map<String, List<_CitySpot>> _citySpotsByProvince = const {};
+  List<_CitySpot> _citySpots = const [];
+  String? _selectedProvinceCode;
 
   @override
   void initState() {
@@ -39,15 +40,52 @@ class _MapScreenState extends State<MapScreen> {
 
     try {
       final cityCodes = await _mapService.fetchLightedCityCodes();
-      final citySpotsByProvince = _buildSpotsFromLightedCityCodes(cityCodes);
-      final litProvinceCodes = citySpotsByProvince.keys.toSet();
+
+      final litProvinces = <String>{};
+      final latestByProvinceCity = <String, _CitySpot>{};
+
+      for (final rawCode in cityCodes) {
+        final cityCode = _normalizeCityCode(rawCode);
+        final provinceCode = _provinceCodeFromCityCode(cityCode);
+        if (cityCode == null || provinceCode == null) continue;
+
+        litProvinces.add(provinceCode);
+
+        final coordinate = kCityCodeCoordinates[cityCode];
+        final spot = _CitySpot(
+          provinceCode: provinceCode,
+          cityLabel: '代码$cityCode',
+          cityCode: cityCode,
+          latitude: coordinate?.latitude,
+          longitude: coordinate?.longitude,
+          editedAt: DateTime.now(),
+        );
+
+        final dedupeKey =
+            '${spot.provinceCode}_${spot.cityCode ?? spot.cityLabel}';
+        final current = latestByProvinceCity[dedupeKey];
+        if (current == null || spot.editedAt.isAfter(current.editedAt)) {
+          latestByProvinceCity[dedupeKey] = spot;
+        }
+      }
+
+      final citySpotsByProvince = <String, List<_CitySpot>>{};
+      for (final spot in latestByProvinceCity.values) {
+        citySpotsByProvince.putIfAbsent(spot.provinceCode, () => []).add(spot);
+      }
+      for (final list in citySpotsByProvince.values) {
+        list.sort((a, b) => b.editedAt.compareTo(a.editedAt));
+      }
+
+      final allSpots = latestByProvinceCity.values.toList()
+        ..sort((a, b) => b.editedAt.compareTo(a.editedAt));
 
       if (!mounted) return;
-
       setState(() {
+        _litProvinceCodes = litProvinces;
         _citySpotsByProvince = citySpotsByProvince;
-        _litProvinceCodes = litProvinceCodes;
-        _selectedProvinceCode = litProvinceCodes.contains(_selectedProvinceCode)
+        _citySpots = allSpots;
+        _selectedProvinceCode = litProvinces.contains(_selectedProvinceCode)
             ? _selectedProvinceCode
             : null;
         _isLoading = false;
@@ -58,80 +96,48 @@ class _MapScreenState extends State<MapScreen> {
         _isLoading = false;
         _errorMessage = e.message;
       });
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(e.message)));
     } catch (_) {
       if (!mounted) return;
       setState(() {
         _isLoading = false;
         _errorMessage = '加载地图数据失败，请稍后重试';
       });
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('加载地图数据失败，请稍后重试')));
     }
-  }
-
-  Map<String, List<_CitySpot>> _buildSpotsFromLightedCityCodes(
-    List<String> cityCodes,
-  ) {
-    final result = <String, Map<String, _CitySpot>>{};
-
-    for (final rawCode in cityCodes) {
-      final cityCode = _normalizeCityCode(rawCode);
-      if (cityCode == null || cityCode.length < 2) continue;
-
-      final provincePrefix = cityCode.substring(0, 2);
-      final provinceCode = _provinceCodeByPrefix[provincePrefix];
-      if (provinceCode == null) continue;
-
-      final coordinate = kCityCodeCoordinates[cityCode];
-      final spot = _CitySpot(
-        provinceCode: provinceCode,
-        cityLabel: cityCode,
-        cityCode: cityCode,
-        latitude: coordinate?.latitude,
-        longitude: coordinate?.longitude,
-        editedAt: DateTime.now(),
-      );
-
-      final key = cityCode;
-      result.putIfAbsent(provinceCode, () => <String, _CitySpot>{});
-      result[provinceCode]![key] = spot;
-    }
-
-    final converted = <String, List<_CitySpot>>{};
-    for (final entry in result.entries) {
-      converted[entry.key] = entry.value.values.toList()
-        ..sort((a, b) => b.editedAt.compareTo(a.editedAt));
-    }
-
-    return converted;
   }
 
   Future<void> _loadProvinceDetails(String provinceCode) async {
     if (_loadingProvinceCode == provinceCode) return;
 
-    final prefix = _provincePrefixFromCode(provinceCode);
-    if (prefix == null) return;
+    final provincePrefix = _provincePrefixFromCode(provinceCode);
+    if (provincePrefix == null) return;
 
     setState(() {
       _loadingProvinceCode = provinceCode;
     });
 
     try {
-      final cards = await _mapService.fetchProvincePostcards(prefix);
-      final detailSpots = <String, _CitySpot>{};
+      final cards = await _mapService.fetchProvincePostcards(provincePrefix);
+      final latestByProvinceCity = <String, _CitySpot>{};
 
       for (final card in cards) {
         final cityCode = _normalizeCityCode(card.cityCode);
         final cityLabel = _resolveCityLabel(
-          cityCode: cityCode,
           cityName: card.cityName,
+          cityCode: cityCode,
         );
-        final coordinate = _resolveCoordinate(
+        final coordinate = _resolveCityCoordinate(
           cityCode: cityCode,
           latitude: card.latitude,
           longitude: card.longitude,
         );
 
-        final key = cityCode ?? cityLabel;
-        final candidate = _CitySpot(
+        final spot = _CitySpot(
           provinceCode: provinceCode,
           cityLabel: cityLabel,
           cityCode: cityCode,
@@ -140,21 +146,30 @@ class _MapScreenState extends State<MapScreen> {
           editedAt: card.createdAt,
         );
 
-        final existing = detailSpots[key];
-        if (existing == null || candidate.editedAt.isAfter(existing.editedAt)) {
-          detailSpots[key] = candidate;
+        final dedupeKey =
+            '${spot.provinceCode}_${spot.cityCode ?? spot.cityLabel}';
+        final current = latestByProvinceCity[dedupeKey];
+        if (current == null || spot.editedAt.isAfter(current.editedAt)) {
+          latestByProvinceCity[dedupeKey] = spot;
         }
       }
 
       if (!mounted) return;
 
-      if (detailSpots.isNotEmpty) {
+      if (latestByProvinceCity.isNotEmpty) {
+        final nextByProvince = <String, List<_CitySpot>>{
+          ..._citySpotsByProvince,
+          provinceCode: latestByProvinceCity.values.toList()
+            ..sort((a, b) => b.editedAt.compareTo(a.editedAt)),
+        };
+
+        final nextAllSpots = _buildAllSpots(nextByProvince);
+        final nextLitProvinces = <String>{..._litProvinceCodes, provinceCode};
+
         setState(() {
-          _citySpotsByProvince = <String, List<_CitySpot>>{
-            ..._citySpotsByProvince,
-            provinceCode: detailSpots.values.toList()
-              ..sort((a, b) => b.editedAt.compareTo(a.editedAt)),
-          };
+          _citySpotsByProvince = nextByProvince;
+          _citySpots = nextAllSpots;
+          _litProvinceCodes = nextLitProvinces;
         });
       }
     } on BackendApiException catch (e) {
@@ -176,36 +191,37 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
-  CityCoordinate? _resolveCoordinate({
+  List<_CitySpot> _buildAllSpots(Map<String, List<_CitySpot>> byProvince) {
+    final all = <_CitySpot>[];
+    for (final spots in byProvince.values) {
+      all.addAll(spots);
+    }
+    all.sort((a, b) => b.editedAt.compareTo(a.editedAt));
+    return all;
+  }
+
+  bool _isValidCoordinate(double? lat, double? lng) {
+    if (lat == null || lng == null) return false;
+    return lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180;
+  }
+
+  CityCoordinate? _resolveCityCoordinate({
     required String? cityCode,
     required double? latitude,
     required double? longitude,
   }) {
-    if (latitude != null &&
-        longitude != null &&
-        latitude >= -90 &&
-        latitude <= 90 &&
-        longitude >= -180 &&
-        longitude <= 180) {
-      return CityCoordinate(longitude, latitude);
+    if (_isValidCoordinate(latitude, longitude)) {
+      return CityCoordinate(longitude!, latitude!);
     }
-
     if (cityCode == null) return null;
     return kCityCodeCoordinates[cityCode];
   }
 
-  String _resolveCityLabel({
-    required String? cityCode,
-    required String? cityName,
-  }) {
-    final trimmedName = cityName?.trim() ?? '';
-    if (trimmedName.isNotEmpty) {
-      return trimmedName;
-    }
-    if (cityCode != null && cityCode.isNotEmpty) {
-      return cityCode;
-    }
-    return '未知城市';
+  String? _provinceCodeFromCityCode(String? cityCode) {
+    final normalized = _normalizeCityCode(cityCode);
+    if (normalized == null || normalized.length < 2) return null;
+    final provincePrefix = normalized.substring(0, 2);
+    return _provinceCodeByCityPrefix[provincePrefix];
   }
 
   String? _provincePrefixFromCode(String code) {
@@ -215,42 +231,53 @@ class _MapScreenState extends State<MapScreen> {
     return prefix;
   }
 
+  String _resolveCityLabel({String? cityName, String? cityCode}) {
+    final normalizedCity = _normalizeCityName(cityName);
+    if (normalizedCity != null && normalizedCity.isNotEmpty) {
+      return normalizedCity;
+    }
+    final normalizedCityCode = _normalizeCityCode(cityCode);
+    if (normalizedCityCode != null) {
+      return '代码$normalizedCityCode';
+    }
+    return '未知城市';
+  }
+
+  String? _normalizeCityName(String? raw) {
+    if (raw == null) return null;
+    var text = raw.trim();
+    if (text.isEmpty) return null;
+
+    const suffixes = ['自治州', '地区', '省直辖县级行政区划', '省直辖行政单位', '盟', '市'];
+
+    for (final suffix in suffixes) {
+      if (text.endsWith(suffix) && text.length > suffix.length) {
+        text = text.substring(0, text.length - suffix.length);
+        break;
+      }
+    }
+
+    return text;
+  }
+
   String? _normalizeCityCode(String? raw) {
     if (raw == null) return null;
-    final digits = raw.trim().replaceAll(RegExp(r'[^0-9]'), '');
+    final text = raw.trim();
+    if (text.isEmpty) return null;
+    final digits = text.replaceAll(RegExp(r'[^0-9]'), '');
     if (digits.isEmpty) return null;
-    if (digits.length >= 4) {
-      return digits.substring(0, 4);
-    }
-    return digits;
+    return digits.length >= 4 ? digits.substring(0, 4) : digits;
   }
 
   void _onProvinceTap(String code) {
-    final next = _selectedProvinceCode == code ? null : code;
+    final nextCode = _selectedProvinceCode == code ? null : code;
     setState(() {
-      _selectedProvinceCode = next;
+      _selectedProvinceCode = nextCode;
     });
 
-    if (next != null) {
-      _loadProvinceDetails(next);
+    if (nextCode != null) {
+      _loadProvinceDetails(nextCode);
     }
-  }
-
-  List<_CitySpot> get _allSpots {
-    final all = <_CitySpot>[];
-    for (final spots in _citySpotsByProvince.values) {
-      all.addAll(spots);
-    }
-    all.sort((a, b) => b.editedAt.compareTo(a.editedAt));
-    return all;
-  }
-
-  List<_CitySpot> get _visibleSpots {
-    final selected = _selectedProvinceCode;
-    if (selected == null) {
-      return _allSpots;
-    }
-    return _citySpotsByProvince[selected] ?? const <_CitySpot>[];
   }
 
   Map<String, Color> _buildProvinceColorMap() {
@@ -260,14 +287,16 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   List<MarkerGroup> _buildMarkerGroups() {
-    final markersToDraw = _visibleSpots
-        .where((spot) => spot.hasCoordinate)
-        .take(100)
-        .toList();
+    final selected = _selectedProvinceCode;
+    final source = selected == null
+        ? _citySpots
+        : (_citySpotsByProvince[selected] ?? const <_CitySpot>[]);
 
-    if (markersToDraw.isEmpty) {
-      return const [];
-    }
+    final markersToDraw = source
+        .where((e) => e.hasCoordinate)
+        .take(80)
+        .toList();
+    if (markersToDraw.isEmpty) return const [];
 
     return [
       MarkerGroup(
@@ -306,7 +335,7 @@ class _MapScreenState extends State<MapScreen> {
             const SizedBox(height: 10),
             _buildSummary(
               provinceCount: sortedProvinceCodes.length,
-              cityCount: _allSpots.length,
+              cityCount: _citySpots.length,
             ),
             const SizedBox(height: 8),
             _buildProvinceChips(sortedProvinceCodes),
@@ -334,13 +363,19 @@ class _MapScreenState extends State<MapScreen> {
       child: Stack(
         fit: StackFit.expand,
         children: [
-          const Center(
-            child: Text(
-              '地图',
-              style: TextStyle(
-                fontSize: 30,
-                fontWeight: FontWeight.w700,
-                color: Color(0xFF1E2430),
+          Center(
+            child: Image.asset(
+              _headerAsset,
+              height: 40,
+              fit: BoxFit.contain,
+              filterQuality: FilterQuality.high,
+              errorBuilder: (_, _, _) => const Text(
+                '地图',
+                style: TextStyle(
+                  fontSize: 30,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF1E2430),
+                ),
               ),
             ),
           ),
@@ -385,7 +420,7 @@ class _MapScreenState extends State<MapScreen> {
                 onCountrySelected: _onProvinceTap,
                 markers: _buildMarkerGroups(),
                 theme: InteractiveMapTheme(
-                  defaultCountryColor: const Color(0xFFB6B8BB),
+                  defaultCountryColor: const Color.fromARGB(255, 170, 172, 174),
                   defaultSelectedCountryColor: const Color(0xFF88B6FF),
                   borderColor: Colors.white,
                   borderWidth: 1.2,
@@ -403,35 +438,6 @@ class _MapScreenState extends State<MapScreen> {
                   color: Color(0x99FFFFFF),
                   child: Center(
                     child: CircularProgressIndicator(strokeWidth: 2.4),
-                  ),
-                ),
-              ),
-            if (!_isLoading && _errorMessage != null)
-              Positioned.fill(
-                child: ColoredBox(
-                  color: const Color(0xCCFFFFFF),
-                  child: Center(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 20),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            _errorMessage!,
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(
-                              color: Color(0xFF49515C),
-                              fontSize: 14,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          OutlinedButton(
-                            onPressed: _loadMapData,
-                            child: const Text('重试'),
-                          ),
-                        ],
-                      ),
-                    ),
                   ),
                 ),
               ),
@@ -456,6 +462,8 @@ class _MapScreenState extends State<MapScreen> {
 
     final text = _isLoading
         ? '正在读取地图数据...'
+        : _errorMessage != null
+        ? _errorMessage!
         : selectedProvinceName != null
         ? '当前选中：$selectedProvinceName，已标注 $selectedProvinceCityCount 个城市'
         : '已点亮 $provinceCount 个省份，标注 $cityCount 个城市';
@@ -554,7 +562,7 @@ class _MapScreenState extends State<MapScreen> {
         ? null
         : _provinceNameByCode[selectedCode];
     final spots = selectedCode == null
-        ? _allSpots.take(24).toList()
+        ? _citySpots.take(24).toList()
         : (_citySpotsByProvince[selectedCode] ?? const <_CitySpot>[]);
 
     if (spots.isEmpty) {
@@ -651,7 +659,7 @@ class _CitySpot {
   bool get hasCoordinate => latitude != null && longitude != null;
 }
 
-const Map<String, String> _provinceCodeByPrefix = {
+const Map<String, String> _provinceCodeByCityPrefix = {
   '11': 'CN-11',
   '12': 'CN-12',
   '13': 'CN-13',
