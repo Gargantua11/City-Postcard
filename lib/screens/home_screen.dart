@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../services/edited_postcard_service.dart';
 import '../widgets/app_bottom_nav_bar.dart';
@@ -65,38 +65,38 @@ class _HomeScreenState extends State<HomeScreen> {
             const SizedBox(height: 20),
             Align(
               alignment: Alignment.centerRight,
-	              child: GestureDetector(
-	                onTap: () => Navigator.pushNamed(context, '/city_search'),
-	                child: Container(
-	                  padding: const EdgeInsets.symmetric(
-	                    horizontal: 9.33,
-	                    vertical: 5.33,
-	                  ),
-	                  decoration: BoxDecoration(
-	                    color: const Color(0xFFE9EEDB),
-	                    borderRadius: BorderRadius.circular(13.33),
-	                    border: Border.all(color: const Color(0xFFB8BDAE)),
-	                    boxShadow: const [
-	                      BoxShadow(
-	                        color: Color(0x1A000000),
-	                        blurRadius: 5.33,
-	                        offset: Offset(0, 2),
-	                      ),
-	                    ],
-	                  ),
-	                  child: const Row(
-	                    mainAxisSize: MainAxisSize.min,
-	                    children: [
-	                      Icon(Icons.search, size: 12, color: Colors.black87),
-	                      SizedBox(width: 2.67),
-	                      Text(
-	                        '搜索',
-	                        style: TextStyle(
-	                          fontSize: 12,
-	                          fontWeight: FontWeight.w500,
-	                          color: Colors.black87,
-	                        ),
-	                      ),
+              child: GestureDetector(
+                onTap: () => Navigator.pushNamed(context, '/city_search'),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 9.33,
+                    vertical: 5.33,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE9EEDB),
+                    borderRadius: BorderRadius.circular(13.33),
+                    border: Border.all(color: const Color(0xFFB8BDAE)),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Color(0x1A000000),
+                        blurRadius: 5.33,
+                        offset: Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.search, size: 12, color: Colors.black87),
+                      SizedBox(width: 2.67),
+                      Text(
+                        '搜索',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                          color: Colors.black87,
+                        ),
+                      ),
                     ],
                   ),
                 ),

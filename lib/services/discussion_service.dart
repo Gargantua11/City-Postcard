@@ -126,7 +126,7 @@ class DiscussionService {
     final body = await _apiClient.get(
       '/discussion/postcards',
       queryParameters: <String, String>{'lastTime': formatted},
-      requireAuth: true,
+      requireAuth: false,
     );
 
     final data = BackendApiClient.extractData(body);

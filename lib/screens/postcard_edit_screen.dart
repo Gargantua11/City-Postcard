@@ -51,7 +51,8 @@ class _PostcardEditScreenState extends State<PostcardEditScreen> {
     final selectedCity = await Navigator.push<City>(
       context,
       MaterialPageRoute(
-        builder: (context) => CitySearchScreen(selectedCity: _selectedCity?.name),
+        builder: (context) =>
+            CitySearchScreen(selectedCity: _selectedCity?.name),
       ),
     );
 
@@ -178,7 +179,8 @@ class _PostcardEditScreenState extends State<PostcardEditScreen> {
                                 assetPath: 'assets/images/edit/编辑-添加元素.png',
                                 width: actionWidth,
                                 height: actionHeight,
-                                onTap: () => Navigator.pushNamed(context, '/add'),
+                                onTap: () =>
+                                    Navigator.pushNamed(context, '/add'),
                               ),
                               SizedBox(height: 14 * scale),
                               _AssetTapButton(
@@ -219,7 +221,7 @@ class _PostcardEditScreenState extends State<PostcardEditScreen> {
                           ),
                         ),
                       ),
-                      SizedBox(height: 30 * scale),
+                      SizedBox(height: 16 * scale),
                       _AssetTapButton(
                         assetPath: 'assets/images/edit/编辑-保存.png',
                         width: saveWidth,

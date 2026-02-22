@@ -77,7 +77,10 @@ class MapBackendService {
   final BackendApiClient _apiClient;
 
   Future<List<String>> fetchLightedCityCodes() async {
-    final body = await _apiClient.get('/map/lighted-cities', requireAuth: true);
+    final body = await _apiClient.get(
+      '/map/lighted-cities',
+      requireAuth: false,
+    );
 
     final data = BackendApiClient.extractData(body);
     final rawList = BackendApiClient.extractList(data);
@@ -97,7 +100,7 @@ class MapBackendService {
   ) async {
     final body = await _apiClient.get(
       '/map/province-postcard/$provinceCodePrefix',
-      requireAuth: true,
+      requireAuth: false,
     );
 
     final data = BackendApiClient.extractData(body);

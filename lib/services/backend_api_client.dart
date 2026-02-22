@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import 'storage_service.dart';
@@ -20,12 +21,34 @@ class BackendApiClient {
   BackendApiClient({StorageService? storageService})
     : _storageService = storageService ?? StorageService();
 
-  static const String baseUrl = String.fromEnvironment(
+  static const String _configuredBaseUrl = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: 'http://localhost:8080',
   );
+  static final String baseUrl = _resolveBaseUrl();
 
   final StorageService _storageService;
+
+  static String _resolveBaseUrl() {
+    final configured = _configuredBaseUrl.trim();
+    if (configured.isNotEmpty) {
+      return configured;
+    }
+
+    if (kIsWeb) {
+      return 'http://localhost:8080';
+    }
+
+    switch (defaultTargetPlatform) {
+      case TargetPlatform.android:
+        return 'http://10.0.2.2:8080';
+      case TargetPlatform.iOS:
+      case TargetPlatform.macOS:
+      case TargetPlatform.linux:
+      case TargetPlatform.windows:
+      case TargetPlatform.fuchsia:
+        return 'http://localhost:8080';
+    }
+  }
 
   Future<Map<String, dynamic>> get(
     String path, {
@@ -64,11 +87,9 @@ class BackendApiClient {
     }
 
     final token = await _storageService.getToken();
-    if (token == null || token.trim().isEmpty) {
-      throw const BackendApiException('请先登录', statusCode: 401);
+    if (token != null && token.trim().isNotEmpty) {
+      headers['Authorization'] = 'Bearer ${token.trim()}';
     }
-
-    headers['Authorization'] = 'Bearer ${token.trim()}';
     return headers;
   }
 

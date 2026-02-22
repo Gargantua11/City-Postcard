@@ -1,19 +1,43 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import '../models/user.dart';
 
 class AuthService {
-  static const String _baseUrl = String.fromEnvironment(
+  static const String _configuredBaseUrl = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: 'http://localhost:8080',
   );
+  static final String _baseUrl = _resolveBaseUrl();
 
   String? _lastError;
 
   String? get lastError => _lastError;
   String get baseUrl => _baseUrl;
+
+  static String _resolveBaseUrl() {
+    final configured = _configuredBaseUrl.trim();
+    if (configured.isNotEmpty) {
+      return configured;
+    }
+
+    if (kIsWeb) {
+      return 'http://localhost:8080';
+    }
+
+    switch (defaultTargetPlatform) {
+      case TargetPlatform.android:
+        // Android emulator maps host loopback to 10.0.2.2.
+        return 'http://10.0.2.2:8080';
+      case TargetPlatform.iOS:
+      case TargetPlatform.macOS:
+      case TargetPlatform.linux:
+      case TargetPlatform.windows:
+      case TargetPlatform.fuchsia:
+        return 'http://localhost:8080';
+    }
+  }
 
   Future<bool> sendRegisterCode(String phone) async {
     _lastError = null;
