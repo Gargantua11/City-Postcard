@@ -72,6 +72,7 @@ flutter:
     - assets/images/map/
     - assets/images/edit/
     - assets/images/profile/
+    - assets/images/dynamic_effects/
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

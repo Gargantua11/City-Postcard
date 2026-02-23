@@ -1,8 +1,12 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../data/city_code_center.dart';
+import '../models/postcard_element_layer.dart';
 import '../services/edited_postcard_service.dart';
 import 'city_search_screen.dart';
+import 'dynamic_effect_screen.dart';
 
 class PostcardEditScreen extends StatefulWidget {
   const PostcardEditScreen({super.key});
@@ -11,12 +15,30 @@ class PostcardEditScreen extends StatefulWidget {
   State<PostcardEditScreen> createState() => _PostcardEditScreenState();
 }
 
-class _PostcardEditScreenState extends State<PostcardEditScreen> {
+class _PostcardEditScreenState extends State<PostcardEditScreen>
+    with SingleTickerProviderStateMixin {
   static const String _defaultPreviewAsset = 'assets/images/edit/编辑-开始定制.png';
 
   final EditedPostcardService _editedPostcardService = EditedPostcardService();
+  List<PostcardElementLayer> _elementLayers = const [];
   City? _selectedCity;
   bool _isSaving = false;
+  late final AnimationController _effectController;
+
+  @override
+  void initState() {
+    super.initState();
+    _effectController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 12),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _effectController.dispose();
+    super.dispose();
+  }
 
   Future<void> _savePostcard() async {
     if (_isSaving) return;
@@ -34,6 +56,7 @@ class _PostcardEditScreenState extends State<PostcardEditScreen> {
       provinceName: provinceName,
       latitude: coordinate?.latitude,
       longitude: coordinate?.longitude,
+      layers: _elementLayers,
     );
 
     if (!mounted) return;
@@ -94,6 +117,147 @@ class _PostcardEditScreenState extends State<PostcardEditScreen> {
 
   void _onActionTap(String title) {
     _showHint('$title 功能开发中');
+  }
+
+  Future<void> _openDynamicEffects() async {
+    if (_isSaving) return;
+    final result = await Navigator.push<List<PostcardElementLayer>>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => DynamicEffectScreen(initialLayers: _elementLayers),
+      ),
+    );
+    if (!mounted || result == null) return;
+    setState(() {
+      _elementLayers = List<PostcardElementLayer>.from(result);
+    });
+  }
+
+  Future<void> _openAddElements() async {
+    if (_isSaving) return;
+
+    final result = await Navigator.pushNamed(context, '/add');
+    if (!mounted || result == null) return;
+
+    if (result is List<PostcardElementLayer>) {
+      setState(() {
+        _elementLayers = List<PostcardElementLayer>.from(result);
+      });
+      _showHint('已应用元素：${_elementLayers.length} 个');
+      return;
+    }
+
+    if (result is List) {
+      final layers = <PostcardElementLayer>[];
+      for (final item in result) {
+        if (item is PostcardElementLayer) {
+          layers.add(item);
+        }
+      }
+      if (layers.isEmpty) return;
+      setState(() {
+        _elementLayers = layers;
+      });
+      _showHint('已应用元素：${_elementLayers.length} 个');
+    }
+  }
+
+  List<PostcardElementLayer> _sortedLayers() {
+    final layers = List<PostcardElementLayer>.from(_elementLayers);
+    layers.sort((a, b) => a.zIndex.compareTo(b.zIndex));
+    return layers;
+  }
+
+  Widget _buildLayerOverlay(double previewWidth, double previewHeight) {
+    if (_elementLayers.isEmpty) return const SizedBox.shrink();
+    final layers = _sortedLayers();
+
+    return IgnorePointer(
+      child: AnimatedBuilder(
+        animation: _effectController,
+        builder: (context, child) {
+          return Stack(
+            fit: StackFit.expand,
+            children: [
+              for (final layer in layers)
+                _buildSingleLayer(layer, previewWidth, previewHeight),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildSingleLayer(
+    PostcardElementLayer layer,
+    double previewWidth,
+    double previewHeight,
+  ) {
+    final rawScale = layer.scale <= 0 ? 1.0 : layer.scale;
+    final baseSize = (previewWidth * 0.22 * rawScale).clamp(
+      26.0,
+      previewWidth * 0.45,
+    );
+
+    final useFallbackOffset = layer.x == 0 && layer.y == 0;
+    final fallbackX = ((layer.zIndex % 4) - 1.5) * (previewWidth * 0.16);
+    final fallbackY = (((layer.zIndex ~/ 4) % 3) - 1.0) * (previewHeight * 0.14);
+
+    final offsetX = useFallbackOffset ? fallbackX : layer.x;
+    final offsetY = useFallbackOffset ? fallbackY : layer.y;
+
+    final left = previewWidth / 2 + offsetX - baseSize / 2;
+    final top = previewHeight / 2 + offsetY - baseSize / 2;
+
+    final image = Image.asset(
+      layer.assetPath,
+      fit: BoxFit.contain,
+      filterQuality: FilterQuality.high,
+      errorBuilder: (context, error, stackTrace) {
+        return Container(
+          decoration: BoxDecoration(
+            color: const Color(0xFFE5E5E5),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: const Color(0xFFC8C8C8)),
+          ),
+          alignment: Alignment.center,
+          child: const Icon(Icons.image_not_supported, size: 18),
+        );
+      },
+    );
+
+    final speed = layer.rotationSpeed <= 0 ? 1.0 : layer.rotationSpeed;
+    final directionSign =
+        layer.rotationDirection == 'counterclockwise' ? -1.0 : 1.0;
+    final cycleAngle =
+        _effectController.value * math.pi * 2 * speed * directionSign;
+
+    Widget transformed = image;
+    if (layer.is3dEnabled) {
+      final matrix = Matrix4.identity()..setEntry(3, 2, layer.perspective);
+      if (layer.rotationAxis == 'horizontal') {
+        matrix
+          ..rotateX(layer.rotateX + cycleAngle)
+          ..rotateY(layer.rotateY);
+      } else {
+        matrix
+          ..rotateY(layer.rotateY + cycleAngle)
+          ..rotateX(layer.rotateX);
+      }
+      transformed = Transform(
+        alignment: Alignment.center,
+        transform: matrix,
+        child: image,
+      );
+    } else if (layer.rotation2d != 0) {
+      transformed = Transform.rotate(angle: layer.rotation2d, child: image);
+    }
+
+    return Positioned(
+      left: left,
+      top: top,
+      child: SizedBox(width: baseSize, height: baseSize, child: transformed),
+    );
   }
 
   @override
@@ -168,6 +332,7 @@ class _PostcardEditScreenState extends State<PostcardEditScreen> {
                         width: contentWidth,
                         height: previewHeight,
                         onTap: () => _onActionTap('开始定制'),
+                        child: _buildLayerOverlay(contentWidth, previewHeight),
                       ),
                       SizedBox(height: 30 * scale),
                       Row(
@@ -179,15 +344,14 @@ class _PostcardEditScreenState extends State<PostcardEditScreen> {
                                 assetPath: 'assets/images/edit/编辑-添加元素.png',
                                 width: actionWidth,
                                 height: actionHeight,
-                                onTap: () =>
-                                    Navigator.pushNamed(context, '/add'),
+                                onTap: _openAddElements,
                               ),
                               SizedBox(height: 14 * scale),
                               _AssetTapButton(
                                 assetPath: 'assets/images/edit/编辑-动态效果.png',
                                 width: actionWidth,
                                 height: actionHeight,
-                                onTap: () => _onActionTap('动态效果'),
+                                onTap: _openDynamicEffects,
                               ),
                               SizedBox(height: 14 * scale),
                               _AssetTapButton(

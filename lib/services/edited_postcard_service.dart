@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../models/postcard_element_layer.dart';
+
 class EditedPostcard {
   final String draftId;
   final String imageUrl;
@@ -11,6 +13,7 @@ class EditedPostcard {
   final String? cityName;
   final String? cityCode;
   final String? provinceName;
+  final List<PostcardElementLayer> layers;
 
   const EditedPostcard({
     required this.draftId,
@@ -22,6 +25,7 @@ class EditedPostcard {
     this.cityName,
     this.cityCode,
     this.provinceName,
+    this.layers = const [],
   });
 
   Map<String, dynamic> toJson() {
@@ -38,6 +42,8 @@ class EditedPostcard {
         'cityCode': cityCode!.trim(),
       if (provinceName != null && provinceName!.trim().isNotEmpty)
         'provinceName': provinceName!.trim(),
+      if (layers.isNotEmpty)
+        'layers': layers.map((item) => item.toJson()).toList(growable: false),
     };
   }
 
@@ -61,6 +67,7 @@ class EditedPostcard {
       cityName: _toNullableTrimmedString(json['cityName']),
       cityCode: _toNullableCodeString(json['cityCode']),
       provinceName: _toNullableTrimmedString(json['provinceName']),
+      layers: _toElementLayers(json['layers']),
     );
   }
 }
@@ -105,6 +112,7 @@ class EditedPostcardService {
     String? cityName,
     String? cityCode,
     String? provinceName,
+    List<PostcardElementLayer>? layers,
   }) async {
     final postcards = await getEditedPostcards();
     postcards.insert(
@@ -119,6 +127,7 @@ class EditedPostcardService {
         cityName: cityName?.trim(),
         cityCode: _toNullableCodeString(cityCode),
         provinceName: provinceName?.trim(),
+        layers: List<PostcardElementLayer>.from(layers ?? const []),
       ),
     );
     await _savePostcards(postcards);
@@ -155,6 +164,7 @@ class EditedPostcardService {
       cityName: target.cityName,
       cityCode: target.cityCode,
       provinceName: target.provinceName,
+      layers: target.layers,
     );
 
     await _savePostcards(postcards);
@@ -214,4 +224,28 @@ bool? _toBool(dynamic value) {
   if (text == 'true' || text == '1') return true;
   if (text == 'false' || text == '0') return false;
   return null;
+}
+
+List<PostcardElementLayer> _toElementLayers(dynamic value) {
+  if (value is! List) return const [];
+
+  final layers = <PostcardElementLayer>[];
+  for (var i = 0; i < value.length; i++) {
+    final item = value[i];
+    if (item is Map<String, dynamic>) {
+      layers.add(
+        PostcardElementLayer.fromJson(item, fallbackId: 'legacy_layer_$i'),
+      );
+      continue;
+    }
+    if (item is Map) {
+      layers.add(
+        PostcardElementLayer.fromJson(
+          item.cast<String, dynamic>(),
+          fallbackId: 'legacy_layer_$i',
+        ),
+      );
+    }
+  }
+  return layers;
 }

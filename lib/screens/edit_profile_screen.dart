@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 
 import '../services/storage_service.dart';
+import 'edit_profile_avatar_screen.dart';
+import 'edit_profile_nickname_screen.dart';
+import 'edit_profile_password_screen.dart';
+import 'edit_profile_phone_screen.dart';
 
 class EditProfileScreen extends StatefulWidget {
   const EditProfileScreen({super.key});
@@ -47,313 +51,186 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     });
   }
 
-  Future<void> _editAvatar() async {
-    final action = await showModalBottomSheet<String>(
-      context: context,
-      showDragHandle: true,
-      builder: (sheetContext) {
-        return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(
-                leading: const Icon(Icons.person_outline),
-                title: const Text('使用默认头像'),
-                onTap: () => Navigator.pop(sheetContext, 'default'),
-              ),
-              ListTile(
-                leading: const Icon(Icons.link),
-                title: const Text('输入头像地址'),
-                onTap: () => Navigator.pop(sheetContext, 'input'),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-
-    if (!mounted || action == null) return;
-
-    if (action == 'default') {
-      await _storageService.saveProfileAvatar(null);
-      if (!mounted) return;
-      setState(() {
-        _avatarSource = null;
-      });
-      _showHint('已恢复默认头像');
-      return;
-    }
-
-    final controller = TextEditingController(text: _avatarSource ?? '');
-    final value = await showDialog<String>(
-      context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          title: const Text('头像地址'),
-          content: TextField(
-            controller: controller,
-            decoration: const InputDecoration(
-              hintText: '输入 http(s) 或 assets/ 开头地址',
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('取消'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(dialogContext, controller.text),
-              child: const Text('保存'),
-            ),
-          ],
-        );
-      },
-    );
-
-    if (!mounted || value == null) return;
-    final normalized = value.trim();
-    if (normalized.isEmpty) {
-      _showHint('头像地址不能为空');
-      return;
-    }
-
-    await _storageService.saveProfileAvatar(normalized);
-    if (!mounted) return;
-    setState(() {
-      _avatarSource = normalized;
-    });
-    _showHint('头像已更新');
-  }
-
-  Future<void> _editNickname() async {
-    final controller = TextEditingController(text: _nickname);
-    final value = await showDialog<String>(
-      context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          title: const Text('修改昵称'),
-          content: TextField(
-            controller: controller,
-            maxLength: 20,
-            decoration: const InputDecoration(hintText: '请输入昵称（2-20字）'),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('取消'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(dialogContext, controller.text),
-              child: const Text('保存'),
-            ),
-          ],
-        );
-      },
-    );
-
-    if (!mounted || value == null) return;
-    final normalized = value.trim();
-    if (normalized.length < 2 || normalized.length > 20) {
-      _showHint('昵称长度需在2-20之间');
-      return;
-    }
-
-    await _storageService.saveProfileNickname(normalized);
-    if (!mounted) return;
-    setState(() {
-      _nickname = normalized;
-    });
-    _showHint('昵称已更新');
-  }
-
-  Future<void> _editPhone() async {
-    final controller = TextEditingController(text: _phone);
-    final value = await showDialog<String>(
-      context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          title: const Text('修改手机号'),
-          content: TextField(
-            controller: controller,
-            keyboardType: TextInputType.phone,
-            maxLength: 11,
-            decoration: const InputDecoration(hintText: '请输入11位手机号'),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('取消'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(dialogContext, controller.text),
-              child: const Text('保存'),
-            ),
-          ],
-        );
-      },
-    );
-
-    if (!mounted || value == null) return;
-    final normalized = value.trim();
-    if (!RegExp(r'^1\d{10}$').hasMatch(normalized)) {
-      _showHint('请输入正确的11位手机号');
-      return;
-    }
-
-    await _storageService.saveProfilePhone(normalized);
-    if (!mounted) return;
-    setState(() {
-      _phone = normalized;
-    });
-    _showHint('手机号已更新');
-  }
-
-  Future<void> _editPassword() async {
-    final passwordController = TextEditingController();
-    final confirmController = TextEditingController();
-
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          title: const Text('修改密码'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: passwordController,
-                obscureText: true,
-                decoration: const InputDecoration(hintText: '请输入新密码'),
-              ),
-              const SizedBox(height: 10),
-              TextField(
-                controller: confirmController,
-                obscureText: true,
-                decoration: const InputDecoration(hintText: '请再次输入新密码'),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext, false),
-              child: const Text('取消'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(dialogContext, true),
-              child: const Text('保存'),
-            ),
-          ],
-        );
-      },
-    );
-
-    if (!mounted || confirmed != true) return;
-
-    final password = passwordController.text.trim();
-    final confirm = confirmController.text.trim();
-    if (password.length < 6) {
-      _showHint('密码至少6位');
-      return;
-    }
-    if (password != confirm) {
-      _showHint('两次输入的密码不一致');
-      return;
-    }
-
-    await _storageService.saveProfilePassword(password);
-    if (!mounted) return;
-    setState(() {
-      _hasPassword = true;
-    });
-    _showHint('密码已更新');
-  }
-
-  void _showHint(String message) {
-    ScaffoldMessenger.of(
+  Future<void> _openAvatarEdit() async {
+    final updated = await Navigator.push<bool>(
       context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+      MaterialPageRoute(builder: (_) => const EditProfileAvatarScreen()),
+    );
+    if (!mounted || updated != true) return;
+    await _loadProfile();
+  }
+
+  Future<void> _openNicknameEdit() async {
+    final updated = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(builder: (_) => const EditProfileNicknameScreen()),
+    );
+    if (!mounted || updated != true) return;
+    await _loadProfile();
+  }
+
+  Future<void> _openPhoneEdit() async {
+    final updated = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(builder: (_) => const EditProfilePhoneScreen()),
+    );
+    if (!mounted || updated != true) return;
+    await _loadProfile();
+  }
+
+  Future<void> _openPasswordEdit() async {
+    final updated = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(builder: (_) => const EditProfilePasswordScreen()),
+    );
+    if (!mounted || updated != true) return;
+    await _loadProfile();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFEDEDED),
-      appBar: AppBar(
-        backgroundColor: const Color(0xFFEDEDED),
-        elevation: 0,
-        centerTitle: true,
-        title: const Text(
-          '编辑个人信息',
-          style: TextStyle(
-            fontSize: 22,
-            fontWeight: FontWeight.w700,
-            color: Color(0xFF30363B),
+      body: Container(
+        decoration: const BoxDecoration(
+          image: DecorationImage(
+            image: AssetImage('assets/images/auth/注册2-背景.png'),
+            fit: BoxFit.cover,
+            filterQuality: FilterQuality.high,
           ),
         ),
-      ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : SafeArea(
-              top: false,
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  final maxWidth = constraints.maxWidth;
-                  final rowWidth = (maxWidth - 24).clamp(320.0, 440.0);
-                  final rowHeight = rowWidth * (48 / 397);
-
-                  return Center(
-                    child: SizedBox(
-                      width: rowWidth,
-                      child: SingleChildScrollView(
-                        padding: const EdgeInsets.only(top: 18, bottom: 16),
-                        child: Column(
-                          children: [
-                            _EditProfileItem(
-                              width: rowWidth,
-                              height: rowHeight,
-                              icon: Icons.account_circle_outlined,
-                              text: '头像',
-                              value: '点击修改',
-                              valueWidget: _InlineAvatar(
-                                imageSource: _avatarSource,
-                              ),
-                              onTap: _editAvatar,
-                            ),
-                            const SizedBox(height: 16),
-                            _EditProfileItem(
-                              width: rowWidth,
-                              height: rowHeight,
-                              icon: Icons.person_outline,
-                              text: '昵称',
-                              value: _nickname,
-                              onTap: _editNickname,
-                            ),
-                            const SizedBox(height: 16),
-                            _EditProfileItem(
-                              width: rowWidth,
-                              height: rowHeight,
-                              icon: Icons.phone_outlined,
-                              text: '手机号',
-                              value: _maskPhone(_phone),
-                              onTap: _editPhone,
-                            ),
-                            const SizedBox(height: 16),
-                            _EditProfileItem(
-                              width: rowWidth,
-                              height: rowHeight,
-                              icon: Icons.lock_outline,
-                              text: '密码',
-                              value: _hasPassword ? '已设置' : '未设置',
-                              onTap: _editPassword,
-                            ),
-                          ],
-                        ),
-                      ),
+        child: Stack(
+          children: [
+            Positioned(
+              top: 20,
+              left: 5,
+              child: GestureDetector(
+                onTap: () => Navigator.pop(context),
+                child: Container(
+                  width: 80,
+                  height: 30,
+                  decoration: const BoxDecoration(
+                    image: DecorationImage(
+                      image: AssetImage('assets/images/auth/注册2-返回.png'),
+                      fit: BoxFit.contain,
+                      filterQuality: FilterQuality.high,
                     ),
-                  );
-                },
+                  ),
+                ),
               ),
             ),
+            SafeArea(
+              child: _isLoading
+                  ? const Center(child: CircularProgressIndicator())
+                  : LayoutBuilder(
+                      builder: (context, constraints) {
+                        final maxWidth = constraints.maxWidth;
+                        final rowWidth = maxWidth > 320 ? 300.0 : maxWidth - 20;
+
+                        return Center(
+                          child: SizedBox(
+                            width: rowWidth,
+                            child: SingleChildScrollView(
+                              padding: const EdgeInsets.only(
+                                top: 26,
+                                bottom: 20,
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.center,
+                                children: [
+                                  const Text(
+                                    '编辑个人信息',
+                                    style: TextStyle(
+                                      fontSize: 28,
+                                      fontWeight: FontWeight.w600,
+                                      color: Color(0xFF2E3A2A),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 16),
+                                  GestureDetector(
+                                    onTap: _openAvatarEdit,
+                                    child: Container(
+                                      width: 94,
+                                      height: 94,
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFE7F2E7),
+                                        shape: BoxShape.circle,
+                                        border: Border.all(
+                                          color: const Color(0xFF90EE90),
+                                          width: 1.2,
+                                        ),
+                                        boxShadow: const [
+                                          BoxShadow(
+                                            color: Color(0x14000000),
+                                            blurRadius: 10,
+                                            offset: Offset(0, 2),
+                                          ),
+                                        ],
+                                      ),
+                                      child: Center(
+                                        child: _InlineAvatar(
+                                          imageSource: _avatarSource,
+                                          radius: 42,
+                                          iconSize: 34,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 10),
+                                  const Text(
+                                    '点击头像可修改',
+                                    style: TextStyle(
+                                      color: Colors.black54,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 26),
+                                  _EditProfileItem(
+                                    width: rowWidth,
+                                    icon: Icons.account_circle_outlined,
+                                    text: '头像',
+                                    value: '进入修改',
+                                    valueWidget: _InlineAvatar(
+                                      imageSource: _avatarSource,
+                                      radius: 14,
+                                      iconSize: 16,
+                                    ),
+                                    onTap: _openAvatarEdit,
+                                  ),
+                                  const SizedBox(height: 14),
+                                  _EditProfileItem(
+                                    width: rowWidth,
+                                    icon: Icons.person_outline,
+                                    text: '昵称',
+                                    value: _nickname,
+                                    onTap: _openNicknameEdit,
+                                  ),
+                                  const SizedBox(height: 14),
+                                  _EditProfileItem(
+                                    width: rowWidth,
+                                    icon: Icons.phone,
+                                    text: '手机号',
+                                    value: _maskPhone(_phone),
+                                    onTap: _openPhoneEdit,
+                                  ),
+                                  const SizedBox(height: 14),
+                                  _EditProfileItem(
+                                    width: rowWidth,
+                                    icon: Icons.lock_outline,
+                                    text: '密码',
+                                    value: _hasPassword ? '已设置' : '未设置',
+                                    onTap: _openPasswordEdit,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -367,7 +244,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
 class _EditProfileItem extends StatelessWidget {
   final double width;
-  final double height;
   final IconData icon;
   final String text;
   final String value;
@@ -376,7 +252,6 @@ class _EditProfileItem extends StatelessWidget {
 
   const _EditProfileItem({
     required this.width,
-    required this.height,
     required this.icon,
     required this.text,
     required this.value,
@@ -387,33 +262,34 @@ class _EditProfileItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return InkWell(
-      borderRadius: BorderRadius.circular(26),
+      borderRadius: BorderRadius.circular(15),
       onTap: onTap,
       child: Container(
         width: width,
-        height: height,
+        height: 50,
         padding: const EdgeInsets.symmetric(horizontal: 22),
         decoration: BoxDecoration(
-          color: const Color(0xFFD9DDD2),
-          borderRadius: BorderRadius.circular(26),
+          color: const Color.fromARGB(255, 231, 242, 231),
+          borderRadius: BorderRadius.circular(15),
+          border: Border.all(color: const Color(0xFF90EE90), width: 1),
           boxShadow: const [
             BoxShadow(
-              color: Color(0x20000000),
-              blurRadius: 8,
-              offset: Offset(0, 4),
+              color: Color(0x14000000),
+              blurRadius: 10,
+              offset: Offset(0, 2),
             ),
           ],
         ),
         child: Row(
           children: [
-            Icon(icon, size: 30, color: Colors.black87),
-            const SizedBox(width: 12),
+            Icon(icon, size: 20, color: Colors.grey),
+            const SizedBox(width: 10),
             Text(
               text,
               style: const TextStyle(
-                fontSize: 15,
-                color: Color(0xFF4C5450),
-                fontWeight: FontWeight.w600,
+                fontSize: 14,
+                color: Color(0xFF3D4B3A),
+                fontWeight: FontWeight.w500,
               ),
             ),
             const Spacer(),
@@ -422,21 +298,21 @@ class _EditProfileItem extends StatelessWidget {
               const SizedBox(width: 10),
             ],
             ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 150),
+              constraints: const BoxConstraints(maxWidth: 140),
               child: Text(
                 value,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 textAlign: TextAlign.right,
                 style: const TextStyle(
-                  fontSize: 14,
+                  fontSize: 13.5,
                   color: Color(0xFF4C5450),
                   fontWeight: FontWeight.w500,
                 ),
               ),
             ),
             const SizedBox(width: 12),
-            const Icon(Icons.chevron_right, size: 26, color: Color(0xFF7D817D)),
+            Icon(Icons.chevron_right, size: 20, color: Colors.grey.shade500),
           ],
         ),
       ),
@@ -446,23 +322,29 @@ class _EditProfileItem extends StatelessWidget {
 
 class _InlineAvatar extends StatelessWidget {
   final String? imageSource;
+  final double radius;
+  final double iconSize;
 
-  const _InlineAvatar({required this.imageSource});
+  const _InlineAvatar({
+    required this.imageSource,
+    this.radius = 14,
+    this.iconSize = 16,
+  });
 
   @override
   Widget build(BuildContext context) {
     final source = imageSource?.trim() ?? '';
     if (source.isEmpty) {
-      return const CircleAvatar(
-        radius: 14,
-        backgroundColor: Color(0xFFC9C9C9),
-        child: Icon(Icons.person, color: Colors.white, size: 16),
+      return CircleAvatar(
+        radius: radius,
+        backgroundColor: const Color(0xFFC9C9C9),
+        child: Icon(Icons.person, color: Colors.white, size: iconSize),
       );
     }
 
     if (source.startsWith('assets/')) {
       return CircleAvatar(
-        radius: 14,
+        radius: radius,
         backgroundImage: AssetImage(source),
         onBackgroundImageError: (_, _) {},
       );
@@ -470,13 +352,16 @@ class _InlineAvatar extends StatelessWidget {
 
     final uri = Uri.tryParse(source);
     if (uri != null && (uri.isScheme('http') || uri.isScheme('https'))) {
-      return CircleAvatar(radius: 14, backgroundImage: NetworkImage(source));
+      return CircleAvatar(
+        radius: radius,
+        backgroundImage: NetworkImage(source),
+      );
     }
 
-    return const CircleAvatar(
-      radius: 14,
-      backgroundColor: Color(0xFFC9C9C9),
-      child: Icon(Icons.person, color: Colors.white, size: 16),
+    return CircleAvatar(
+      radius: radius,
+      backgroundColor: const Color(0xFFC9C9C9),
+      child: Icon(Icons.person, color: Colors.white, size: iconSize),
     );
   }
 }

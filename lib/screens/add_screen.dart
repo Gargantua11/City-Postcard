@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
+import '../models/postcard_element_layer.dart';
 // 导入搜索页面
 import 'search_index.dart';
 // 导入编辑页面
-import 'postcard_edit_screen.dart';
 
 class AddIndexPage extends StatefulWidget {
   const AddIndexPage({Key? key}) : super(key: key);
@@ -13,10 +13,7 @@ class AddIndexPage extends StatefulWidget {
 
 class _AddIndexPageState extends State<AddIndexPage> {
   // 已选元素列表
-  List<Map<String, dynamic>> selectedElements = [
-    {'name': '烟花', 'count': 2},
-    {'name': '马踏飞燕', 'count': 1},
-  ];
+  List<Map<String, dynamic>> selectedElements = [];
 
   // 分类数据 - 按图片顺序：马年元素、新年元素、季节元素
   final List<Map<String, dynamic>> categories = [
@@ -48,21 +45,72 @@ class _AddIndexPageState extends State<AddIndexPage> {
   };
 
   // 当前选中的元素
-  Map<String, int> addedElements = {'烟花': 2, '马踏飞燕': 1};
+  final List<PostcardElementLayer> _addedLayers = [];
+  int _layerSequence = 0;
 
   @override
   void dispose() {
     super.dispose();
   }
 
-  // 添加元素 - 点击直接添加
-  void addElement(String elementName) {
-    setState(() {
-      if (addedElements.containsKey(elementName)) {
-        addedElements[elementName] = addedElements[elementName]! + 1;
-      } else {
-        addedElements[elementName] = 1;
+  String _createLayerId() {
+    _layerSequence += 1;
+    return 'layer_${DateTime.now().microsecondsSinceEpoch}_$_layerSequence';
+  }
+
+  String? _findElementIconPath(String elementName) {
+    for (final categoryElements in elementsByCategory.values) {
+      for (final element in categoryElements) {
+        final name = element['name']?.toString().trim() ?? '';
+        if (name == elementName) {
+          return element['icon']?.toString().trim();
+        }
       }
+    }
+    return null;
+  }
+
+  int _countElementInstances(String elementName) {
+    var count = 0;
+    for (final layer in _addedLayers) {
+      if (layer.elementKey == elementName) {
+        count += 1;
+      }
+    }
+    return count;
+  }
+
+  Offset _defaultLayerOffset(int index) {
+    const perRow = 4;
+    final col = index % perRow;
+    final row = index ~/ perRow;
+    final dx = (col - 1.5) * 42.0;
+    final dy = ((row % 3) - 1) * 34.0;
+    return Offset(dx, dy);
+  }
+
+  // 添加元素 - 点击直接添加
+  void addElement(String elementName, {String? iconPath}) {
+    final normalizedName = elementName.trim();
+    if (normalizedName.isEmpty) return;
+    final resolvedIconPath =
+        iconPath?.trim().isNotEmpty == true
+            ? iconPath!.trim()
+            : (_findElementIconPath(normalizedName) ??
+                'assets/images/add_elements/$normalizedName.png');
+
+    setState(() {
+      final offset = _defaultLayerOffset(_addedLayers.length);
+      _addedLayers.add(
+        PostcardElementLayer(
+          id: _createLayerId(),
+          elementKey: normalizedName,
+          assetPath: resolvedIconPath,
+          x: offset.dx,
+          y: offset.dy,
+          zIndex: _addedLayers.length,
+        ),
+      );
       updateSelectedElementsList();
 
       // 添加成功提示
@@ -77,7 +125,7 @@ class _AddIndexPageState extends State<AddIndexPage> {
                 fit: BoxFit.contain,
               ),
               const SizedBox(width: 8),
-              Text('已添加 $elementName'),
+              Text('已添加 $normalizedName'),
             ],
           ),
           duration: const Duration(milliseconds: 800),
@@ -90,12 +138,11 @@ class _AddIndexPageState extends State<AddIndexPage> {
   // 移除单个元素的一个数量
   void removeElement(String elementName) {
     setState(() {
-      if (addedElements.containsKey(elementName)) {
-        if (addedElements[elementName]! > 1) {
-          addedElements[elementName] = addedElements[elementName]! - 1;
-        } else {
-          addedElements.remove(elementName);
-        }
+      final index = _addedLayers.lastIndexWhere(
+        (layer) => layer.elementKey == elementName,
+      );
+      if (index >= 0) {
+        _addedLayers.removeAt(index);
         updateSelectedElementsList();
       }
     });
@@ -128,7 +175,7 @@ class _AddIndexPageState extends State<AddIndexPage> {
             TextButton(
               onPressed: () {
                 setState(() {
-                  addedElements.clear();
+                  _addedLayers.clear();
                   selectedElements.clear();
                 });
                 Navigator.pop(context);
@@ -163,15 +210,19 @@ class _AddIndexPageState extends State<AddIndexPage> {
 
   // 更新已选元素列表
   void updateSelectedElementsList() {
-    selectedElements.clear();
-    addedElements.forEach((key, value) {
-      selectedElements.add({'name': key, 'count': value});
-    });
+    final counts = <String, int>{};
+    for (final layer in _addedLayers) {
+      counts[layer.elementKey] = (counts[layer.elementKey] ?? 0) + 1;
+    }
+    selectedElements =
+        counts.entries
+            .map((entry) => {'name': entry.key, 'count': entry.value})
+            .toList(growable: true);
   }
 
   // 应用并返回编辑页
   void applyAndReturn() {
-    print('应用的元素: $addedElements');
+    print('应用的元素图层: ${_addedLayers.map((item) => item.toJson()).toList()}');
 
     // 显示应用成功提示
     ScaffoldMessenger.of(context).showSnackBar(
@@ -195,14 +246,14 @@ class _AddIndexPageState extends State<AddIndexPage> {
 
     // 延迟返回编辑页
     Future.delayed(const Duration(milliseconds: 800), () {
-      Navigator.pop(context);
+      Navigator.pop(context, List<PostcardElementLayer>.from(_addedLayers));
     });
   }
 
   // 返回编辑页
   void goBackToEditPage() {
     // 如果有已选元素，可以选择提示用户是否保存
-    if (addedElements.isNotEmpty) {
+    if (_addedLayers.isNotEmpty) {
       showDialog(
         context: context,
         builder: (BuildContext context) {
@@ -250,7 +301,7 @@ class _AddIndexPageState extends State<AddIndexPage> {
     ).then((result) {
       // 从搜索页面返回后，如果有返回的数据（如选中的元素），可以在这里处理
       if (result != null && result is Map<String, dynamic>) {
-        String elementName = result['name'];
+        String elementName = result['name'].toString();
         addElement(elementName);
 
         ScaffoldMessenger.of(context).showSnackBar(
@@ -481,13 +532,13 @@ class _AddIndexPageState extends State<AddIndexPage> {
   // 构建元素项 - 点击直接添加
   Widget _buildElementItem(Map<String, dynamic> element) {
     String elementName = element['name'];
-    bool isSelected = addedElements.containsKey(elementName);
-    int count = addedElements[elementName] ?? 0;
+    int count = _countElementInstances(elementName);
+    bool isSelected = count > 0;
 
     return GestureDetector(
       onTap: () {
         // 点击直接添加元素
-        addElement(elementName);
+        addElement(elementName, iconPath: element['icon']?.toString());
       },
       child: Container(
         decoration: BoxDecoration(
@@ -613,7 +664,7 @@ class _AddIndexPageState extends State<AddIndexPage> {
     return GestureDetector(
       onTap: () {
         // 点击已选元素可减少数量
-        removeElement(element['name']);
+        removeElement(element['name'].toString());
       },
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),

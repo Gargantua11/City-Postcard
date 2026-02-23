@@ -16,6 +16,7 @@ import './screens/favorites_screen.dart';
 import './screens/draft_box_screen.dart';
 import './screens/postcard_overview_screen.dart';
 import './screens/edit_profile_screen.dart';
+import './screens/dynamic_effect_screen.dart';
 import './screens/add_screen.dart';
 import './screens/search_index.dart';
 import './screens/search_screen.dart';
@@ -58,6 +59,7 @@ class MyApp extends StatelessWidget {
           '/draft_box': (context) => const DraftBoxScreen(),
           '/postcard_overview': (context) => const PostcardOverviewScreen(),
           '/edit_profile': (context) => const EditProfileScreen(),
+          '/dynamic_effects': (context) => const DynamicEffectScreen(),
           '/add': (context) => const AddIndexPage(),
           '/search_index': (context) => const SearchIndexScreen(),
           '/search_screen': (context) => const SearchScreen(),
