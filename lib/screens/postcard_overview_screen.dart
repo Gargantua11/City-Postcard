@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../services/edited_postcard_service.dart';
+import '../widgets/resolved_image.dart';
 
 class PostcardOverviewScreen extends StatefulWidget {
   const PostcardOverviewScreen({super.key});
@@ -280,34 +281,12 @@ class _PostcardImage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final source = imageSource.trim();
-    if (source.isEmpty) {
-      return _buildFallback();
-    }
-
-    if (source.startsWith('assets/')) {
-      return Image.asset(
-        source,
-        fit: BoxFit.cover,
-        filterQuality: FilterQuality.high,
-        errorBuilder: (_, _, _) => _buildFallback(),
-      );
-    }
-
-    final uri = Uri.tryParse(source);
-    if (uri == null || (!uri.isScheme('http') && !uri.isScheme('https'))) {
-      return _buildFallback();
-    }
-
-    return Image.network(
-      source,
+    return ResolvedImage(
+      source: imageSource,
       fit: BoxFit.cover,
       filterQuality: FilterQuality.high,
-      errorBuilder: (_, _, _) => _buildFallback(),
-      loadingBuilder: (context, child, progress) {
-        if (progress == null) return child;
-        return _buildFallback(showLoading: true);
-      },
+      fallbackBuilder: (_) => _buildFallback(),
+      loadingBuilder: (_) => _buildFallback(showLoading: true),
     );
   }
 

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../services/storage_service.dart';
+import '../widgets/resolved_image.dart';
 import 'edit_profile_avatar_screen.dart';
 import 'edit_profile_nickname_screen.dart';
 import 'edit_profile_password_screen.dart';
@@ -341,27 +342,21 @@ class _InlineAvatar extends StatelessWidget {
         child: Icon(Icons.person, color: Colors.white, size: iconSize),
       );
     }
-
-    if (source.startsWith('assets/')) {
-      return CircleAvatar(
-        radius: radius,
-        backgroundImage: AssetImage(source),
-        onBackgroundImageError: (_, _) {},
-      );
-    }
-
-    final uri = Uri.tryParse(source);
-    if (uri != null && (uri.isScheme('http') || uri.isScheme('https'))) {
-      return CircleAvatar(
-        radius: radius,
-        backgroundImage: NetworkImage(source),
-      );
-    }
-
     return CircleAvatar(
       radius: radius,
       backgroundColor: const Color(0xFFC9C9C9),
-      child: Icon(Icons.person, color: Colors.white, size: iconSize),
+      child: ClipOval(
+        child: SizedBox(
+          width: radius * 2,
+          height: radius * 2,
+          child: ResolvedImage(
+            source: source,
+            fit: BoxFit.cover,
+            fallbackBuilder: (_) =>
+                Icon(Icons.person, color: Colors.white, size: iconSize),
+          ),
+        ),
+      ),
     );
   }
 }

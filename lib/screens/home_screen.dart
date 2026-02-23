@@ -1,9 +1,14 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import '../models/postcard_element_layer.dart';
 import '../services/edited_postcard_service.dart';
+import '../services/storage_service.dart';
 import '../widgets/app_bottom_nav_bar.dart';
+import '../widgets/resolved_image.dart';
 
-/// 首页：首张卡片用于新增明信片，后续卡片按编辑时间倒序展示
+/// 棣栭〉锛氶寮犲崱鐗囩敤浜庢柊澧炴槑淇＄墖锛屽悗缁崱鐗囨寜缂栬緫鏃堕棿鍊掑簭灞曠ず
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -13,16 +18,19 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   final EditedPostcardService _editedPostcardService = EditedPostcardService();
+  final StorageService _storageService = StorageService();
 
   List<EditedPostcard> _editedPostcards = const [];
   bool _isLoading = true;
   bool _isSelectionMode = false;
+  bool _isHome3dPreviewEnabled = true;
   bool _isDeleting = false;
   int? _selectedDeleteIndex;
 
   @override
   void initState() {
     super.initState();
+    _loadHome3dPreviewSetting();
     _loadEditedPostcards();
   }
 
@@ -71,6 +79,26 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() {
       _selectedDeleteIndex = _selectedDeleteIndex == index ? null : index;
     });
+  }
+
+  void _toggleHome3dPreview() {
+    final nextValue = !_isHome3dPreviewEnabled;
+    setState(() {
+      _isHome3dPreviewEnabled = nextValue;
+    });
+    _persistHome3dPreviewEnabled(nextValue);
+  }
+
+  Future<void> _loadHome3dPreviewSetting() async {
+    final saved = await _storageService.getHome3dPreviewEnabled();
+    if (!mounted || saved == null) return;
+    setState(() {
+      _isHome3dPreviewEnabled = saved;
+    });
+  }
+
+  Future<void> _persistHome3dPreviewEnabled(bool enabled) async {
+    await _storageService.saveHome3dPreviewEnabled(enabled);
   }
 
   Future<void> _deleteSelectedPostcard() async {
@@ -166,6 +194,10 @@ class _HomeScreenState extends State<HomeScreen> {
                   label: _isSelectionMode ? '完成' : '编辑',
                   onTap: _toggleSelectionMode,
                 ),
+                _Top3dToggleButton(
+                  checked: _isHome3dPreviewEnabled,
+                  onTap: _toggleHome3dPreview,
+                ),
                 _TopActionButton(
                   icon: Icons.search,
                   label: '搜索',
@@ -208,7 +240,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
                       : const Icon(Icons.delete_outline),
-                  label: Text(_isDeleting ? '删除中' : '删除'),
+                  label: Text(_isDeleting ? '删除中...' : '删除'),
                 ),
               ),
             ],
@@ -227,13 +259,16 @@ class _HomeScreenState extends State<HomeScreen> {
                     padding: const EdgeInsets.only(bottom: 22),
                     child: _EditedPostcardCard(
                       item: item,
+                      enable3dPreview: _isHome3dPreviewEnabled,
                       selectable: _isSelectionMode,
                       selected: _selectedDeleteIndex == index,
                       onTap: () => _onSelectPostcard(index),
                     ),
                   );
                 }).toList(),
-              ),
+              )
+            else
+              const SizedBox.shrink(),
           ],
         ),
       ),
@@ -337,14 +372,66 @@ class _TopActionButton extends StatelessWidget {
   }
 }
 
+class _Top3dToggleButton extends StatelessWidget {
+  const _Top3dToggleButton({required this.checked, required this.onTap});
+
+  final bool checked;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 9.33, vertical: 5.33),
+        decoration: BoxDecoration(
+          color: const Color(0xFFE9EEDB),
+          borderRadius: BorderRadius.circular(13.33),
+          border: Border.all(color: const Color(0xFFB8BDAE)),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x1A000000),
+              blurRadius: 5.33,
+              offset: Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              checked
+                  ? Icons.check_box_rounded
+                  : Icons.check_box_outline_blank_rounded,
+              size: 12,
+              color: Colors.black87,
+            ),
+            const SizedBox(width: 2.67),
+            const Text(
+              '启用3D效果',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                color: Colors.black87,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _EditedPostcardCard extends StatelessWidget {
   final EditedPostcard item;
+  final bool enable3dPreview;
   final bool selectable;
   final bool selected;
   final VoidCallback onTap;
 
   const _EditedPostcardCard({
     required this.item,
+    required this.enable3dPreview,
     required this.selectable,
     required this.selected,
     required this.onTap,
@@ -352,6 +439,7 @@ class _EditedPostcardCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final locationText = _resolveLocation(item);
     return GestureDetector(
       onTap: selectable ? onTap : null,
       child: AnimatedContainer(
@@ -371,7 +459,11 @@ class _EditedPostcardCard extends StatelessWidget {
           child: Stack(
             fit: StackFit.expand,
             children: [
-              _PostcardImage(imageSource: item.imageUrl),
+              _PostcardImage(
+                imageSource: item.imageUrl,
+                layers: item.layers,
+                enable3dPreview: enable3dPreview,
+              ),
               if (selectable)
                 Positioned(
                   left: 12,
@@ -410,9 +502,38 @@ class _EditedPostcardCard extends StatelessWidget {
                     color: Colors.black.withValues(alpha: 0.45),
                     borderRadius: BorderRadius.circular(14),
                   ),
-                  child: Text(
-                    DateFormat('yyyy-MM-dd HH:mm').format(item.editedAt),
-                    style: const TextStyle(color: Colors.white, fontSize: 12),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        DateFormat('yyyy-MM-dd HH:mm').format(item.editedAt),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                        ),
+                      ),
+                      if (locationText != null && locationText.isNotEmpty) ...[
+                        const SizedBox(width: 8),
+                        const Icon(
+                          Icons.place_rounded,
+                          size: 12,
+                          color: Colors.white70,
+                        ),
+                        const SizedBox(width: 2),
+                        ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 95),
+                          child: Text(
+                            locationText,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
                 ),
               ),
@@ -422,38 +543,115 @@ class _EditedPostcardCard extends StatelessWidget {
       ),
     );
   }
+
+  String? _resolveLocation(EditedPostcard postcard) {
+    final city = postcard.cityName?.trim();
+    final province = postcard.provinceName?.trim();
+    final cityCode = postcard.cityCode?.trim();
+
+    if (city != null &&
+        city.isNotEmpty &&
+        province != null &&
+        province.isNotEmpty) {
+      if (city == province) return city;
+      return '$province $city';
+    }
+    if (city != null && city.isNotEmpty) return city;
+    if (province != null && province.isNotEmpty) return province;
+    if (cityCode != null && cityCode.isNotEmpty) return cityCode;
+    return null;
+  }
 }
 
-class _PostcardImage extends StatelessWidget {
+class _PostcardImage extends StatefulWidget {
   final String imageSource;
+  final List<PostcardElementLayer> layers;
+  final bool enable3dPreview;
 
-  const _PostcardImage({required this.imageSource});
+  const _PostcardImage({
+    required this.imageSource,
+    this.layers = const [],
+    this.enable3dPreview = true,
+  });
+
+  @override
+  State<_PostcardImage> createState() => _PostcardImageState();
+}
+
+class _PostcardImageState extends State<_PostcardImage>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _effectController;
+
+  bool get _hasDynamicLayer {
+    if (!widget.enable3dPreview) return false;
+    return widget.layers.any((layer) => layer.is3dEnabled);
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _effectController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 12),
+    );
+    _syncAnimationState();
+  }
+
+  @override
+  void didUpdateWidget(covariant _PostcardImage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _syncAnimationState();
+  }
+
+  @override
+  void dispose() {
+    _effectController.dispose();
+    super.dispose();
+  }
+
+  void _syncAnimationState() {
+    if (_hasDynamicLayer) {
+      if (!_effectController.isAnimating) {
+        _effectController.repeat();
+      }
+      return;
+    }
+
+    if (_effectController.isAnimating) {
+      _effectController.stop();
+    }
+    _effectController.value = 0;
+  }
 
   @override
   Widget build(BuildContext context) {
-    if (imageSource.startsWith('assets/')) {
-      return Image.asset(
-        imageSource,
-        fit: BoxFit.cover,
-        filterQuality: FilterQuality.high,
-        errorBuilder: (_, _, _) => _buildFallback(),
-      );
-    }
-
-    final uri = Uri.tryParse(imageSource);
-    if (uri == null || (!uri.isScheme('http') && !uri.isScheme('https'))) {
-      return _buildFallback();
-    }
-
-    return Image.network(
-      imageSource,
-      fit: BoxFit.cover,
-      filterQuality: FilterQuality.high,
-      errorBuilder: (_, _, _) => _buildFallback(),
-      loadingBuilder: (context, child, progress) {
-        if (progress == null) return child;
-        return _buildFallback(showProgress: true);
-      },
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        ResolvedImage(
+          source: widget.imageSource,
+          fit: BoxFit.cover,
+          filterQuality: FilterQuality.high,
+          fallbackBuilder: (_) => _buildFallback(),
+          loadingBuilder: (_) => _buildFallback(showProgress: true),
+        ),
+        if (widget.layers.isNotEmpty)
+          if (_hasDynamicLayer)
+            AnimatedBuilder(
+              animation: _effectController,
+              builder: (_, _) => _PostcardLayerOverlay(
+                layers: widget.layers,
+                animationProgress: _effectController.value,
+                enable3dPreview: widget.enable3dPreview,
+              ),
+            )
+          else
+            _PostcardLayerOverlay(
+              layers: widget.layers,
+              animationProgress: 0,
+              enable3dPreview: widget.enable3dPreview,
+            ),
+      ],
     );
   }
 
@@ -470,5 +668,113 @@ class _PostcardImage extends StatelessWidget {
               ),
       ),
     );
+  }
+}
+
+class _PostcardLayerOverlay extends StatelessWidget {
+  const _PostcardLayerOverlay({
+    required this.layers,
+    required this.animationProgress,
+    required this.enable3dPreview,
+  });
+
+  final List<PostcardElementLayer> layers;
+  final double animationProgress;
+  final bool enable3dPreview;
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final width = constraints.maxWidth;
+          final height = constraints.maxHeight;
+          final sortedLayers = List<PostcardElementLayer>.from(layers)
+            ..sort((a, b) => a.zIndex.compareTo(b.zIndex));
+
+          return Stack(
+            fit: StackFit.expand,
+            children: [
+              for (final layer in sortedLayers)
+                _buildLayer(layer, width: width, height: height),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildLayer(
+    PostcardElementLayer layer, {
+    required double width,
+    required double height,
+  }) {
+    final path = layer.assetPath.trim();
+    if (path.isEmpty) return const SizedBox.shrink();
+
+    final rawScale = layer.scale <= 0 ? 1.0 : layer.scale;
+    final itemSize = (width * 0.22 * rawScale).clamp(20.0, width * 0.45);
+    final offset = _resolveLayerOffset(layer, width, height);
+    final left = width / 2 + offset.dx - itemSize / 2;
+    final top = height / 2 + offset.dy - itemSize / 2;
+
+    final image = Image.asset(
+      path,
+      fit: BoxFit.contain,
+      filterQuality: FilterQuality.high,
+      errorBuilder: (_, _, _) => const SizedBox.shrink(),
+    );
+
+    Widget transformed = image;
+    if (enable3dPreview && layer.is3dEnabled) {
+      final speed = layer.rotationSpeed <= 0 ? 1.0 : layer.rotationSpeed;
+      final directionSign = layer.rotationDirection == 'counterclockwise'
+          ? -1.0
+          : 1.0;
+      final cycleAngle =
+          animationProgress * math.pi * 2 * speed * directionSign;
+
+      final matrix = Matrix4.identity()..setEntry(3, 2, layer.perspective);
+      if (layer.rotationAxis == 'horizontal') {
+        matrix
+          ..rotateX(layer.rotateX + cycleAngle)
+          ..rotateY(layer.rotateY);
+      } else {
+        matrix
+          ..rotateY(layer.rotateY + cycleAngle)
+          ..rotateX(layer.rotateX);
+      }
+      transformed = Transform(
+        alignment: Alignment.center,
+        transform: matrix,
+        child: image,
+      );
+    } else if (layer.rotation2d != 0) {
+      transformed = Transform.rotate(angle: layer.rotation2d, child: image);
+    }
+
+    return Positioned(
+      left: left,
+      top: top,
+      width: itemSize,
+      height: itemSize,
+      child: transformed,
+    );
+  }
+
+  Offset _resolveLayerOffset(
+    PostcardElementLayer layer,
+    double previewWidth,
+    double previewHeight,
+  ) {
+    final useFallbackOffset = layer.x == 0 && layer.y == 0;
+    if (!useFallbackOffset) {
+      return Offset(layer.x, layer.y);
+    }
+
+    final fallbackX = ((layer.zIndex % 4) - 1.5) * (previewWidth * 0.16);
+    final fallbackY =
+        (((layer.zIndex ~/ 4) % 3) - 1.0) * (previewHeight * 0.14);
+    return Offset(fallbackX, fallbackY);
   }
 }

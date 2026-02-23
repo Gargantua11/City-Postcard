@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../services/storage_service.dart';
-import '../widgets/custom_text_field.dart';
+import '../widgets/resolved_image.dart';
 
 class EditProfileAvatarScreen extends StatefulWidget {
   const EditProfileAvatarScreen({super.key});
@@ -13,9 +14,9 @@ class EditProfileAvatarScreen extends StatefulWidget {
 
 class _EditProfileAvatarScreenState extends State<EditProfileAvatarScreen> {
   final StorageService _storageService = StorageService();
-  final TextEditingController _controller = TextEditingController();
-  final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
+  final ImagePicker _imagePicker = ImagePicker();
 
+  String? _avatarSource;
   bool _isLoading = true;
   bool _isSaving = false;
 
@@ -25,46 +26,45 @@ class _EditProfileAvatarScreenState extends State<EditProfileAvatarScreen> {
     _loadInitial();
   }
 
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
   Future<void> _loadInitial() async {
     final avatar = await _storageService.getProfileAvatar();
     if (!mounted) return;
 
-    _controller.text = (avatar ?? '').trim();
     setState(() {
+      _avatarSource = (avatar ?? '').trim();
       _isLoading = false;
     });
   }
 
-  String? _validateAvatar(String? value) {
-    final text = (value ?? '').trim();
-    if (text.isEmpty) return null;
-    if (text.startsWith('assets/')) return null;
+  Future<void> _pickLocalAvatar() async {
+    if (_isSaving) return;
 
-    final uri = Uri.tryParse(text);
-    if (uri != null && (uri.isScheme('http') || uri.isScheme('https'))) {
-      return null;
+    try {
+      final picked = await _imagePicker.pickImage(source: ImageSource.gallery);
+      if (!mounted || picked == null) return;
+      final path = picked.path.trim();
+      if (path.isEmpty) return;
+      setState(() {
+        _avatarSource = path;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('选择图片失败，请重试')));
     }
-
-    return '仅支持 http(s) 或 assets/ 开头地址';
   }
 
   Future<void> _save() async {
     if (_isSaving) return;
-    if (!_formKey.currentState!.validate()) return;
 
     setState(() {
       _isSaving = true;
     });
 
     try {
-      final text = _controller.text.trim();
-      await _storageService.saveProfileAvatar(text.isEmpty ? null : text);
+      final source = _avatarSource?.trim() ?? '';
+      await _storageService.saveProfileAvatar(source.isEmpty ? null : source);
       if (!mounted) return;
       Navigator.pop(context, true);
     } catch (_) {
@@ -108,15 +108,13 @@ class _EditProfileAvatarScreenState extends State<EditProfileAvatarScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final previewSource = _controller.text.trim().isEmpty
-        ? null
-        : _controller.text.trim();
+    final previewSource = _avatarSource?.trim();
 
     return Scaffold(
       body: Container(
         decoration: const BoxDecoration(
           image: DecorationImage(
-            image: AssetImage('assets/images/auth/注册2-背景.png'),
+            image: AssetImage('assets/images/auth/娉ㄥ唽2-鑳屾櫙.png'),
             fit: BoxFit.cover,
             filterQuality: FilterQuality.high,
           ),
@@ -133,7 +131,7 @@ class _EditProfileAvatarScreenState extends State<EditProfileAvatarScreen> {
                   height: 30,
                   decoration: const BoxDecoration(
                     image: DecorationImage(
-                      image: AssetImage('assets/images/auth/注册2-返回.png'),
+                      image: AssetImage('assets/images/auth/娉ㄥ唽2-杩斿洖.png'),
                       fit: BoxFit.contain,
                       filterQuality: FilterQuality.high,
                     ),
@@ -146,57 +144,57 @@ class _EditProfileAvatarScreenState extends State<EditProfileAvatarScreen> {
                   ? const Center(child: CircularProgressIndicator())
                   : Padding(
                       padding: const EdgeInsets.all(20),
-                      child: Form(
-                        key: _formKey,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: [
-                            const SizedBox(height: 56),
-                            const Text(
-                              '修改头像',
-                              style: TextStyle(
-                                fontSize: 28,
-                                fontWeight: FontWeight.w600,
-                                color: Color(0xFF2E3A2A),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          const SizedBox(height: 56),
+                          const Text(
+                            '修改头像',
+                            style: TextStyle(
+                              fontSize: 28,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF2E3A2A),
+                            ),
+                          ),
+                          const SizedBox(height: 20),
+                          _AvatarPreview(imageSource: previewSource),
+                          const SizedBox(height: 8),
+                          const Text(
+                            '点击选择本地照片，保存后立即生效',
+                            style: TextStyle(
+                              color: Colors.black54,
+                              fontSize: 12,
+                            ),
+                          ),
+                          const SizedBox(height: 18),
+                          SizedBox(
+                            width: 300,
+                            height: 44,
+                            child: OutlinedButton.icon(
+                              onPressed: _isSaving ? null : _pickLocalAvatar,
+                              icon: const Icon(Icons.photo_library_outlined),
+                              label: const Text('从相册选择头像'),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: const Color(0xFF2E3A2A),
+                                side: const BorderSide(
+                                  color: Color(0xFF90EE90),
+                                ),
+                                backgroundColor: const Color(0xFFE7F2E7),
                               ),
                             ),
-                            const SizedBox(height: 20),
-                            _AvatarPreview(imageSource: previewSource),
-                            const SizedBox(height: 8),
-                            const Text(
-                              '输入头像地址，留空并保存可恢复默认头像',
-                              style: TextStyle(
-                                color: Colors.black54,
-                                fontSize: 12,
-                              ),
-                            ),
-                            const SizedBox(height: 18),
-                            SizedBox(
-                              width: 300,
-                              child: CustomTextField(
-                                controller: _controller,
-                                hintText: 'http(s) 或 assets/ 路径',
-                                prefixIcon: Icons.link,
-                                validator: _validateAvatar,
-                                enabled: !_isSaving,
-                                onChanged: (_) {
-                                  setState(() {});
-                                },
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-                            TextButton(
-                              onPressed: _isSaving ? null : _useDefaultAvatar,
-                              child: const Text('恢复默认头像'),
-                            ),
-                            const SizedBox(height: 14),
-                            _ActionButton(
-                              isLoading: _isSaving,
-                              onTap: _save,
-                              text: '保存头像',
-                            ),
-                          ],
-                        ),
+                          ),
+                          const SizedBox(height: 12),
+                          TextButton(
+                            onPressed: _isSaving ? null : _useDefaultAvatar,
+                            child: const Text('恢复默认头像'),
+                          ),
+                          const SizedBox(height: 14),
+                          _ActionButton(
+                            isLoading: _isSaving,
+                            onTap: _save,
+                            text: '保存头像',
+                          ),
+                        ],
                       ),
                     ),
             ),
@@ -230,7 +228,7 @@ class _ActionButton extends StatelessWidget {
             const DecoratedBox(
               decoration: BoxDecoration(
                 image: DecorationImage(
-                  image: AssetImage('assets/images/auth/注册2-完成.png'),
+                  image: AssetImage('assets/images/auth/娉ㄥ唽2-瀹屾垚.png'),
                   fit: BoxFit.contain,
                   filterQuality: FilterQuality.high,
                 ),
@@ -271,36 +269,20 @@ class _AvatarPreview extends StatelessWidget {
   Widget build(BuildContext context) {
     final source = imageSource?.trim() ?? '';
 
-    Widget child;
-    if (source.isEmpty) {
-      child = const Icon(Icons.person, size: 42, color: Colors.white);
-    } else if (source.startsWith('assets/')) {
+    Widget child = const Icon(Icons.person, size: 42, color: Colors.white);
+    if (source.isNotEmpty) {
       child = ClipOval(
-        child: Image.asset(
-          source,
+        child: SizedBox(
           width: 84,
           height: 84,
-          fit: BoxFit.cover,
-          errorBuilder: (_, _, _) =>
-              const Icon(Icons.person, size: 42, color: Colors.white),
-        ),
-      );
-    } else {
-      final uri = Uri.tryParse(source);
-      if (uri != null && (uri.isScheme('http') || uri.isScheme('https'))) {
-        child = ClipOval(
-          child: Image.network(
-            source,
-            width: 84,
-            height: 84,
+          child: ResolvedImage(
+            source: source,
             fit: BoxFit.cover,
-            errorBuilder: (_, _, _) =>
+            fallbackBuilder: (_) =>
                 const Icon(Icons.person, size: 42, color: Colors.white),
           ),
-        );
-      } else {
-        child = const Icon(Icons.person, size: 42, color: Colors.white);
-      }
+        ),
+      );
     }
 
     return Container(

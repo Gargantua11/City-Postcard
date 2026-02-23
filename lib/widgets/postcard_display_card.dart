@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'resolved_image.dart';
 
 /// 评论对象，字段对齐文档 3.3 获取评论列表 records[]。
 class PostcardHotComment {
@@ -216,18 +217,13 @@ class _PostcardImage extends StatelessWidget {
       borderRadius: BorderRadius.circular(8),
       child: ColoredBox(
         color: const Color(0xFFD1D5DB),
-        child: imageUrl.trim().isEmpty
-            ? const SizedBox.expand()
-            : Image.network(
-                imageUrl,
-                fit: BoxFit.cover,
-                filterQuality: FilterQuality.high,
-                errorBuilder: (_, _, _) => const SizedBox.expand(),
-                loadingBuilder: (context, child, progress) {
-                  if (progress == null) return child;
-                  return const SizedBox.expand();
-                },
-              ),
+        child: ResolvedImage(
+          source: imageUrl,
+          fit: BoxFit.cover,
+          filterQuality: FilterQuality.high,
+          fallbackBuilder: (_) => const SizedBox.expand(),
+          loadingBuilder: (_) => const SizedBox.expand(),
+        ),
       ),
     );
   }

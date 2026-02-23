@@ -2,6 +2,17 @@ import 'package:flutter/material.dart';
 
 import '../models/postcard_element_layer.dart';
 
+const Color _kDynamicBg = Colors.white;
+const Color _kDynamicCard = Color(0xFFDDF1D0);
+const Color _kDynamicCardBorder = Color(0xFFA5C39A);
+const Color _kDynamicChip = Color(0xFFE8F6DD);
+const Color _kDynamicChipBorder = Color(0xFFB8D3AB);
+const Color _kDynamicButton = Color(0xFFD9EDCC);
+const Color _kDynamicButtonDisabled = Color(0xFFEAF3E3);
+const Color _kDynamicAccent = Color(0xFF5E9A66);
+const Color _kDynamicTextPrimary = Color(0xFF1F2A1E);
+const Color _kDynamicTextSecondary = Color(0xFF4C654A);
+
 class DynamicEffectScreen extends StatefulWidget {
   final List<PostcardElementLayer> initialLayers;
 
@@ -88,7 +99,9 @@ class _DynamicEffectScreenState extends State<DynamicEffectScreen> {
     setState(() => _selectedLayerIndex = index);
   }
 
-  void _updateCurrentLayer(PostcardElementLayer Function(PostcardElementLayer) fn) {
+  void _updateCurrentLayer(
+    PostcardElementLayer Function(PostcardElementLayer) fn,
+  ) {
     if (!_hasLayers) return;
     setState(() {
       _layers[_selectedLayerIndex] = fn(_layers[_selectedLayerIndex]);
@@ -148,9 +161,9 @@ class _DynamicEffectScreenState extends State<DynamicEffectScreen> {
         clearSpeedLevel: true,
       ),
     );
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('已重置当前元素的动态效果')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('已重置当前元素的动态效果')));
   }
 
   void _apply() {
@@ -166,7 +179,7 @@ class _DynamicEffectScreenState extends State<DynamicEffectScreen> {
     final perspectiveOption = _perspectiveOption;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFE7E7E7),
+      backgroundColor: _kDynamicBg,
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(20, 10, 20, 14),
@@ -181,7 +194,7 @@ class _DynamicEffectScreenState extends State<DynamicEffectScreen> {
                     style: TextStyle(
                       fontSize: 24,
                       fontWeight: FontWeight.w600,
-                      color: Colors.black,
+                      color: _kDynamicTextPrimary,
                     ),
                   ),
                 ],
@@ -229,14 +242,17 @@ class _DynamicEffectScreenState extends State<DynamicEffectScreen> {
                                             options: [
                                               _CheckItemData(
                                                 label: '低',
-                                                checked: rotationOption ==
+                                                checked:
+                                                    rotationOption ==
                                                     _LevelOption.low,
-                                                onTap: () =>
-                                                    _setRotationSpeed(_LevelOption.low),
+                                                onTap: () => _setRotationSpeed(
+                                                  _LevelOption.low,
+                                                ),
                                               ),
                                               _CheckItemData(
                                                 label: '中',
-                                                checked: rotationOption ==
+                                                checked:
+                                                    rotationOption ==
                                                     _LevelOption.medium,
                                                 onTap: () => _setRotationSpeed(
                                                   _LevelOption.medium,
@@ -244,10 +260,12 @@ class _DynamicEffectScreenState extends State<DynamicEffectScreen> {
                                               ),
                                               _CheckItemData(
                                                 label: '高',
-                                                checked: rotationOption ==
+                                                checked:
+                                                    rotationOption ==
                                                     _LevelOption.high,
-                                                onTap: () =>
-                                                    _setRotationSpeed(_LevelOption.high),
+                                                onTap: () => _setRotationSpeed(
+                                                  _LevelOption.high,
+                                                ),
                                               ),
                                             ],
                                           ),
@@ -258,7 +276,7 @@ class _DynamicEffectScreenState extends State<DynamicEffectScreen> {
                                               '默认值：${(currentLayer?.rotationSpeed ?? 0).toStringAsFixed(1)}',
                                               style: const TextStyle(
                                                 fontSize: 12,
-                                                color: Color(0xFF3F4E63),
+                                                color: _kDynamicTextSecondary,
                                               ),
                                             ),
                                           ),
@@ -268,7 +286,8 @@ class _DynamicEffectScreenState extends State<DynamicEffectScreen> {
                                             options: [
                                               _CheckItemData(
                                                 label: '水平',
-                                                checked: axisOption ==
+                                                checked:
+                                                    axisOption ==
                                                     _AxisOption.horizontal,
                                                 onTap: () => _setRotationAxis(
                                                   _AxisOption.horizontal,
@@ -276,7 +295,8 @@ class _DynamicEffectScreenState extends State<DynamicEffectScreen> {
                                               ),
                                               _CheckItemData(
                                                 label: '竖直',
-                                                checked: axisOption ==
+                                                checked:
+                                                    axisOption ==
                                                     _AxisOption.vertical,
                                                 onTap: () => _setRotationAxis(
                                                   _AxisOption.vertical,
@@ -290,21 +310,26 @@ class _DynamicEffectScreenState extends State<DynamicEffectScreen> {
                                             options: [
                                               _CheckItemData(
                                                 label: '顺时针',
-                                                checked: directionOption ==
+                                                checked:
+                                                    directionOption ==
                                                     _DirectionOption.clockwise,
-                                                onTap: () => _setRotationDirection(
-                                                  _DirectionOption.clockwise,
-                                                ),
+                                                onTap: () =>
+                                                    _setRotationDirection(
+                                                      _DirectionOption
+                                                          .clockwise,
+                                                    ),
                                               ),
                                               _CheckItemData(
                                                 label: '逆时针',
-                                                checked: directionOption ==
+                                                checked:
+                                                    directionOption ==
                                                     _DirectionOption
                                                         .counterclockwise,
-                                                onTap: () => _setRotationDirection(
-                                                  _DirectionOption
-                                                      .counterclockwise,
-                                                ),
+                                                onTap: () =>
+                                                    _setRotationDirection(
+                                                      _DirectionOption
+                                                          .counterclockwise,
+                                                    ),
                                               ),
                                             ],
                                           ),
@@ -314,14 +339,17 @@ class _DynamicEffectScreenState extends State<DynamicEffectScreen> {
                                             options: [
                                               _CheckItemData(
                                                 label: '低',
-                                                checked: perspectiveOption ==
+                                                checked:
+                                                    perspectiveOption ==
                                                     _LevelOption.low,
-                                                onTap: () =>
-                                                    _setPerspective(_LevelOption.low),
+                                                onTap: () => _setPerspective(
+                                                  _LevelOption.low,
+                                                ),
                                               ),
                                               _CheckItemData(
                                                 label: '中',
-                                                checked: perspectiveOption ==
+                                                checked:
+                                                    perspectiveOption ==
                                                     _LevelOption.medium,
                                                 onTap: () => _setPerspective(
                                                   _LevelOption.medium,
@@ -329,10 +357,12 @@ class _DynamicEffectScreenState extends State<DynamicEffectScreen> {
                                               ),
                                               _CheckItemData(
                                                 label: '高',
-                                                checked: perspectiveOption ==
+                                                checked:
+                                                    perspectiveOption ==
                                                     _LevelOption.high,
-                                                onTap: () =>
-                                                    _setPerspective(_LevelOption.high),
+                                                onTap: () => _setPerspective(
+                                                  _LevelOption.high,
+                                                ),
                                               ),
                                             ],
                                           ),
@@ -343,7 +373,7 @@ class _DynamicEffectScreenState extends State<DynamicEffectScreen> {
                                               '默认值：${(currentLayer?.perspective ?? 0).toStringAsFixed(4)}',
                                               style: const TextStyle(
                                                 fontSize: 12,
-                                                color: Color(0xFF3F4E63),
+                                                color: _kDynamicTextSecondary,
                                               ),
                                             ),
                                           ),
@@ -370,7 +400,7 @@ class _DynamicEffectScreenState extends State<DynamicEffectScreen> {
                             '请先在编辑页添加元素，再设置每个元素的3D效果。',
                             style: TextStyle(
                               fontSize: 14,
-                              color: Color(0xFF3F4E63),
+                              color: _kDynamicTextSecondary,
                             ),
                           ),
                         ),
@@ -408,10 +438,7 @@ enum _AxisOption { horizontal, vertical }
 
 enum _DirectionOption { clockwise, counterclockwise }
 
-_LevelOption? _closestOption(
-  double value,
-  Map<_LevelOption, double> defaults,
-) {
+_LevelOption? _closestOption(double value, Map<_LevelOption, double> defaults) {
   _LevelOption? best;
   double? delta;
   defaults.forEach((key, target) {
@@ -469,7 +496,7 @@ class _PreviewInfo extends StatelessWidget {
     if (layer == null) {
       return const Text(
         '暂无元素',
-        style: TextStyle(fontSize: 14, color: Color(0xFF3F4E63)),
+        style: TextStyle(fontSize: 14, color: _kDynamicTextSecondary),
       );
     }
 
@@ -478,28 +505,28 @@ class _PreviewInfo extends StatelessWidget {
       children: [
         Text(
           '当前元素：${layer!.elementKey}',
-          style: const TextStyle(fontSize: 14, color: Colors.black87),
+          style: const TextStyle(fontSize: 14, color: _kDynamicTextPrimary),
         ),
         const SizedBox(height: 6),
         Text(
           '3D开关：${layer!.is3dEnabled ? '开启' : '关闭'}',
-          style: const TextStyle(fontSize: 13, color: Color(0xFF3F4E63)),
+          style: const TextStyle(fontSize: 13, color: _kDynamicTextSecondary),
         ),
         Text(
           '旋转速度：${layer!.rotationSpeed.toStringAsFixed(1)}',
-          style: const TextStyle(fontSize: 13, color: Color(0xFF3F4E63)),
+          style: const TextStyle(fontSize: 13, color: _kDynamicTextSecondary),
         ),
         Text(
           '旋转轴向：${layer!.rotationAxis == 'horizontal' ? '水平' : '竖直'}',
-          style: const TextStyle(fontSize: 13, color: Color(0xFF3F4E63)),
+          style: const TextStyle(fontSize: 13, color: _kDynamicTextSecondary),
         ),
         Text(
           '旋转方向：${layer!.rotationDirection == 'counterclockwise' ? '逆时针' : '顺时针'}',
-          style: const TextStyle(fontSize: 13, color: Color(0xFF3F4E63)),
+          style: const TextStyle(fontSize: 13, color: _kDynamicTextSecondary),
         ),
         Text(
           '透视强度：${layer!.perspective.toStringAsFixed(4)}',
-          style: const TextStyle(fontSize: 13, color: Color(0xFF3F4E63)),
+          style: const TextStyle(fontSize: 13, color: _kDynamicTextSecondary),
         ),
       ],
     );
@@ -525,15 +552,15 @@ class _ElementChip extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
         decoration: BoxDecoration(
-          color: selected ? const Color(0xFF8ABFA8) : const Color(0xFFD9DDD1),
+          color: selected ? const Color(0xFFBFE0B2) : _kDynamicChip,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
-            color: selected ? const Color(0xFF5D8B76) : const Color(0xFFABB39D),
+            color: selected ? _kDynamicAccent : _kDynamicChipBorder,
           ),
         ),
         child: Text(
           label,
-          style: const TextStyle(fontSize: 13, color: Colors.black87),
+          style: const TextStyle(fontSize: 13, color: _kDynamicTextPrimary),
         ),
       ),
     );
@@ -554,12 +581,12 @@ class _BackButton extends StatelessWidget {
         height: 42,
         padding: const EdgeInsets.symmetric(horizontal: 12),
         decoration: BoxDecoration(
-          color: const Color(0xFFD9DDD1),
+          color: _kDynamicButton,
           borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: const Color(0xFFABB39D)),
+          border: Border.all(color: _kDynamicCardBorder),
           boxShadow: const [
             BoxShadow(
-              color: Color(0x1A000000),
+              color: Color(0x12000000),
               blurRadius: 4,
               offset: Offset(0, 2),
             ),
@@ -568,9 +595,12 @@ class _BackButton extends StatelessWidget {
         child: const Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.reply, size: 18, color: Colors.black87),
+            Icon(Icons.reply, size: 18, color: _kDynamicTextPrimary),
             SizedBox(width: 6),
-            Text('返回', style: TextStyle(fontSize: 15, color: Colors.black87)),
+            Text(
+              '返回',
+              style: TextStyle(fontSize: 15, color: _kDynamicTextPrimary),
+            ),
           ],
         ),
       ),
@@ -598,9 +628,9 @@ class _TopToggleChip extends StatelessWidget {
         height: 52,
         padding: const EdgeInsets.symmetric(horizontal: 10),
         decoration: BoxDecoration(
-          color: const Color(0xFFC7DAD6),
+          color: _kDynamicCard,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: const Color(0xFF9AAEAA)),
+          border: Border.all(color: _kDynamicCardBorder),
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -610,7 +640,7 @@ class _TopToggleChip extends StatelessWidget {
                   ? Icons.check_box_outlined
                   : Icons.check_box_outline_blank_rounded,
               size: 20,
-              color: Colors.black87,
+              color: _kDynamicTextPrimary,
             ),
             const SizedBox(width: 6),
             Flexible(
@@ -618,7 +648,10 @@ class _TopToggleChip extends StatelessWidget {
                 label,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 13, color: Colors.black87),
+                style: const TextStyle(
+                  fontSize: 13,
+                  color: _kDynamicTextPrimary,
+                ),
               ),
             ),
           ],
@@ -640,9 +673,9 @@ class _SectionCard extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
       decoration: BoxDecoration(
-        color: const Color(0xFFC7DAD6),
+        color: _kDynamicCard,
         borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: const Color(0xFF97ABA7)),
+        border: Border.all(color: _kDynamicCardBorder),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -652,7 +685,7 @@ class _SectionCard extends StatelessWidget {
             style: const TextStyle(
               fontSize: 17,
               fontWeight: FontWeight.w600,
-              color: Colors.black87,
+              color: _kDynamicTextPrimary,
             ),
           ),
           const SizedBox(height: 8),
@@ -689,12 +722,12 @@ class _OptionCheck extends StatelessWidget {
                   ? Icons.check_box_outlined
                   : Icons.check_box_outline_blank_rounded,
               size: 20,
-              color: Colors.black87,
+              color: _kDynamicTextPrimary,
             ),
             const SizedBox(width: 4),
             Text(
               text,
-              style: const TextStyle(fontSize: 13, color: Colors.black87),
+              style: const TextStyle(fontSize: 13, color: _kDynamicTextPrimary),
             ),
           ],
         ),
@@ -729,7 +762,7 @@ class _LabeledOptionRow extends StatelessWidget {
         children: [
           Text(
             label,
-            style: const TextStyle(fontSize: 13, color: Colors.black87),
+            style: const TextStyle(fontSize: 13, color: _kDynamicTextPrimary),
           ),
           const SizedBox(width: 6),
           for (var i = 0; i < options.length; i++) ...[
@@ -761,12 +794,12 @@ class _BottomActionButton extends StatelessWidget {
       child: Container(
         height: 52,
         decoration: BoxDecoration(
-          color: enabled ? const Color(0xFFD9DDD1) : const Color(0xFFE5E7E0),
+          color: enabled ? _kDynamicButton : _kDynamicButtonDisabled,
           borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: const Color(0xFFABB39D)),
+          border: Border.all(color: _kDynamicCardBorder),
           boxShadow: const [
             BoxShadow(
-              color: Color(0x1A000000),
+              color: Color(0x12000000),
               blurRadius: 4,
               offset: Offset(0, 2),
             ),
@@ -778,7 +811,7 @@ class _BottomActionButton extends StatelessWidget {
           style: TextStyle(
             fontSize: 18,
             fontWeight: FontWeight.w500,
-            color: enabled ? Colors.black87 : Colors.black45,
+            color: enabled ? _kDynamicTextPrimary : const Color(0xFF7A8875),
           ),
         ),
       ),

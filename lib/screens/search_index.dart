@@ -1,11 +1,9 @@
 // search_index_screen.dart
 import 'package:flutter/material.dart';
-// 导入添加元素页面
-import 'add_screen.dart';
 //添加元素界面
 
 class SearchIndexScreen extends StatefulWidget {
-  const SearchIndexScreen({Key? key}) : super(key: key);
+  const SearchIndexScreen({super.key});
 
   @override
   State<SearchIndexScreen> createState() => _SearchIndexScreenState();
@@ -131,7 +129,7 @@ class _SearchIndexScreenState extends State<SearchIndexScreen> {
         color: Colors.white,
         boxShadow: [
           BoxShadow(
-            color: Colors.grey.withOpacity(0.1),
+            color: Colors.grey.withValues(alpha: 0.1),
             spreadRadius: 1,
             blurRadius: 3,
             offset: const Offset(0, 1),
@@ -335,7 +333,7 @@ class _SearchIndexScreenState extends State<SearchIndexScreen> {
           int index = entry.key;
           Map<String, dynamic> category = entry.value;
           return _buildCategoryCard(category, index);
-        }).toList(),
+        }),
       ],
     );
   }
@@ -377,11 +375,14 @@ class _SearchIndexScreenState extends State<SearchIndexScreen> {
                 fit: BoxFit.contain,
               ),
               const SizedBox(width: 10),
-              // 分类名称
-              Image.asset(
-                'assets/images/search_elements/$categoryName.png',
-                height: 22,
-                fit: BoxFit.contain,
+              // 分类名称（纯文本）
+              Text(
+                categoryName,
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF1E2A1F),
+                ),
               ),
             ],
           ),
@@ -417,8 +418,6 @@ class _SearchIndexScreenState extends State<SearchIndexScreen> {
 
   // 构建元素项
   Widget _buildElementItem(Map<String, dynamic> element) {
-    String elementName = element['name'];
-
     return GestureDetector(
       onTap: () {
         // 点击元素，返回添加元素页并传递数据
@@ -431,7 +430,7 @@ class _SearchIndexScreenState extends State<SearchIndexScreen> {
           border: Border.all(color: Colors.grey[300]!, width: 1),
           boxShadow: [
             BoxShadow(
-              color: Colors.grey.withOpacity(0.1),
+              color: Colors.grey.withValues(alpha: 0.1),
               spreadRadius: 1,
               blurRadius: 2,
               offset: const Offset(0, 1),

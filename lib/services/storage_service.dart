@@ -5,6 +5,7 @@ import '../models/user.dart';
 class StorageService {
   static const String _userKey = 'user';
   static const String _tokenKey = 'token';
+  static const String _home3dPreviewEnabledKey = 'home_3d_preview_enabled';
   static const String _profileCityNameKey = 'profile_city_name';
   static const String _profileCityCodeKey = 'profile_city_code';
   static const String _profileNicknameKey = 'profile_nickname';
@@ -188,5 +189,18 @@ class StorageService {
     final password = prefs.getString(_profilePasswordKey)?.trim();
     if (password == null || password.isEmpty) return null;
     return password;
+  }
+
+  Future<void> saveHome3dPreviewEnabled(bool enabled) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_home3dPreviewEnabledKey, enabled);
+  }
+
+  Future<bool?> getHome3dPreviewEnabled() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (!prefs.containsKey(_home3dPreviewEnabledKey)) {
+      return null;
+    }
+    return prefs.getBool(_home3dPreviewEnabledKey);
   }
 }

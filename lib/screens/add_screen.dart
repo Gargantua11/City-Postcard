@@ -1,56 +1,56 @@
 import 'package:flutter/material.dart';
+
 import '../models/postcard_element_layer.dart';
-// 导入搜索页面
-import 'search_index.dart';
-// 导入编辑页面
 
 class AddIndexPage extends StatefulWidget {
-  const AddIndexPage({Key? key}) : super(key: key);
+  const AddIndexPage({super.key});
 
   @override
   State<AddIndexPage> createState() => _AddIndexPageState();
 }
 
 class _AddIndexPageState extends State<AddIndexPage> {
-  // 已选元素列表
-  List<Map<String, dynamic>> selectedElements = [];
+  static const double _newElementScale = 2 / 3;
 
-  // 分类数据 - 按图片顺序：马年元素、新年元素、季节元素
-  final List<Map<String, dynamic>> categories = [
-    {'name': '马年元素', 'icon': 'assets/images/add_elements/马年元素.png'},
-    {'name': '新年元素', 'icon': 'assets/images/add_elements/新年元素.png'},
-    {'name': '季节元素', 'icon': 'assets/images/add_elements/季节元素.png'},
+  final List<_CategoryData> _categories = const [
+    _CategoryData(name: '马年元素'),
+    _CategoryData(name: '新年元素'),
+    _CategoryData(name: '季节元素'),
   ];
 
-  // 每个分类下的具体元素
-  final Map<String, List<Map<String, dynamic>>> elementsByCategory = {
+  final Map<String, List<_ElementData>> _elementsByCategory = const {
     '马年元素': [
-      {'name': '马踏飞燕', 'icon': 'assets/images/add_elements/马踏飞燕.png'},
-      {'name': '骏马', 'icon': 'assets/images/add_elements/骏马.png'},
-      {'name': '马鞍', 'icon': 'assets/images/add_elements/马鞍.png'},
-      {'name': '马蹄', 'icon': 'assets/images/add_elements/马蹄.png'},
+      _ElementData(
+        name: '马踏飞燕',
+        iconPath: 'assets/images/add_elements/马踏飞燕.png',
+      ),
+      _ElementData(name: '骏马', iconPath: 'assets/images/add_elements/骏马.png'),
+      _ElementData(name: '马鞍', iconPath: 'assets/images/add_elements/马鞍.png'),
+      _ElementData(name: '马蹄', iconPath: 'assets/images/add_elements/马蹄.png'),
     ],
     '新年元素': [
-      {'name': '烟花', 'icon': 'assets/images/add_elements/烟花.png'},
-      {'name': '灯笼', 'icon': 'assets/images/add_elements/灯笼.png'},
-      {'name': '春联', 'icon': 'assets/images/add_elements/春联.png'},
-      {'name': '鞭炮', 'icon': 'assets/images/add_elements/鞭炮.png'},
+      _ElementData(name: '烟花', iconPath: 'assets/images/add_elements/烟花.png'),
+      _ElementData(name: '灯笼', iconPath: 'assets/images/add_elements/灯笼.png'),
+      _ElementData(name: '春联', iconPath: 'assets/images/add_elements/春联.png'),
+      _ElementData(name: '鞭炮', iconPath: 'assets/images/add_elements/鞭炮.png'),
     ],
     '季节元素': [
-      {'name': '梅花', 'icon': 'assets/images/add_elements/梅花.png'},
-      {'name': '雪花', 'icon': 'assets/images/add_elements/雪花.png'},
-      {'name': '绿叶', 'icon': 'assets/images/add_elements/绿叶.png'},
-      {'name': '枫叶', 'icon': 'assets/images/add_elements/枫叶.png'},
+      _ElementData(name: '梅花', iconPath: 'assets/images/add_elements/梅花.png'),
+      _ElementData(name: '雪花', iconPath: 'assets/images/add_elements/雪花.png'),
+      _ElementData(name: '绿叶', iconPath: 'assets/images/add_elements/绿叶.png'),
+      _ElementData(name: '枫叶', iconPath: 'assets/images/add_elements/枫叶.png'),
     ],
   };
 
-  // 当前选中的元素
-  final List<PostcardElementLayer> _addedLayers = [];
+  final List<PostcardElementLayer> _addedLayers = <PostcardElementLayer>[];
   int _layerSequence = 0;
 
-  @override
-  void dispose() {
-    super.dispose();
+  Map<String, int> get _selectedCounts {
+    final map = <String, int>{};
+    for (final layer in _addedLayers) {
+      map[layer.elementKey] = (map[layer.elementKey] ?? 0) + 1;
+    }
+    return map;
   }
 
   String _createLayerId() {
@@ -58,16 +58,13 @@ class _AddIndexPageState extends State<AddIndexPage> {
     return 'layer_${DateTime.now().microsecondsSinceEpoch}_$_layerSequence';
   }
 
-  String? _findElementIconPath(String elementName) {
-    for (final categoryElements in elementsByCategory.values) {
-      for (final element in categoryElements) {
-        final name = element['name']?.toString().trim() ?? '';
-        if (name == elementName) {
-          return element['icon']?.toString().trim();
-        }
-      }
-    }
-    return null;
+  Offset _defaultLayerOffset(int index) {
+    const perRow = 4;
+    final col = index % perRow;
+    final row = index ~/ perRow;
+    final dx = (col - 1.5) * 42.0;
+    final dy = ((row % 3) - 1) * 34.0;
+    return Offset(dx, dy);
   }
 
   int _countElementInstances(String elementName) {
@@ -80,24 +77,9 @@ class _AddIndexPageState extends State<AddIndexPage> {
     return count;
   }
 
-  Offset _defaultLayerOffset(int index) {
-    const perRow = 4;
-    final col = index % perRow;
-    final row = index ~/ perRow;
-    final dx = (col - 1.5) * 42.0;
-    final dy = ((row % 3) - 1) * 34.0;
-    return Offset(dx, dy);
-  }
-
-  // 添加元素 - 点击直接添加
-  void addElement(String elementName, {String? iconPath}) {
+  void _addElement(String elementName, {required String iconPath}) {
     final normalizedName = elementName.trim();
     if (normalizedName.isEmpty) return;
-    final resolvedIconPath =
-        iconPath?.trim().isNotEmpty == true
-            ? iconPath!.trim()
-            : (_findElementIconPath(normalizedName) ??
-                'assets/images/add_elements/$normalizedName.png');
 
     setState(() {
       final offset = _defaultLayerOffset(_addedLayers.length);
@@ -105,500 +87,578 @@ class _AddIndexPageState extends State<AddIndexPage> {
         PostcardElementLayer(
           id: _createLayerId(),
           elementKey: normalizedName,
-          assetPath: resolvedIconPath,
+          assetPath: iconPath,
+          scale: _newElementScale,
           x: offset.dx,
           y: offset.dy,
           zIndex: _addedLayers.length,
         ),
       );
-      updateSelectedElementsList();
-
-      // 添加成功提示
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Row(
-            children: [
-              Image.asset(
-                'assets/images/add_elements/应用.png',
-                width: 20,
-                height: 20,
-                fit: BoxFit.contain,
-              ),
-              const SizedBox(width: 8),
-              Text('已添加 $normalizedName'),
-            ],
-          ),
-          duration: const Duration(milliseconds: 800),
-          backgroundColor: Colors.green,
-        ),
-      );
     });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('已添加 $normalizedName'),
+        duration: const Duration(milliseconds: 700),
+      ),
+    );
   }
 
-  // 移除单个元素的一个数量
-  void removeElement(String elementName) {
+  void _removeOneElement(String elementName) {
     setState(() {
       final index = _addedLayers.lastIndexWhere(
         (layer) => layer.elementKey == elementName,
       );
       if (index >= 0) {
         _addedLayers.removeAt(index);
-        updateSelectedElementsList();
       }
     });
   }
 
-  // 删除所有已选元素
-  void deleteAllElements() {
-    showDialog(
+  Future<void> _confirmDeleteAll() async {
+    if (_addedLayers.isEmpty) return;
+    final confirmed = await showDialog<bool>(
       context: context,
-      builder: (BuildContext context) {
+      builder: (context) {
         return AlertDialog(
-          title: Row(
-            children: [
-              Image.asset(
-                'assets/images/add_elements/删除.png',
-                width: 24,
-                height: 24,
-                fit: BoxFit.contain,
-              ),
-              const SizedBox(width: 8),
-              const Text('确认删除'),
-            ],
-          ),
-          content: const Text('确定要清空所有已选元素吗？'),
+          title: const Text('确认删除'),
+          content: const Text('确定清空已选元素吗？'),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(context),
+              onPressed: () => Navigator.pop(context, false),
               child: const Text('取消'),
             ),
             TextButton(
-              onPressed: () {
-                setState(() {
-                  _addedLayers.clear();
-                  selectedElements.clear();
-                });
-                Navigator.pop(context);
-
-                // 删除成功提示
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Row(
-                      children: [
-                        Image.asset(
-                          'assets/images/add_elements/删除.png',
-                          width: 20,
-                          height: 20,
-                          fit: BoxFit.contain,
-                        ),
-                        const SizedBox(width: 8),
-                        const Text('已清空所有元素'),
-                      ],
-                    ),
-                    duration: const Duration(milliseconds: 800),
-                    backgroundColor: Colors.red,
-                  ),
-                );
-              },
+              onPressed: () => Navigator.pop(context, true),
               child: const Text('确定'),
             ),
           ],
         );
       },
     );
+    if (confirmed != true || !mounted) return;
+    setState(() => _addedLayers.clear());
   }
 
-  // 更新已选元素列表
-  void updateSelectedElementsList() {
-    final counts = <String, int>{};
-    for (final layer in _addedLayers) {
-      counts[layer.elementKey] = (counts[layer.elementKey] ?? 0) + 1;
+  void _applyAndReturn() {
+    Navigator.pop(context, List<PostcardElementLayer>.from(_addedLayers));
+  }
+
+  Future<void> _goBack() async {
+    if (_addedLayers.isEmpty) {
+      Navigator.pop(context);
+      return;
     }
-    selectedElements =
-        counts.entries
-            .map((entry) => {'name': entry.key, 'count': entry.value})
-            .toList(growable: true);
-  }
 
-  // 应用并返回编辑页
-  void applyAndReturn() {
-    print('应用的元素图层: ${_addedLayers.map((item) => item.toJson()).toList()}');
-
-    // 显示应用成功提示
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Row(
-          children: [
-            Image.asset(
-              'assets/images/add_elements/应用.png',
-              width: 24,
-              height: 24,
-              fit: BoxFit.contain,
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('返回编辑页'),
+          content: const Text('当前已选择元素，直接返回将丢失未应用的修改，确定返回吗？'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('取消'),
             ),
-            const SizedBox(width: 8),
-            const Text('应用成功，返回编辑页'),
+            TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('返回'),
+            ),
           ],
-        ),
-        duration: const Duration(milliseconds: 1000),
-        backgroundColor: const Color(0xFF4CAF50),
-      ),
+        );
+      },
     );
-
-    // 延迟返回编辑页
-    Future.delayed(const Duration(milliseconds: 800), () {
-      Navigator.pop(context, List<PostcardElementLayer>.from(_addedLayers));
-    });
-  }
-
-  // 返回编辑页
-  void goBackToEditPage() {
-    // 如果有已选元素，可以选择提示用户是否保存
-    if (_addedLayers.isNotEmpty) {
-      showDialog(
-        context: context,
-        builder: (BuildContext context) {
-          return AlertDialog(
-            title: Row(
-              children: [
-                Image.asset(
-                  'assets/images/add_elements/返回.png',
-                  width: 24,
-                  height: 24,
-                  fit: BoxFit.contain,
-                ),
-                const SizedBox(width: 8),
-                const Text('返回编辑页'),
-              ],
-            ),
-            content: const Text('当前已选择了元素，返回后将丢失未应用的更改，确定要返回吗？'),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('取消'),
-              ),
-              TextButton(
-                onPressed: () {
-                  Navigator.pop(context); // 关闭对话框
-                  Navigator.pop(context); // 返回编辑页
-                },
-                child: const Text('确定'),
-              ),
-            ],
-          );
-        },
-      );
-    } else {
-      // 没有已选元素，直接返回
+    if (confirmed == true && mounted) {
       Navigator.pop(context);
     }
   }
 
-  // 跳转到搜索页面
-  void goToSearchPage() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => const SearchIndexScreen()),
-    ).then((result) {
-      // 从搜索页面返回后，如果有返回的数据（如选中的元素），可以在这里处理
-      if (result != null && result is Map<String, dynamic>) {
-        String elementName = result['name'].toString();
-        addElement(elementName);
+  Future<void> _goToSearchPage() async {
+    final allElements = _elementsByCategory.values
+        .expand((elements) => elements)
+        .toList(growable: false);
+    final uniqueElements = <_ElementData>[];
+    final seen = <String>{};
+    for (final element in allElements) {
+      if (seen.add(element.name)) {
+        uniqueElements.add(element);
+      }
+    }
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                Image.asset(
-                  'assets/images/add_elements/应用.png',
-                  width: 20,
-                  height: 20,
-                  fit: BoxFit.contain,
+    final selected = await showSearch<_ElementData?>(
+      context: context,
+      delegate: _ElementSearchDelegate(elements: uniqueElements),
+    );
+    if (!mounted || selected == null) return;
+    _addElement(selected.name, iconPath: selected.iconPath);
+  }
+
+  Future<void> _openCategorySheet(_CategoryData category) async {
+    final elements =
+        _elementsByCategory[category.name] ?? const <_ElementData>[];
+    if (elements.isEmpty) return;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return Container(
+          height: MediaQuery.of(context).size.height * 0.62,
+          decoration: const BoxDecoration(
+            color: Color(0xFFE9F4DE),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: Column(
+            children: [
+              const SizedBox(height: 12),
+              Container(
+                width: 44,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFA7C398),
+                  borderRadius: BorderRadius.circular(4),
                 ),
-                const SizedBox(width: 8),
-                Text('从搜索结果添加: $elementName'),
-              ],
-            ),
-            duration: const Duration(milliseconds: 800),
-            backgroundColor: Colors.green,
+              ),
+              const SizedBox(height: 14),
+              Text(
+                category.name,
+                style: const TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 14),
+              Expanded(
+                child: GridView.builder(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 3,
+                    crossAxisSpacing: 12,
+                    mainAxisSpacing: 12,
+                    childAspectRatio: 0.95,
+                  ),
+                  itemCount: elements.length,
+                  itemBuilder: (context, index) {
+                    final element = elements[index];
+                    final count = _countElementInstances(element.name);
+                    return _ElementTile(
+                      element: element,
+                      count: count,
+                      onTap: () {
+                        _addElement(element.name, iconPath: element.iconPath);
+                        setState(() {});
+                      },
+                    );
+                  },
+                ),
+              ),
+            ],
           ),
         );
-      }
-    });
+      },
+    );
   }
 
   @override
   Widget build(BuildContext context) {
+    final selectedCounts = _selectedCounts;
+
     return Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(
         child: Column(
           children: [
-            // 顶部区域
-            _buildTopBar(),
-
-            // 搜索框
-            _buildSearchBox(),
-
-            // 分类区域 - 垂直排列，不滚动
-            _buildCategorySection(),
-
-            // 已选元素区域
-            _buildSelectedElementsSection(),
-
-            // 底部按钮
-            _buildBottomButtons(),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // 构建顶部栏
-  Widget _buildTopBar() {
-    return Container(
-      height: 56,
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.grey.withOpacity(0.1),
-            spreadRadius: 1,
-            blurRadius: 3,
-            offset: const Offset(0, 1),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          // 返回按钮 - 使用素材库图片，点击返回编辑页
-          GestureDetector(
-            onTap: goBackToEditPage,
-            child: Image.asset(
-              'assets/images/add_elements/返回.png',
-              width: 24,
-              height: 24,
-              fit: BoxFit.contain,
-            ),
-          ),
-
-          const SizedBox(width: 12),
-
-          // 标题"元素库" - 使用素材库图片
-          Expanded(
-            child: Center(
-              child: Image.asset(
-                'assets/images/add_elements/元素库.png',
-                height: 28,
-                fit: BoxFit.contain,
-              ),
-            ),
-          ),
-
-          // 占位，保持标题居中
-          const SizedBox(width: 36),
-        ],
-      ),
-    );
-  }
-
-  // 构建搜索框 - 点击跳转到搜索页面
-  Widget _buildSearchBox() {
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: GestureDetector(
-        onTap: goToSearchPage,
-        child: Container(
-          height: 40,
-          decoration: BoxDecoration(
-            color: const Color(0xFFF5F5F5),
-            borderRadius: BorderRadius.circular(20),
-          ),
-          child: Row(
-            children: [
-              const SizedBox(width: 12),
-              // 搜索图标 - 使用素材库图片
-              Image.asset(
-                'assets/images/add_elements/搜索.png',
-                width: 20,
-                height: 20,
-                fit: BoxFit.contain,
-              ),
-              const SizedBox(width: 8),
-              // 搜索提示文字
-              const Text(
-                '搜索',
-                style: TextStyle(fontSize: 14, color: Colors.grey),
-              ),
-              const Spacer(),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  // 构建分类区域 - 垂直排列，不滚动
-  Widget _buildCategorySection() {
-    return Expanded(
-      child: SingleChildScrollView(
-        physics: const NeverScrollableScrollPhysics(),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // 分类标题
-            const Padding(
-              padding: EdgeInsets.only(left: 16, top: 8, bottom: 12),
-              child: Text(
-                '分类',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w500,
-                  color: Colors.black87,
+            Expanded(
+              child: SingleChildScrollView(
+                physics: const BouncingScrollPhysics(),
+                padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _TopBar(onBack: _goBack),
+                    const SizedBox(height: 16),
+                    _SearchBar(onTap: _goToSearchPage),
+                    const SizedBox(height: 18),
+                    for (var i = 0; i < _categories.length; i++) ...[
+                      _CategoryPanel(
+                        category: _categories[i],
+                        elements:
+                            _elementsByCategory[_categories[i].name] ??
+                            const <_ElementData>[],
+                        onOpenCategory: () =>
+                            _openCategorySheet(_categories[i]),
+                        onTapElement: (element) {
+                          _addElement(element.name, iconPath: element.iconPath);
+                        },
+                      ),
+                      if (i != _categories.length - 1)
+                        const SizedBox(height: 14),
+                    ],
+                    const SizedBox(height: 10),
+                  ],
                 ),
               ),
             ),
-            // 三个分类卡片 - 垂直排列，不滚动
-            ...categories.asMap().entries.map((entry) {
-              int index = entry.key;
-              Map<String, dynamic> category = entry.value;
-              return _buildCategoryCard(category, index);
-            }).toList(),
-
-            const SizedBox(height: 16),
+            Container(
+              width: double.infinity,
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                boxShadow: [
+                  BoxShadow(
+                    color: Color(0x14000000),
+                    blurRadius: 8,
+                    offset: Offset(0, -2),
+                  ),
+                ],
+              ),
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _SelectedPanel(
+                    selectedCounts: selectedCounts,
+                    onTapItem: _removeOneElement,
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _BottomButton(
+                          label: '应用',
+                          onTap: _applyAndReturn,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _BottomButton(
+                          label: '删除',
+                          onTap: _confirmDeleteAll,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
           ],
         ),
       ),
     );
   }
+}
 
-  // 构建分类卡片 - 垂直排列
-  Widget _buildCategoryCard(Map<String, dynamic> category, int index) {
-    String categoryName = category['name'];
-    List<Map<String, dynamic>> categoryElements =
-        elementsByCategory[categoryName] ?? [];
+class _TopBar extends StatelessWidget {
+  final VoidCallback onBack;
 
+  const _TopBar({required this.onBack});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        InkWell(
+          onTap: onBack,
+          borderRadius: BorderRadius.circular(20),
+          child: SizedBox(
+            width: 74,
+            height: 34,
+            child: Image.asset(
+              'assets/images/add_elements/返回.png',
+              fit: BoxFit.contain,
+              errorBuilder: (context, error, stackTrace) {
+                return const Icon(Icons.arrow_back_ios_new_rounded, size: 18);
+              },
+            ),
+          ),
+        ),
+        const Expanded(
+          child: Center(
+            child: Text(
+              '元素库',
+              style: TextStyle(
+                fontSize: 42,
+                fontWeight: FontWeight.w500,
+                letterSpacing: 1.5,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 74),
+      ],
+    );
+  }
+}
+
+class _SearchBar extends StatelessWidget {
+  final VoidCallback onTap;
+
+  const _SearchBar({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        height: 42,
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        decoration: BoxDecoration(
+          color: const Color(0xFFDDF1D0),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: const Color(0xFFA5C39A)),
+        ),
+        child: const Row(
+          children: [
+            Text(
+              '搜索',
+              style: TextStyle(color: Color(0xFF5C7558), fontSize: 18),
+            ),
+            Spacer(),
+            Icon(Icons.search_rounded, size: 22),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CategoryPanel extends StatefulWidget {
+  final _CategoryData category;
+  final List<_ElementData> elements;
+  final VoidCallback onOpenCategory;
+  final ValueChanged<_ElementData> onTapElement;
+
+  const _CategoryPanel({
+    required this.category,
+    required this.elements,
+    required this.onOpenCategory,
+    required this.onTapElement,
+  });
+
+  @override
+  State<_CategoryPanel> createState() => _CategoryPanelState();
+}
+
+class _CategoryPanelState extends State<_CategoryPanel> {
+  static const int _collapsedVisibleCount = 3;
+  bool _expanded = false;
+
+  bool get _canExpand => widget.elements.length > _collapsedVisibleCount;
+
+  @override
+  Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      padding: const EdgeInsets.all(12),
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
       decoration: BoxDecoration(
-        color: const Color(0xFFE8F5E9), // 浅绿色背景
-        borderRadius: BorderRadius.circular(12),
+        color: const Color(0xFFDDF1D0),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: const Color(0xFFA5C39A)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // 分类标题行
-          Row(
-            children: [
-              // 分类图标 - 使用素材库图片
-              Image.asset(
-                category['icon'],
-                width: 32,
-                height: 32,
-                fit: BoxFit.contain,
-              ),
-              const SizedBox(width: 10),
-              // 分类名称 - 使用素材库图片
-              Image.asset(
-                'assets/images/add_elements/$categoryName.png',
-                height: 22,
-                fit: BoxFit.contain,
-              ),
-            ],
+          GestureDetector(
+            onTap: widget.onOpenCategory,
+            child: _CategoryTitlePillar(title: widget.category.name),
           ),
-          const SizedBox(height: 12),
-
-          // 该分类下的元素网格 - 每行4个
-          GridView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 4, // 每行4个元素
-              crossAxisSpacing: 8,
-              mainAxisSpacing: 8,
-              childAspectRatio: 1,
+          const SizedBox(height: 10),
+          const Text(
+            '下方展示部分元素，点击元素可快速添加',
+            style: TextStyle(fontSize: 12, color: Color(0xFF4C654A)),
+          ),
+          const SizedBox(height: 10),
+          GestureDetector(
+            onTap: _canExpand
+                ? () => setState(() => _expanded = !_expanded)
+                : null,
+            child: ClipRect(
+              child: AnimatedSize(
+                duration: const Duration(milliseconds: 220),
+                curve: Curves.easeOut,
+                alignment: Alignment.topCenter,
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(maxHeight: _expanded ? 420 : 132),
+                  child: Wrap(
+                    spacing: 12,
+                    runSpacing: 12,
+                    children: widget.elements
+                        .map((element) {
+                          return _CategoryPreviewTile(
+                            element: element,
+                            onTap: () => widget.onTapElement(element),
+                          );
+                        })
+                        .toList(growable: false),
+                  ),
+                ),
+              ),
             ),
-            itemCount: categoryElements.length,
-            itemBuilder: (context, index) {
-              return _buildElementItem(categoryElements[index]);
-            },
           ),
+          if (_canExpand) ...[
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                onPressed: () => setState(() => _expanded = !_expanded),
+                style: TextButton.styleFrom(
+                  foregroundColor: const Color(0xFF3E5B3B),
+                  textStyle: const TextStyle(fontSize: 13),
+                ),
+                child: Text(_expanded ? '收起' : '展开'),
+              ),
+            ),
+          ],
         ],
       ),
     );
   }
+}
 
-  // 构建元素项 - 点击直接添加
-  Widget _buildElementItem(Map<String, dynamic> element) {
-    String elementName = element['name'];
-    int count = _countElementInstances(elementName);
-    bool isSelected = count > 0;
+class _CategoryTitlePillar extends StatelessWidget {
+  final String title;
 
-    return GestureDetector(
-      onTap: () {
-        // 点击直接添加元素
-        addElement(elementName, iconPath: element['icon']?.toString());
-      },
+  const _CategoryTitlePillar({required this.title});
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      title,
+      style: const TextStyle(
+        fontSize: 24,
+        fontWeight: FontWeight.w700,
+        color: Color(0xFF1F2A1E),
+      ),
+    );
+  }
+}
+
+class _CategoryPreviewTile extends StatelessWidget {
+  final _ElementData element;
+  final VoidCallback onTap;
+
+  const _CategoryPreviewTile({required this.element, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
       child: Container(
+        width: 88,
+        height: 132,
         decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(
-            color: isSelected ? const Color(0xFF4CAF50) : Colors.grey[300]!,
-            width: isSelected ? 2 : 1,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.grey.withOpacity(0.1),
-              spreadRadius: 1,
-              blurRadius: 2,
-              offset: const Offset(0, 1),
+          color: const Color(0xFFE8F6DD),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFFB8D3AB)),
+        ),
+        padding: const EdgeInsets.fromLTRB(6, 6, 6, 8),
+        child: Column(
+          children: [
+            Text(
+              element.name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 6),
+            Expanded(
+              child: Image.asset(
+                element.iconPath,
+                fit: BoxFit.contain,
+                errorBuilder: (context, error, stackTrace) {
+                  return const Icon(
+                    Icons.image_not_supported_outlined,
+                    size: 18,
+                    color: Color(0xFF8BA081),
+                  );
+                },
+              ),
             ),
           ],
         ),
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            // 元素图标
-            Image.asset(
-              element['icon'],
-              width: 40,
-              height: 40,
-              fit: BoxFit.contain,
-              errorBuilder: (context, error, stackTrace) {
-                return Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: Colors.grey[200],
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Icon(Icons.image, size: 20, color: Colors.grey[400]),
-                );
-              },
-            ),
+      ),
+    );
+  }
+}
 
-            // 选中计数角标
-            if (isSelected && count > 0)
+class _ElementTile extends StatelessWidget {
+  final _ElementData element;
+  final int count;
+  final VoidCallback onTap;
+
+  const _ElementTile({
+    required this.element,
+    required this.count,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        decoration: BoxDecoration(
+          color: const Color(0xFFF4FAEF),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: count > 0
+                ? const Color(0xFF5E9A66)
+                : const Color(0xFFBFD6B4),
+            width: count > 0 ? 2 : 1,
+          ),
+        ),
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(8, 12, 8, 10),
+                child: Column(
+                  children: [
+                    Expanded(
+                      child: Image.asset(
+                        element.iconPath,
+                        fit: BoxFit.contain,
+                        errorBuilder: (context, error, stackTrace) {
+                          return const Icon(
+                            Icons.image_not_supported_outlined,
+                            size: 24,
+                            color: Color(0xFF93A48F),
+                          );
+                        },
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      element.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 13),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            if (count > 0)
               Positioned(
-                top: 2,
-                right: 2,
+                right: 6,
+                top: 6,
                 child: Container(
                   width: 18,
                   height: 18,
                   decoration: const BoxDecoration(
-                    color: Color(0xFF4CAF50),
                     shape: BoxShape.circle,
+                    color: Color(0xFF5E9A66),
                   ),
-                  child: Center(
-                    child: Text(
-                      '$count',
-                      style: const TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
+                  alignment: Alignment.center,
+                  child: Text(
+                    '$count',
+                    style: const TextStyle(
+                      fontSize: 10,
+                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
                 ),
@@ -608,205 +668,231 @@ class _AddIndexPageState extends State<AddIndexPage> {
       ),
     );
   }
+}
 
-  // 构建已选元素区域
-  Widget _buildSelectedElementsSection() {
+class _SelectedPanel extends StatelessWidget {
+  final Map<String, int> selectedCounts;
+  final ValueChanged<String> onTapItem;
+
+  const _SelectedPanel({required this.selectedCounts, required this.onTapItem});
+
+  @override
+  Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16),
-      padding: const EdgeInsets.all(12),
+      width: double.infinity,
+      constraints: const BoxConstraints(minHeight: 100),
+      padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
       decoration: BoxDecoration(
-        color: const Color(0xFFF8F8F8),
-        borderRadius: BorderRadius.circular(12),
+        color: const Color(0xFFDDF1D0),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFA5C39A)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // "已选元素："标题 - 使用素材库图片
-          Row(
-            children: [
-              Image.asset(
-                'assets/images/add_elements/已选元素.png',
-                height: 18,
-                fit: BoxFit.contain,
-              ),
-              const Text(
-                '：',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                  color: Colors.black87,
-                ),
-              ),
-            ],
+          const Text(
+            '已选元素：',
+            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
           ),
-          const SizedBox(height: 12),
-
-          // 已选元素列表
-          selectedElements.isEmpty
-              ? const Text(
-                  '暂未选择任何元素',
-                  style: TextStyle(fontSize: 13, color: Colors.grey),
-                )
-              : Wrap(
-                  spacing: 10,
-                  runSpacing: 10,
-                  children: selectedElements.map((element) {
-                    return _buildSelectedElementChip(element);
-                  }).toList(),
-                ),
+          const SizedBox(height: 8),
+          if (selectedCounts.isEmpty)
+            const Text(
+              '暂无已选元素',
+              style: TextStyle(fontSize: 12, color: Color(0xFF5A7356)),
+            )
+          else
+            Wrap(
+              spacing: 10,
+              runSpacing: 6,
+              children: selectedCounts.entries
+                  .map((entry) {
+                    return GestureDetector(
+                      onTap: () => onTapItem(entry.key),
+                      child: Text(
+                        '${entry.key} * ${entry.value}',
+                        style: const TextStyle(fontSize: 13),
+                      ),
+                    );
+                  })
+                  .toList(growable: false),
+            ),
         ],
       ),
     );
   }
+}
 
-  // 构建已选元素标签
-  Widget _buildSelectedElementChip(Map<String, dynamic> element) {
-    return GestureDetector(
-      onTap: () {
-        // 点击已选元素可减少数量
-        removeElement(element['name'].toString());
-      },
+class _BottomButton extends StatelessWidget {
+  final String label;
+  final VoidCallback onTap;
+
+  const _BottomButton({required this.label, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(22),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        height: 44,
         decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.grey[300]!),
-          boxShadow: [
+          color: const Color(0xFFD9EDCC),
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: const Color(0xFF9DBB90)),
+          boxShadow: const [
             BoxShadow(
-              color: Colors.grey.withOpacity(0.1),
-              spreadRadius: 1,
-              blurRadius: 2,
-              offset: const Offset(0, 1),
+              color: Color(0x18000000),
+              blurRadius: 3,
+              offset: Offset(0, 2),
             ),
           ],
         ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // 元素图标
-            Image.asset(
-              'assets/images/add_elements/${element['name']}.png',
-              width: 24,
-              height: 24,
-              fit: BoxFit.contain,
-              errorBuilder: (context, error, stackTrace) {
-                return Container(
-                  width: 24,
-                  height: 24,
-                  decoration: BoxDecoration(
-                    color: Colors.grey[200],
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                );
-              },
-            ),
-            const SizedBox(width: 6),
-            // 元素名称
-            Text(
-              element['name'],
-              style: const TextStyle(fontSize: 13, color: Colors.black87),
-            ),
-            const SizedBox(width: 4),
-            // 数量
-            Text(
-              '×${element['count']}',
-              style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-            ),
-          ],
+        alignment: Alignment.center,
+        child: Text(
+          label,
+          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
         ),
       ),
     );
   }
+}
 
-  // 构建底部按钮
-  Widget _buildBottomButtons() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.grey.withOpacity(0.1),
-            spreadRadius: 1,
-            blurRadius: 3,
-            offset: const Offset(0, -1),
-          ),
-        ],
+class _ElementSearchDelegate extends SearchDelegate<_ElementData?> {
+  static const Color _themeColor = Color(0xFFCBE6BB);
+
+  final List<_ElementData> elements;
+
+  _ElementSearchDelegate({required this.elements});
+
+  List<_ElementData> _filtered() {
+    final keyword = query.trim();
+    if (keyword.isEmpty) return elements;
+    return elements
+        .where((element) => element.name.contains(keyword))
+        .toList(growable: false);
+  }
+
+  @override
+  String get searchFieldLabel => '搜索现有元素';
+
+  @override
+  ThemeData appBarTheme(BuildContext context) {
+    final base = Theme.of(context);
+    return base.copyWith(
+      scaffoldBackgroundColor: _themeColor,
+      appBarTheme: base.appBarTheme.copyWith(
+        backgroundColor: _themeColor,
+        surfaceTintColor: _themeColor,
+        elevation: 0,
+        iconTheme: const IconThemeData(color: Color(0xFF2E3A2F)),
       ),
-      child: Row(
-        children: [
-          // 返回按钮 - 使用素材库图片，点击返回编辑页
-          Expanded(
-            child: GestureDetector(
-              onTap: goBackToEditPage,
-              child: Container(
-                height: 44,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF0F0F0),
-                  borderRadius: BorderRadius.circular(22),
-                ),
-                child: Center(
-                  child: Image.asset(
-                    'assets/images/add_elements/返回.png',
-                    width: 24,
-                    height: 24,
-                    fit: BoxFit.contain,
-                  ),
-                ),
-              ),
-            ),
-          ),
-
-          const SizedBox(width: 16),
-
-          // 删除按钮 - 使用素材库图片
-          Expanded(
-            child: GestureDetector(
-              onTap: deleteAllElements,
-              child: Container(
-                height: 44,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFFEBEE),
-                  borderRadius: BorderRadius.circular(22),
-                ),
-                child: Center(
-                  child: Image.asset(
-                    'assets/images/add_elements/删除.png',
-                    width: 24,
-                    height: 24,
-                    fit: BoxFit.contain,
-                  ),
-                ),
-              ),
-            ),
-          ),
-
-          const SizedBox(width: 16),
-
-          // 应用按钮 - 使用素材库图片
-          Expanded(
-            flex: 2,
-            child: GestureDetector(
-              onTap: applyAndReturn,
-              child: Container(
-                height: 44,
-                decoration: BoxDecoration(
-                  color: const Color(0xFF4CAF50),
-                  borderRadius: BorderRadius.circular(22),
-                ),
-                child: Center(
-                  child: Image.asset(
-                    'assets/images/add_elements/应用.png',
-                    height: 24,
-                    fit: BoxFit.contain,
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
+      inputDecorationTheme: const InputDecorationTheme(
+        filled: true,
+        fillColor: Color(0xFFE6F2DE),
+        hintStyle: TextStyle(color: Color(0xFF6C786E)),
+        border: InputBorder.none,
+        enabledBorder: InputBorder.none,
+        focusedBorder: InputBorder.none,
+        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       ),
     );
   }
+
+  @override
+  List<Widget>? buildActions(BuildContext context) {
+    return [
+      if (query.isNotEmpty)
+        IconButton(
+          tooltip: '清空',
+          icon: const Icon(Icons.clear),
+          onPressed: () => query = '',
+        ),
+    ];
+  }
+
+  @override
+  Widget? buildLeading(BuildContext context) {
+    return IconButton(
+      tooltip: '返回',
+      icon: const Icon(Icons.arrow_back),
+      onPressed: () => close(context, null),
+    );
+  }
+
+  @override
+  Widget buildResults(BuildContext context) {
+    return _buildResultList(context);
+  }
+
+  @override
+  Widget buildSuggestions(BuildContext context) {
+    return _buildResultList(context);
+  }
+
+  Widget _buildResultList(BuildContext context) {
+    final results = _filtered();
+    if (results.isEmpty) {
+      return const ColoredBox(
+        color: _themeColor,
+        child: Center(
+          child: Text(
+            '未找到相关元素',
+            style: TextStyle(fontSize: 16, color: Color(0xFF6F7B88)),
+          ),
+        ),
+      );
+    }
+    return ColoredBox(
+      color: _themeColor,
+      child: ListView.separated(
+        itemCount: results.length,
+        separatorBuilder: (context, index) =>
+            const Divider(height: 1, color: Color(0xFFC3D8B5)),
+        itemBuilder: (context, index) {
+          final element = results[index];
+          return ListTile(
+            tileColor: _themeColor,
+            leading: ClipRRect(
+              borderRadius: BorderRadius.circular(6),
+              child: Image.asset(
+                element.iconPath,
+                width: 34,
+                height: 34,
+                fit: BoxFit.contain,
+                errorBuilder: (context, error, stackTrace) {
+                  return const Icon(
+                    Icons.image_not_supported_outlined,
+                    size: 22,
+                    color: Color(0xFF9AA3A2),
+                  );
+                },
+              ),
+            ),
+            title: Text(
+              element.name,
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+            ),
+            trailing: const Icon(
+              Icons.add_circle_outline,
+              color: Color(0xFF4F8A73),
+            ),
+            onTap: () => close(context, element),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _CategoryData {
+  final String name;
+
+  const _CategoryData({required this.name});
+}
+
+class _ElementData {
+  final String name;
+  final String iconPath;
+
+  const _ElementData({required this.name, required this.iconPath});
 }

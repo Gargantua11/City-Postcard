@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 
 import 'post_comments_screen.dart';
 import '../services/discussion_service.dart';
+import '../widgets/resolved_image.dart';
 import '../widgets/app_bottom_nav_bar.dart';
 
 class CommentSectionScreen extends StatefulWidget {
@@ -441,34 +442,12 @@ class _PostImage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final source = imageUrl.trim();
-    if (source.isEmpty) {
-      return const ColoredBox(color: Color(0xFFD2D2D2));
-    }
-
-    if (source.startsWith('assets/')) {
-      return Image.asset(
-        source,
-        fit: BoxFit.cover,
-        filterQuality: FilterQuality.high,
-        errorBuilder: (_, _, _) => const ColoredBox(color: Color(0xFFD2D2D2)),
-      );
-    }
-
-    final uri = Uri.tryParse(source);
-    if (uri == null || (!uri.isScheme('http') && !uri.isScheme('https'))) {
-      return const ColoredBox(color: Color(0xFFD2D2D2));
-    }
-
-    return Image.network(
-      source,
+    return ResolvedImage(
+      source: imageUrl,
       fit: BoxFit.cover,
       filterQuality: FilterQuality.high,
-      errorBuilder: (_, _, _) => const ColoredBox(color: Color(0xFFD2D2D2)),
-      loadingBuilder: (context, child, progress) {
-        if (progress == null) return child;
-        return const ColoredBox(color: Color(0xFFD2D2D2));
-      },
+      fallbackBuilder: (_) => const ColoredBox(color: Color(0xFFD2D2D2)),
+      loadingBuilder: (_) => const ColoredBox(color: Color(0xFFD2D2D2)),
     );
   }
 }
