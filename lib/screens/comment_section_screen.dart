@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
-import '../services/backend_api_client.dart';
+import 'post_comments_screen.dart';
 import '../services/discussion_service.dart';
 import '../widgets/app_bottom_nav_bar.dart';
 
@@ -17,7 +17,10 @@ class _CommentSectionScreenState extends State<CommentSectionScreen> {
   final DiscussionService _discussionService = DiscussionService();
 
   bool _isLoading = true;
+  bool _isOfflineMode = false;
+  bool _isPostBallExpanded = false;
   String? _errorMessage;
+  String? _offlineNotice;
   List<DiscussionPost> _posts = const [];
 
   @override
@@ -39,32 +42,52 @@ class _CommentSectionScreenState extends State<CommentSectionScreen> {
     setState(() {});
   }
 
+  Future<void> _openPostComments(DiscussionPost post) async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => PostCommentsScreen(post: post)),
+    );
+  }
+
+  Future<void> _openCreatePost() async {
+    setState(() {
+      _isPostBallExpanded = false;
+    });
+    final result = await Navigator.pushNamed(context, '/create_post');
+    if (!mounted) return;
+    if (result == true) {
+      await _loadPosts();
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('发布成功')));
+    }
+  }
+
   Future<void> _loadPosts() async {
     setState(() {
       _isLoading = true;
       _errorMessage = null;
+      _offlineNotice = null;
     });
 
     try {
-      final posts = await _discussionService.fetchPosts(
+      final result = await _discussionService.fetchPostsWithOfflineFallback(
         lastTime: DateTime.now(),
       );
       if (!mounted) return;
 
       setState(() {
-        _posts = posts;
+        _posts = result.posts;
+        _isOfflineMode = result.isOffline;
+        _offlineNotice = result.notice;
         _isLoading = false;
-      });
-    } on BackendApiException catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _isLoading = false;
-        _errorMessage = e.message;
       });
     } catch (_) {
       if (!mounted) return;
       setState(() {
         _isLoading = false;
+        _isOfflineMode = false;
         _errorMessage = '加载讨论区失败，请稍后重试';
       });
     }
@@ -83,7 +106,7 @@ class _CommentSectionScreenState extends State<CommentSectionScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final bottomInset = MediaQuery.of(context).padding.bottom;
+    const postButtonBottomGap = 18.0;
 
     return Scaffold(
       backgroundColor: const Color(0xFFEDEDED),
@@ -94,12 +117,7 @@ class _CommentSectionScreenState extends State<CommentSectionScreen> {
               onRefresh: _loadPosts,
               child: ListView(
                 physics: const AlwaysScrollableScrollPhysics(),
-                padding: EdgeInsets.fromLTRB(
-                  16,
-                  12,
-                  16,
-                  76 + bottomInset + 108,
-                ),
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 56),
                 children: [
                   const Center(
                     child: Text(
@@ -142,6 +160,40 @@ class _CommentSectionScreenState extends State<CommentSectionScreen> {
                       const Icon(Icons.search, size: 34, color: Colors.black87),
                     ],
                   ),
+                  if (_isOfflineMode && _offlineNotice != null) ...[
+                    const SizedBox(height: 12),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFF8E1),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: const Color(0xFFFFE082)),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(
+                            Icons.cloud_off_outlined,
+                            size: 16,
+                            color: Color(0xFF8D6E63),
+                          ),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              _offlineNotice!,
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: Color(0xFF6D4C41),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 20),
                   if (_isLoading)
                     const Padding(
@@ -167,25 +219,26 @@ class _CommentSectionScreenState extends State<CommentSectionScreen> {
                     ..._visiblePosts.map(
                       (item) => Padding(
                         padding: const EdgeInsets.only(bottom: 20),
-                        child: _DiscussionPostCard(item: item),
+                        child: _DiscussionPostCard(
+                          item: item,
+                          onCommentTap: () => _openPostComments(item),
+                        ),
                       ),
                     ),
                 ],
               ),
             ),
             Positioned(
-              left: 0,
-              right: 0,
-              bottom: 76 + bottomInset + 10,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: _InputPostBar(
-                  onAddTap: () {
-                    ScaffoldMessenger.of(
-                      context,
-                    ).showSnackBar(const SnackBar(content: Text('发帖功能待接入')));
-                  },
-                ),
+              right: 16,
+              bottom: postButtonBottomGap,
+              child: _PostActionButton(
+                expanded: _isPostBallExpanded,
+                onToggle: () {
+                  setState(() {
+                    _isPostBallExpanded = !_isPostBallExpanded;
+                  });
+                },
+                onPostTap: _openCreatePost,
               ),
             ),
           ],
@@ -242,11 +295,12 @@ class _ErrorSection extends StatelessWidget {
 }
 
 class _DiscussionPostCard extends StatelessWidget {
-  const _DiscussionPostCard({required this.item});
+  const _DiscussionPostCard({required this.item, required this.onCommentTap});
 
   static const double _postcardAspectRatio = 400 / 258;
 
   final DiscussionPost item;
+  final VoidCallback onCommentTap;
 
   @override
   Widget build(BuildContext context) {
@@ -324,21 +378,25 @@ class _DiscussionPostCard extends StatelessWidget {
                             ),
                           ),
                           const Spacer(),
-                          Container(
-                            width: 34,
-                            height: 34,
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              border: Border.all(
-                                color: const Color(0xFF3A3A3A),
-                                width: 2.5,
+                          InkWell(
+                            borderRadius: BorderRadius.circular(17),
+                            onTap: onCommentTap,
+                            child: Container(
+                              width: 34,
+                              height: 34,
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                border: Border.all(
+                                  color: const Color(0xFF3A3A3A),
+                                  width: 2.5,
+                                ),
+                                borderRadius: BorderRadius.circular(17),
                               ),
-                              borderRadius: BorderRadius.circular(17),
-                            ),
-                            child: const Icon(
-                              Icons.chat_bubble_outline_rounded,
-                              size: 19,
-                              color: Color(0xFF3A3A3A),
+                              child: const Icon(
+                                Icons.chat_bubble_outline_rounded,
+                                size: 19,
+                                color: Color(0xFF3A3A3A),
+                              ),
                             ),
                           ),
                         ],
@@ -383,12 +441,27 @@ class _PostImage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (imageUrl.trim().isEmpty) {
+    final source = imageUrl.trim();
+    if (source.isEmpty) {
+      return const ColoredBox(color: Color(0xFFD2D2D2));
+    }
+
+    if (source.startsWith('assets/')) {
+      return Image.asset(
+        source,
+        fit: BoxFit.cover,
+        filterQuality: FilterQuality.high,
+        errorBuilder: (_, _, _) => const ColoredBox(color: Color(0xFFD2D2D2)),
+      );
+    }
+
+    final uri = Uri.tryParse(source);
+    if (uri == null || (!uri.isScheme('http') && !uri.isScheme('https'))) {
       return const ColoredBox(color: Color(0xFFD2D2D2));
     }
 
     return Image.network(
-      imageUrl,
+      source,
       fit: BoxFit.cover,
       filterQuality: FilterQuality.high,
       errorBuilder: (_, _, _) => const ColoredBox(color: Color(0xFFD2D2D2)),
@@ -400,48 +473,86 @@ class _PostImage extends StatelessWidget {
   }
 }
 
-class _InputPostBar extends StatelessWidget {
-  const _InputPostBar({required this.onAddTap});
+class _PostActionButton extends StatelessWidget {
+  const _PostActionButton({
+    required this.expanded,
+    required this.onToggle,
+    required this.onPostTap,
+  });
 
-  final VoidCallback onAddTap;
+  final bool expanded;
+  final VoidCallback onToggle;
+  final VoidCallback onPostTap;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: 68,
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOutCubic,
+      width: expanded ? 122 : 44,
+      height: 44,
       decoration: BoxDecoration(
-        color: const Color(0xB8D5E5EA),
-        borderRadius: BorderRadius.circular(34),
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 18),
-      child: Row(
-        children: [
-          const Expanded(
-            child: Center(
-              child: Text(
-                '输入您的帖子吧',
-                style: TextStyle(
-                  fontSize: 16,
-                  color: Colors.black,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ),
-          ),
-          GestureDetector(
-            onTap: onAddTap,
-            child: Container(
-              width: 54,
-              height: 54,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                border: Border.all(color: Colors.black87, width: 2),
-              ),
-              child: const Icon(Icons.add, size: 40, color: Colors.black),
-            ),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: const Color(0xFF2E2E2E), width: 1.4),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x26000000),
+            blurRadius: 6,
+            offset: Offset(0, 2),
           ),
         ],
       ),
+      child: expanded
+          ? Row(
+              children: [
+                Expanded(
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(22),
+                    onTap: onPostTap,
+                    child: const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.add, size: 19, color: Colors.black),
+                        SizedBox(width: 4),
+                        Text(
+                          '发帖',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF2C2C2C),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                Container(width: 1, height: 20, color: const Color(0xFFDDDDDD)),
+                InkWell(
+                  borderRadius: BorderRadius.circular(22),
+                  onTap: onToggle,
+                  child: const SizedBox(
+                    width: 36,
+                    height: 44,
+                    child: Icon(
+                      Icons.keyboard_arrow_right,
+                      size: 20,
+                      color: Color(0xFF656565),
+                    ),
+                  ),
+                ),
+              ],
+            )
+          : Material(
+              type: MaterialType.transparency,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(22),
+                onTap: onToggle,
+                child: const Center(
+                  child: Icon(Icons.add, size: 24, color: Colors.black),
+                ),
+              ),
+            ),
     );
   }
 }

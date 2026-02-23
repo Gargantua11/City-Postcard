@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 // 导入添加元素页面
 import 'add_screen.dart';
+//添加元素界面
 
 class SearchIndexScreen extends StatefulWidget {
   const SearchIndexScreen({Key? key}) : super(key: key);
@@ -142,12 +143,12 @@ class _SearchIndexScreenState extends State<SearchIndexScreen> {
           // 返回按钮
           GestureDetector(
             onTap: () {
-              Navigator.pop(context);
+              Navigator.pushNamed(context, '/add');
             },
             child: Image.asset(
               'assets/images/search_elements/返回.png',
-              width: 24,
-              height: 24,
+              width: 60,
+              height: 60,
               fit: BoxFit.contain,
             ),
           ),
@@ -519,4 +520,3 @@ class _SearchIndexScreenState extends State<SearchIndexScreen> {
     );
   }
 }
-

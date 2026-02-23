@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:interactive_country_map/interactive_country_map.dart';
 
 import '../data/city_code_center.dart';
-import '../services/backend_api_client.dart';
+import '../data/city_code_name.dart';
 import '../services/map_backend_service.dart';
 import '../widgets/app_bottom_nav_bar.dart';
 
@@ -19,7 +19,9 @@ class _MapScreenState extends State<MapScreen> {
   final MapBackendService _mapService = MapBackendService();
 
   bool _isLoading = true;
+  bool _isOfflineMode = false;
   String? _errorMessage;
+  String? _offlineNotice;
   String? _loadingProvinceCode;
   Set<String> _litProvinceCodes = const {};
   Map<String, List<_CitySpot>> _citySpotsByProvince = const {};
@@ -36,10 +38,13 @@ class _MapScreenState extends State<MapScreen> {
     setState(() {
       _isLoading = true;
       _errorMessage = null;
+      _offlineNotice = null;
     });
 
     try {
-      final cityCodes = await _mapService.fetchLightedCityCodes();
+      final result = await _mapService
+          .fetchLightedCityCodesWithOfflineFallback();
+      final cityCodes = result.cityCodes;
 
       final litProvinces = <String>{};
       final latestByProvinceCity = <String, _CitySpot>{};
@@ -54,7 +59,7 @@ class _MapScreenState extends State<MapScreen> {
         final coordinate = kCityCodeCoordinates[cityCode];
         final spot = _CitySpot(
           provinceCode: provinceCode,
-          cityLabel: '代码$cityCode',
+          cityLabel: _resolveCityLabel(cityCode: cityCode),
           cityCode: cityCode,
           latitude: coordinate?.latitude,
           longitude: coordinate?.longitude,
@@ -85,34 +90,26 @@ class _MapScreenState extends State<MapScreen> {
         _litProvinceCodes = litProvinces;
         _citySpotsByProvince = citySpotsByProvince;
         _citySpots = allSpots;
+        _isOfflineMode = result.isOffline;
+        _offlineNotice = result.notice;
         _selectedProvinceCode = litProvinces.contains(_selectedProvinceCode)
             ? _selectedProvinceCode
             : null;
         _isLoading = false;
       });
-    } on BackendApiException catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _isLoading = false;
-        _errorMessage = e.message;
-      });
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(e.message)));
     } catch (_) {
       if (!mounted) return;
       setState(() {
         _isLoading = false;
+        _isOfflineMode = false;
         _errorMessage = '加载地图数据失败，请稍后重试';
       });
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('加载地图数据失败，请稍后重试')));
     }
   }
 
   Future<void> _loadProvinceDetails(String provinceCode) async {
     if (_loadingProvinceCode == provinceCode) return;
+    if (_isOfflineMode) return;
 
     final provincePrefix = _provincePrefixFromCode(provinceCode);
     if (provincePrefix == null) return;
@@ -122,7 +119,9 @@ class _MapScreenState extends State<MapScreen> {
     });
 
     try {
-      final cards = await _mapService.fetchProvincePostcards(provincePrefix);
+      final result = await _mapService
+          .fetchProvincePostcardsWithOfflineFallback(provincePrefix);
+      final cards = result.postcards;
       final latestByProvinceCity = <String, _CitySpot>{};
 
       for (final card in cards) {
@@ -170,18 +169,13 @@ class _MapScreenState extends State<MapScreen> {
           _citySpotsByProvince = nextByProvince;
           _citySpots = nextAllSpots;
           _litProvinceCodes = nextLitProvinces;
+          if (result.isOffline) {
+            _offlineNotice = result.notice;
+          }
         });
       }
-    } on BackendApiException catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(e.message)));
     } catch (_) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('加载省份详情失败')));
+      // Keep existing data when province details request fails.
     } finally {
       if (mounted) {
         setState(() {
@@ -238,7 +232,11 @@ class _MapScreenState extends State<MapScreen> {
     }
     final normalizedCityCode = _normalizeCityCode(cityCode);
     if (normalizedCityCode != null) {
-      return '代码$normalizedCityCode';
+      final mappedName = kCityCodeNames[normalizedCityCode];
+      if (mappedName != null && mappedName.trim().isNotEmpty) {
+        return _normalizeCityName(mappedName) ?? mappedName;
+      }
+      return '城市$normalizedCityCode';
     }
     return '未知城市';
   }
@@ -337,6 +335,10 @@ class _MapScreenState extends State<MapScreen> {
               provinceCount: sortedProvinceCodes.length,
               cityCount: _citySpots.length,
             ),
+            if (_isOfflineMode && _offlineNotice != null) ...[
+              const SizedBox(height: 8),
+              _buildOfflineNotice(_offlineNotice!),
+            ],
             const SizedBox(height: 8),
             _buildProvinceChips(sortedProvinceCodes),
             const SizedBox(height: 8),
@@ -478,7 +480,11 @@ class _MapScreenState extends State<MapScreen> {
       ),
       child: Row(
         children: [
-          const Icon(Icons.map_outlined, size: 18, color: Color(0xFF4A5667)),
+          Icon(
+            _isOfflineMode ? Icons.cloud_off_outlined : Icons.map_outlined,
+            size: 18,
+            color: const Color(0xFF4A5667),
+          ),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
@@ -496,6 +502,34 @@ class _MapScreenState extends State<MapScreen> {
               height: 16,
               child: CircularProgressIndicator(strokeWidth: 2),
             ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildOfflineNotice(String message) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF8E1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFFFE082)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.info_outline, size: 16, color: Color(0xFF8D6E63)),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              message,
+              style: const TextStyle(
+                fontSize: 12,
+                color: Color(0xFF6D4C41),
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
         ],
       ),
     );

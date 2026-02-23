@@ -8,9 +8,14 @@ import './screens/forgot_password_screen.dart';
 import './screens/home_screen.dart';
 import './screens/city_search_screen.dart';
 import './screens/comment_section_screen.dart';
+import './screens/create_post_screen.dart';
 import './screens/postcard_edit_screen.dart';
 import './screens/map_screen.dart';
 import './screens/profile_screen.dart';
+import './screens/favorites_screen.dart';
+import './screens/draft_box_screen.dart';
+import './screens/postcard_overview_screen.dart';
+import './screens/edit_profile_screen.dart';
 import './screens/add_screen.dart';
 import './screens/search_index.dart';
 import './screens/search_screen.dart';
@@ -45,9 +50,14 @@ class MyApp extends StatelessWidget {
           '/home': (context) => const HomeScreen(),
           '/city_search': (context) => const CitySearchScreen(),
           '/comment_section': (context) => const CommentSectionScreen(),
+          '/create_post': (context) => const CreatePostScreen(),
           '/postcard_edit': (context) => const PostcardEditScreen(),
           '/map': (context) => const MapScreen(),
           '/profile': (context) => const ProfileScreen(),
+          '/favorites': (context) => const FavoritesScreen(),
+          '/draft_box': (context) => const DraftBoxScreen(),
+          '/postcard_overview': (context) => const PostcardOverviewScreen(),
+          '/edit_profile': (context) => const EditProfileScreen(),
           '/add': (context) => const AddIndexPage(),
           '/search_index': (context) => const SearchIndexScreen(),
           '/search_screen': (context) => const SearchScreen(),

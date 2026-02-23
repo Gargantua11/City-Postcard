@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+//主页搜索
 
 class SearchScreen extends StatelessWidget {
   const SearchScreen({super.key});

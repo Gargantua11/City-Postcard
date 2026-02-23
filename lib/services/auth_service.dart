@@ -154,6 +154,13 @@ class AuthService {
           _extractStringField(data ?? body, const <String>['username']) ??
           phone,
       avatar: _extractStringField(data ?? body, const <String>['avatar']),
+      phone:
+          _extractStringField(data ?? body, const <String>['phone']) ?? phone,
+      cityName: _extractStringField(data ?? body, const <String>[
+        'cityName',
+        'city',
+      ]),
+      cityCode: _extractStringField(data ?? body, const <String>['cityCode']),
       accessToken: accessToken,
       refreshToken: refreshToken,
       tokenType: tokenType ?? 'Bearer',

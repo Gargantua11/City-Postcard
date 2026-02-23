@@ -2,8 +2,10 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class EditedPostcard {
+  final String draftId;
   final String imageUrl;
   final DateTime editedAt;
+  final bool isPublished;
   final double? latitude;
   final double? longitude;
   final String? cityName;
@@ -11,8 +13,10 @@ class EditedPostcard {
   final String? provinceName;
 
   const EditedPostcard({
+    required this.draftId,
     required this.imageUrl,
     required this.editedAt,
+    this.isPublished = false,
     this.latitude,
     this.longitude,
     this.cityName,
@@ -22,8 +26,10 @@ class EditedPostcard {
 
   Map<String, dynamic> toJson() {
     return {
+      'draftId': draftId,
       'imageUrl': imageUrl,
       'editedAt': editedAt.toIso8601String(),
+      'isPublished': isPublished,
       if (latitude != null) 'latitude': latitude,
       if (longitude != null) 'longitude': longitude,
       if (cityName != null && cityName!.trim().isNotEmpty)
@@ -38,9 +44,18 @@ class EditedPostcard {
   factory EditedPostcard.fromJson(Map<String, dynamic> json) {
     final rawTime = json['editedAt']?.toString() ?? '';
     final parsedTime = DateTime.tryParse(rawTime);
+    final editedAt = parsedTime ?? DateTime.now();
+    final imageUrl = json['imageUrl']?.toString() ?? '';
+    final draftId = _toDraftId(
+      raw: json['draftId'],
+      editedAt: editedAt,
+      imageUrl: imageUrl,
+    );
     return EditedPostcard(
-      imageUrl: json['imageUrl']?.toString() ?? '',
-      editedAt: parsedTime ?? DateTime.now(),
+      draftId: draftId,
+      imageUrl: imageUrl,
+      editedAt: editedAt,
+      isPublished: _toBool(json['isPublished']) ?? false,
       latitude: _toDouble(json['latitude']),
       longitude: _toDouble(json['longitude']),
       cityName: _toNullableTrimmedString(json['cityName']),
@@ -78,6 +93,11 @@ class EditedPostcardService {
     }
   }
 
+  Future<List<EditedPostcard>> getDraftPostcards() async {
+    final postcards = await getEditedPostcards();
+    return postcards.where((item) => !item.isPublished).toList(growable: false);
+  }
+
   Future<void> addEditedPostcard(
     String imageUrl, {
     double? latitude,
@@ -90,8 +110,10 @@ class EditedPostcardService {
     postcards.insert(
       0,
       EditedPostcard(
+        draftId: _createDraftId(),
         imageUrl: imageUrl.trim(),
         editedAt: DateTime.now(),
+        isPublished: false,
         latitude: latitude,
         longitude: longitude,
         cityName: cityName?.trim(),
@@ -100,6 +122,48 @@ class EditedPostcardService {
       ),
     );
     await _savePostcards(postcards);
+  }
+
+  Future<bool> deleteEditedPostcardAt(int index) async {
+    final postcards = await getEditedPostcards();
+    if (index < 0 || index >= postcards.length) {
+      return false;
+    }
+    postcards.removeAt(index);
+    await _savePostcards(postcards);
+    return true;
+  }
+
+  Future<bool> markPostcardPublished(String draftId) async {
+    final normalizedId = draftId.trim();
+    if (normalizedId.isEmpty) return false;
+
+    final postcards = await getEditedPostcards();
+    final index = postcards.indexWhere((item) => item.draftId == normalizedId);
+    if (index < 0) return false;
+
+    final target = postcards[index];
+    if (target.isPublished) return true;
+
+    postcards[index] = EditedPostcard(
+      draftId: target.draftId,
+      imageUrl: target.imageUrl,
+      editedAt: target.editedAt,
+      isPublished: true,
+      latitude: target.latitude,
+      longitude: target.longitude,
+      cityName: target.cityName,
+      cityCode: target.cityCode,
+      provinceName: target.provinceName,
+    );
+
+    await _savePostcards(postcards);
+    return true;
+  }
+
+  String _createDraftId() {
+    final micros = DateTime.now().microsecondsSinceEpoch;
+    return 'draft_$micros';
   }
 
   Future<void> _savePostcards(List<EditedPostcard> postcards) async {
@@ -128,4 +192,26 @@ String? _toNullableCodeString(dynamic value) {
   final digits = text.replaceAll(RegExp(r'[^0-9]'), '');
   if (digits.isEmpty) return null;
   return digits;
+}
+
+String _toDraftId({
+  required dynamic raw,
+  required DateTime editedAt,
+  required String imageUrl,
+}) {
+  final text = raw?.toString().trim() ?? '';
+  if (text.isNotEmpty) return text;
+
+  final safeUrl = imageUrl.trim().isEmpty ? 'empty' : imageUrl.trim();
+  return 'legacy_${editedAt.microsecondsSinceEpoch}_$safeUrl';
+}
+
+bool? _toBool(dynamic value) {
+  if (value is bool) return value;
+  if (value is num) return value != 0;
+  final text = value?.toString().trim().toLowerCase() ?? '';
+  if (text.isEmpty) return null;
+  if (text == 'true' || text == '1') return true;
+  if (text == 'false' || text == '0') return false;
+  return null;
 }
