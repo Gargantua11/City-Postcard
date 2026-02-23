@@ -114,7 +114,7 @@ class _EditProfileAvatarScreenState extends State<EditProfileAvatarScreen> {
       body: Container(
         decoration: const BoxDecoration(
           image: DecorationImage(
-            image: AssetImage('assets/images/auth/娉ㄥ唽2-鑳屾櫙.png'),
+            image: AssetImage('assets/images/auth/注册2-背景.png'),
             fit: BoxFit.cover,
             filterQuality: FilterQuality.high,
           ),
@@ -131,7 +131,7 @@ class _EditProfileAvatarScreenState extends State<EditProfileAvatarScreen> {
                   height: 30,
                   decoration: const BoxDecoration(
                     image: DecorationImage(
-                      image: AssetImage('assets/images/auth/娉ㄥ唽2-杩斿洖.png'),
+                      image: AssetImage('assets/images/auth/注册2-返回.png'),
                       fit: BoxFit.contain,
                       filterQuality: FilterQuality.high,
                     ),
@@ -192,7 +192,7 @@ class _EditProfileAvatarScreenState extends State<EditProfileAvatarScreen> {
                           _ActionButton(
                             isLoading: _isSaving,
                             onTap: _save,
-                            text: '保存头像',
+                            text: '',
                           ),
                         ],
                       ),
@@ -228,7 +228,7 @@ class _ActionButton extends StatelessWidget {
             const DecoratedBox(
               decoration: BoxDecoration(
                 image: DecorationImage(
-                  image: AssetImage('assets/images/auth/娉ㄥ唽2-瀹屾垚.png'),
+                  image: AssetImage('assets/images/auth/注册2-完成.png'),
                   fit: BoxFit.contain,
                   filterQuality: FilterQuality.high,
                 ),

@@ -20,8 +20,7 @@ class PostcardEditScreen extends StatefulWidget {
 
 class _PostcardEditScreenState extends State<PostcardEditScreen>
     with SingleTickerProviderStateMixin {
-  static const String _defaultPreviewAsset =
-      'assets/images/edit/缂栬緫-寮€濮嬪畾鍒?png';
+  static const String _defaultPreviewAsset = 'assets/images/edit/编辑-开始定制.png';
   static const int _maxUndoSteps = 30;
 
   final EditedPostcardService _editedPostcardService = EditedPostcardService();
@@ -79,7 +78,7 @@ class _PostcardEditScreenState extends State<PostcardEditScreen>
     setState(() => _isSaving = false);
 
     if (cityName != null && cityName.isNotEmpty) {
-      _showHint('宸蹭繚瀛樺苟鏍囨敞锛?cityName');
+      _showHint('已保存并标注：$cityName');
     }
     Navigator.pop(context, true);
   }
@@ -99,7 +98,7 @@ class _PostcardEditScreenState extends State<PostcardEditScreen>
     if (_isSameCity(_selectedCity, selectedCity)) return;
     _pushUndoState();
     setState(() => _selectedCity = selectedCity);
-    _showHint('宸叉爣娉ㄥ湴鐐癸細${selectedCity.name}');
+    _showHint('已标注地点：${selectedCity.name}');
   }
 
   String? _normalizeCityCode(String? raw) {
@@ -200,7 +199,7 @@ class _PostcardEditScreenState extends State<PostcardEditScreen>
     final nextLayers = List<PostcardElementLayer>.from(template.layers);
     if (_isSamePreviewSource(_customPreviewImagePath, nextImage) &&
         _isSameLayerList(_elementLayers, nextLayers)) {
-      _showHint('妯℃澘宸叉槸褰撳墠鍐呭');
+      _showHint('模板已是当前内容');
       return;
     }
 
@@ -209,7 +208,7 @@ class _PostcardEditScreenState extends State<PostcardEditScreen>
       _customPreviewImagePath = nextImage.isEmpty ? null : nextImage;
       _elementLayers = nextLayers;
     });
-    _showHint('Template applied');
+    _showHint('已应用热门模板');
   }
 
   Widget _buildHotTemplateCarousel(double width, double height) {
@@ -242,7 +241,7 @@ class _PostcardEditScreenState extends State<PostcardEditScreen>
         ),
         alignment: Alignment.center,
         child: const Text(
-          '鏆傛棤鐑棬妯℃澘',
+          '暂无热门模板',
           style: TextStyle(
             fontSize: 12,
             color: Color(0xFF54634C),
@@ -300,7 +299,7 @@ class _PostcardEditScreenState extends State<PostcardEditScreen>
                           borderRadius: BorderRadius.circular(10),
                         ),
                         child: const Text(
-                          '鐑棬妯℃澘',
+                          '热门模板',
                           style: TextStyle(
                             color: Colors.white,
                             fontSize: 10,
@@ -505,7 +504,7 @@ class _PostcardEditScreenState extends State<PostcardEditScreen>
 
   void _undo() {
     if (_undoStack.isEmpty) {
-      _showHint('娌℃湁鍙挙鍥炵殑鎿嶄綔');
+      _showHint('没有可撤回的操作');
       return;
     }
     final snapshot = _undoStack.removeLast();
@@ -514,11 +513,11 @@ class _PostcardEditScreenState extends State<PostcardEditScreen>
       _selectedCity = _cloneCity(snapshot.selectedCity);
       _customPreviewImagePath = snapshot.previewImagePath;
     });
-    _showHint('Undo applied');
+    _showHint('已撤回到上一步');
   }
 
   void _share() {
-    _showHint('鍒嗕韩鍔熻兘寮€鍙戜腑');
+    _showHint('分享功能开发中');
   }
 
   Future<void> _openDynamicEffects() async {
@@ -543,7 +542,7 @@ class _PostcardEditScreenState extends State<PostcardEditScreen>
     if (result is List<PostcardElementLayer>) {
       final changed = _applyLayerChanges(result);
       if (changed) {
-        _showHint('Applied elements: ${_elementLayers.length}');
+        _showHint('已应用元素：${_elementLayers.length} 个');
       }
       return;
     }
@@ -558,7 +557,7 @@ class _PostcardEditScreenState extends State<PostcardEditScreen>
       if (layers.isEmpty) return;
       final changed = _applyLayerChanges(layers);
       if (changed) {
-        _showHint('Applied elements: ${_elementLayers.length}');
+        _showHint('已应用元素：${_elementLayers.length} 个');
       }
     }
   }
@@ -785,7 +784,7 @@ class _PostcardEditScreenState extends State<PostcardEditScreen>
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
                       Text(
-                        '鍩庡競鏄庝俊鐗?路 缂栬緫',
+                        '城市明信片 · 编辑',
                         style: TextStyle(
                           fontSize: 22 * scale,
                           fontWeight: FontWeight.w500,
@@ -797,13 +796,14 @@ class _PostcardEditScreenState extends State<PostcardEditScreen>
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           _AssetTapButton(
-                            assetPath: 'assets/images/edit/缂栬緫-杩斿洖.png',
+                            assetPath: 'assets/images/edit/编辑-返回.png',
                             width: topButtonWidth,
                             height: topButtonHeight,
                             onTap: _undo,
                           ),
-                          _AssetTapButton(
-                            assetPath: 'assets/images/edit/缂栬緫-鍒嗕韩.png',
+                          _IconTextTopButton(
+                            iconAssetPath: 'assets/images/edit/share_1.png',
+                            label: '分享',
                             width: topButtonWidth,
                             height: topButtonHeight,
                             onTap: _share,
@@ -826,21 +826,21 @@ class _PostcardEditScreenState extends State<PostcardEditScreen>
                           Column(
                             children: [
                               _AssetTapButton(
-                                assetPath: 'assets/images/edit/缂栬緫-娣诲姞鍏冪礌.png',
+                                assetPath: 'assets/images/edit/编辑-添加元素.png',
                                 width: actionWidth,
                                 height: actionHeight,
                                 onTap: _openAddElements,
                               ),
                               SizedBox(height: 14 * scale),
                               _AssetTapButton(
-                                assetPath: 'assets/images/edit/缂栬緫-鍔ㄦ€佹晥鏋?png',
+                                assetPath: 'assets/images/edit/编辑-动态效果.png',
                                 width: actionWidth,
                                 height: actionHeight,
                                 onTap: _openDynamicEffects,
                               ),
                               SizedBox(height: 14 * scale),
                               _AssetTapButton(
-                                assetPath: 'assets/images/edit/缂栬緫-鍦扮偣鏍囨敞.png',
+                                assetPath: 'assets/images/edit/编辑-地点标注.png',
                                 width: actionWidth,
                                 height: actionHeight,
                                 onTap: _selectLocationTag,
@@ -863,8 +863,8 @@ class _PostcardEditScreenState extends State<PostcardEditScreen>
                         alignment: Alignment.centerLeft,
                         child: Text(
                           _selectedCity == null
-                              ? 'Location not tagged'
-                              : '宸叉爣娉ㄥ湴鐐癸細${_selectedCity!.name} (${_selectedCity!.code})',
+                              ? '未标注地点'
+                              : '已标注地点：${_selectedCity!.name} (${_selectedCity!.code})',
                           style: TextStyle(
                             fontSize: 13 * scale,
                             color: const Color(0xFF3F4E63),
@@ -874,7 +874,7 @@ class _PostcardEditScreenState extends State<PostcardEditScreen>
                       ),
                       SizedBox(height: 16 * scale),
                       _AssetTapButton(
-                        assetPath: 'assets/images/edit/缂栬緫-淇濆瓨.png',
+                        assetPath: 'assets/images/edit/编辑-保存.png',
                         width: saveWidth,
                         height: saveHeight,
                         onTap: _isSaving ? null : _savePostcard,
@@ -903,40 +903,40 @@ class _PostcardEditScreenState extends State<PostcardEditScreen>
 }
 
 const Map<String, String> _provinceNameByPrefix = {
-  '11': '鍖椾含',
-  '12': '澶╂触',
-  '13': '娌冲寳',
-  '14': '灞辫タ',
-  '15': 'Inner Mongolia',
-  '21': '杈藉畞',
-  '22': '鍚夋灄',
-  '23': 'Heilongjiang',
-  '31': '涓婃捣',
-  '32': '姹熻嫃',
-  '33': '娴欐睙',
-  '34': '瀹夊窘',
-  '35': '绂忓缓',
-  '36': '姹熻タ',
-  '37': '灞变笢',
-  '41': '娌冲崡',
-  '42': '婀栧寳',
-  '43': '婀栧崡',
-  '44': '骞夸笢',
-  '45': '骞胯タ',
-  '46': '娴峰崡',
-  '50': '閲嶅簡',
-  '51': '鍥涘窛',
-  '52': '璐靛窞',
-  '53': '浜戝崡',
-  '54': '瑗胯棌',
-  '61': '闄曡タ',
-  '62': '鐢樿們',
-  '63': '闈掓捣',
-  '64': '瀹佸',
-  '65': '鏂扮枂',
-  '71': '鍙版咕',
-  '81': '棣欐腐',
-  '82': '婢抽棬',
+  '11': '北京',
+  '12': '天津',
+  '13': '河北',
+  '14': '山西',
+  '15': '内蒙古',
+  '21': '辽宁',
+  '22': '吉林',
+  '23': '黑龙江',
+  '31': '上海',
+  '32': '江苏',
+  '33': '浙江',
+  '34': '安徽',
+  '35': '福建',
+  '36': '江西',
+  '37': '山东',
+  '41': '河南',
+  '42': '湖北',
+  '43': '湖南',
+  '44': '广东',
+  '45': '广西',
+  '46': '海南',
+  '50': '重庆',
+  '51': '四川',
+  '52': '贵州',
+  '53': '云南',
+  '54': '西藏',
+  '61': '陕西',
+  '62': '甘肃',
+  '63': '青海',
+  '64': '宁夏',
+  '65': '新疆',
+  '71': '台湾',
+  '81': '香港',
+  '82': '澳门',
 };
 
 class _AssetTapButton extends StatelessWidget {
@@ -986,6 +986,81 @@ class _AssetTapButton extends StatelessWidget {
                 filterQuality: FilterQuality.high,
               ),
             if (child case final Widget overlay) overlay,
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _IconTextTopButton extends StatelessWidget {
+  final String iconAssetPath;
+  final String label;
+  final double width;
+  final double height;
+  final VoidCallback? onTap;
+
+  const _IconTextTopButton({
+    required this.iconAssetPath,
+    required this.label,
+    required this.width,
+    required this.height,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: width,
+        height: height,
+        padding: EdgeInsets.symmetric(horizontal: width * 0.14),
+        decoration: BoxDecoration(
+          color: const Color(0xFFEAEFE1),
+          borderRadius: BorderRadius.circular(height / 2),
+          border: Border.all(color: const Color(0xFFAFB6A3)),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x33000000),
+              blurRadius: 8,
+              offset: Offset(0, 3),
+            ),
+            BoxShadow(
+              color: Color(0x18FFFFFF),
+              blurRadius: 2,
+              offset: Offset(0, -1),
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Image.asset(
+              iconAssetPath,
+              width: height * 0.46,
+              height: height * 0.46,
+              fit: BoxFit.contain,
+              filterQuality: FilterQuality.high,
+              errorBuilder: (_, _, _) => Icon(
+                Icons.share_outlined,
+                size: height * 0.46,
+                color: const Color(0xFF3E463A),
+              ),
+            ),
+            SizedBox(width: width * 0.08),
+            Flexible(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: height * 0.38,
+                  fontWeight: FontWeight.w600,
+                  color: const Color(0xFF2F372D),
+                ),
+              ),
+            ),
           ],
         ),
       ),

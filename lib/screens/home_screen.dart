@@ -8,7 +8,7 @@ import '../services/storage_service.dart';
 import '../widgets/app_bottom_nav_bar.dart';
 import '../widgets/resolved_image.dart';
 
-/// 棣栭〉锛氶寮犲崱鐗囩敤浜庢柊澧炴槑淇＄墖锛屽悗缁崱鐗囨寜缂栬緫鏃堕棿鍊掑簭灞曠ず
+/// 首页：首张卡片用于新增明信片，后续卡片按编辑时间倒序展示
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 

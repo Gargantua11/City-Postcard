@@ -19,7 +19,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   final StorageService _storageService = StorageService();
   final EditedPostcardService _editedPostcardService = EditedPostcardService();
 
-  String _username = '鍢诲樆鍢?;
+  String _username = '嘻嘻嘻';
   String? _avatarSource;
   String? _cityName;
   String? _cityCode;
@@ -53,7 +53,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       final username = nickname.isNotEmpty
           ? nickname
           : (user?.username.trim() ?? '');
-      _username = username.isEmpty ? '鍢诲樆鍢? : username;
+      _username = username.isEmpty ? '嘻嘻嘻' : username;
       _avatarSource = (avatarSource == null || avatarSource.isEmpty)
           ? null
           : avatarSource;
@@ -112,7 +112,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       });
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('宸叉洿鏂板煄甯傦細${selected.name}')));
+      ).showSnackBar(SnackBar(content: Text('已更新城市：${selected.name}')));
     } catch (_) {
       if (!mounted) return;
       setState(() {
@@ -120,7 +120,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       });
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('鍩庡競鏇存柊澶辫触锛岃閲嶈瘯')));
+      ).showSnackBar(const SnackBar(content: Text('城市更新失败，请重试')));
     }
   }
 
@@ -154,7 +154,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           children: [
                             Positioned.fill(
                               child: Image.asset(
-                                'assets/images/profile/鐢ㄦ埛-鐢婚潰.png',
+                                'assets/images/profile/用户-画面.png',
                                 fit: BoxFit.fill,
                                 filterQuality: FilterQuality.high,
                               ),
@@ -184,7 +184,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         width: rowWidth,
                         height: rowHeight,
                         icon: Icons.brush_outlined,
-                        text: '宸插垱浣滐細$_createdPostcardCount寮犳槑淇＄墖',
+                        text: '已创作：$_createdPostcardCount张明信片',
                         onTap: _openPostcardOverview,
                       ),
                       const SizedBox(height: 16),
@@ -192,7 +192,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         width: rowWidth,
                         height: rowHeight,
                         icon: Icons.edit_outlined,
-                        text: '缂栬緫涓汉淇℃伅',
+                        text: '编辑个人信息',
                         onTap: _openEditProfile,
                       ),
                       const SizedBox(height: 16),
@@ -200,7 +200,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         width: rowWidth,
                         height: rowHeight,
                         icon: Icons.drafts_outlined,
-                        text: '鑽夌绠?,
+                        text: '草稿箱',
                         onTap: () => Navigator.pushNamed(context, '/draft_box'),
                       ),
                       const SizedBox(height: 16),
@@ -208,7 +208,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         width: rowWidth,
                         height: rowHeight,
                         icon: Icons.folder_open_outlined,
-                        text: '鏀惰棌澶?,
+                        text: '收藏夹',
                         onTap: () => Navigator.pushNamed(context, '/favorites'),
                       ),
                     ],
@@ -232,33 +232,33 @@ class _ProfileScreenState extends State<ProfileScreen> {
           Navigator.pushNamed(context, '/comment_section');
         },
         onProfileTap: () {
-          debugPrint('褰撳墠鍦ㄦ垜鐨?);
+          debugPrint('当前在我的');
         },
       ),
     );
   }
 
   String _buildProvinceCityLabel() {
-    if (_isSavingCity) return '鍩庡競锛氫繚瀛樹腑...';
+    if (_isSavingCity) return '城市：保存中...';
 
     final province = _resolveProvinceName(_cityCode);
     final city = _resolveCityName(_cityName, _cityCode);
 
     if ((province == null || province.isEmpty) &&
         (city == null || city.isEmpty)) {
-      return '鍩庡競锛氭湭璁剧疆';
+      return '城市：未设置';
     }
     if (province == null || province.isEmpty) {
-      return '鍩庡競锛?city';
+      return '城市：$city';
     }
     if (city == null || city.isEmpty) {
-      return '鍩庡競锛?province';
+      return '城市：$province';
     }
     if (province == city) {
-      return '鍩庡競锛?city';
+      return '城市：$city';
     }
 
-    return '鍩庡競锛?province $city';
+    return '城市：$province $city';
   }
 
   String? _resolveCityName(String? cityName, String? cityCode) {
@@ -280,40 +280,40 @@ class _ProfileScreenState extends State<ProfileScreen> {
 }
 
 const Map<String, String> _provinceNameByPrefix = {
-  '11': '鍖椾含甯?,
-  '12': '澶╂触甯?,
-  '13': '娌冲寳鐪?,
-  '14': '灞辫タ鐪?,
-  '15': '鍐呰挋鍙よ嚜娌诲尯',
-  '21': '杈藉畞鐪?,
-  '22': '鍚夋灄鐪?,
-  '23': '榛戦緳姹熺渷',
-  '31': '涓婃捣甯?,
-  '32': '姹熻嫃鐪?,
-  '33': '娴欐睙鐪?,
-  '34': '瀹夊窘鐪?,
-  '35': '绂忓缓鐪?,
-  '36': '姹熻タ鐪?,
-  '37': '灞变笢鐪?,
-  '41': '娌冲崡鐪?,
-  '42': '婀栧寳鐪?,
-  '43': '婀栧崡鐪?,
-  '44': '骞夸笢鐪?,
-  '45': '骞胯タ澹棌鑷不鍖?,
-  '46': '娴峰崡鐪?,
-  '50': '閲嶅簡甯?,
-  '51': '鍥涘窛鐪?,
-  '52': '璐靛窞鐪?,
-  '53': '浜戝崡鐪?,
-  '54': '瑗胯棌鑷不鍖?,
-  '61': '闄曡タ鐪?,
-  '62': '鐢樿們鐪?,
-  '63': '闈掓捣鐪?,
-  '64': '瀹佸鍥炴棌鑷不鍖?,
-  '65': '鏂扮枂缁村惥灏旇嚜娌诲尯',
-  '71': '鍙版咕鐪?,
-  '81': '棣欐腐鐗瑰埆琛屾斂鍖?,
-  '82': '婢抽棬鐗瑰埆琛屾斂鍖?,
+  '11': '北京市',
+  '12': '天津市',
+  '13': '河北省',
+  '14': '山西省',
+  '15': '内蒙古自治区',
+  '21': '辽宁省',
+  '22': '吉林省',
+  '23': '黑龙江省',
+  '31': '上海市',
+  '32': '江苏省',
+  '33': '浙江省',
+  '34': '安徽省',
+  '35': '福建省',
+  '36': '江西省',
+  '37': '山东省',
+  '41': '河南省',
+  '42': '湖北省',
+  '43': '湖南省',
+  '44': '广东省',
+  '45': '广西壮族自治区',
+  '46': '海南省',
+  '50': '重庆市',
+  '51': '四川省',
+  '52': '贵州省',
+  '53': '云南省',
+  '54': '西藏自治区',
+  '61': '陕西省',
+  '62': '甘肃省',
+  '63': '青海省',
+  '64': '宁夏回族自治区',
+  '65': '新疆维吾尔自治区',
+  '71': '台湾省',
+  '81': '香港特别行政区',
+  '82': '澳门特别行政区',
 };
 
 class _NameChip extends StatelessWidget {
