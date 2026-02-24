@@ -3,6 +3,7 @@ import 'package:interactive_country_map/interactive_country_map.dart';
 
 import '../data/city_code_center.dart';
 import '../data/city_code_name.dart';
+import '../services/backend_api_client.dart';
 import '../services/map_backend_service.dart';
 import '../widgets/app_bottom_nav_bar.dart';
 
@@ -96,6 +97,13 @@ class _MapScreenState extends State<MapScreen> {
             ? _selectedProvinceCode
             : null;
         _isLoading = false;
+      });
+    } on BackendApiException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+        _isOfflineMode = false;
+        _errorMessage = e.message;
       });
     } catch (_) {
       if (!mounted) return;

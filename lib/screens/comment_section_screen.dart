@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import '../services/backend_api_client.dart';
 import 'post_comments_screen.dart';
 import '../services/discussion_service.dart';
 import '../widgets/resolved_image.dart';
@@ -83,6 +84,13 @@ class _CommentSectionScreenState extends State<CommentSectionScreen> {
         _isOfflineMode = result.isOffline;
         _offlineNotice = result.notice;
         _isLoading = false;
+      });
+    } on BackendApiException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+        _isOfflineMode = false;
+        _errorMessage = e.message;
       });
     } catch (_) {
       if (!mounted) return;

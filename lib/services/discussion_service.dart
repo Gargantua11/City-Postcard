@@ -145,11 +145,80 @@ class DiscussionPost {
 class DiscussionService {
   static const String _postsCacheKey = 'discussion_posts_cache_v1';
   static const String _localPostsKey = 'discussion_local_posts_v1';
+  static const List<String> _publishEndpoints = <String>[
+    '/discussion/postcards',
+    '/discussion/postcard',
+    '/postcard/publish',
+  ];
 
   DiscussionService({BackendApiClient? apiClient})
     : _apiClient = apiClient ?? BackendApiClient();
 
   final BackendApiClient _apiClient;
+
+  Future<void> publishPost({
+    required String username,
+    required String imageUrl,
+    required String address,
+    String hotComment = '',
+    String? avatar,
+    String? cityName,
+    String? cityCode,
+    String? provinceName,
+    double? latitude,
+    double? longitude,
+  }) async {
+    final source = imageUrl.trim();
+    if (source.isEmpty) {
+      throw ArgumentError('imageUrl cannot be empty');
+    }
+
+    final normalizedAddress = address.trim();
+    final normalizedCityName = cityName?.trim();
+    final normalizedCityCode = cityCode?.trim();
+    final normalizedProvinceName = provinceName?.trim();
+    final normalizedHotComment = hotComment.trim();
+
+    final payload = <String, dynamic>{
+      'imageUrl': source,
+      'image': source,
+      'url': source,
+      'address': normalizedAddress.isEmpty ? '未知地点' : normalizedAddress,
+      'location': normalizedAddress.isEmpty ? '未知地点' : normalizedAddress,
+      'hotComment': normalizedHotComment,
+      'hotCommentContent': normalizedHotComment,
+      'content': normalizedHotComment,
+      'username': username.trim().isEmpty ? '我' : username.trim(),
+      'cityName': normalizedCityName,
+      'cityCode': normalizedCityCode,
+      'provinceName': normalizedProvinceName,
+      'latitude': latitude,
+      'longitude': longitude,
+    };
+    payload.removeWhere(
+      (key, value) => value == null || (value is String && value.isEmpty),
+    );
+
+    for (final path in _publishEndpoints) {
+      try {
+        await _apiClient.post(path, body: payload, requireAuth: true);
+        return;
+      } on BackendApiException {
+        continue;
+      } catch (_) {
+        continue;
+      }
+    }
+
+    // Keep posting usable when backend publish API is unavailable.
+    await publishLocalPost(
+      username: username,
+      avatar: avatar,
+      imageUrl: source,
+      address: normalizedAddress,
+      hotComment: normalizedHotComment,
+    );
+  }
 
   Future<void> publishLocalPost({
     required String username,
@@ -198,6 +267,21 @@ class DiscussionService {
         posts: _mergePosts(onlinePosts, localPosts),
         isOffline: false,
       );
+    } on BackendApiException catch (e) {
+      final cachedPosts = await _readPostsCache();
+      if (cachedPosts.isNotEmpty) {
+        return DiscussionFetchResult(
+          posts: _mergePosts(cachedPosts, localPosts),
+          isOffline: true,
+          notice: e.isUnauthorized ? '登录状态已失效，已展示本地缓存内容' : '网络异常，已展示离线缓存内容',
+        );
+      }
+
+      return DiscussionFetchResult(
+        posts: _mergePosts(_buildOfflineSeedPosts(), localPosts),
+        isOffline: true,
+        notice: e.isUnauthorized ? '登录状态已失效，已展示本地离线内容' : '网络异常，已展示离线示例内容',
+      );
     } catch (_) {
       final cachedPosts = await _readPostsCache();
       if (cachedPosts.isNotEmpty) {
@@ -228,7 +312,7 @@ class DiscussionService {
     final body = await _apiClient.get(
       '/discussion/postcards',
       queryParameters: <String, String>{'lastTime': formatted},
-      requireAuth: false,
+      requireAuth: true,
     );
 
     final data = BackendApiClient.extractData(body);

@@ -1,6 +1,5 @@
 import 'dart:convert';
 
-import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import 'storage_service.dart';
@@ -8,8 +7,9 @@ import 'storage_service.dart';
 class BackendApiException implements Exception {
   final String message;
   final int? statusCode;
+  final int? apiCode;
 
-  const BackendApiException(this.message, {this.statusCode});
+  const BackendApiException(this.message, {this.statusCode, this.apiCode});
 
   bool get isUnauthorized => statusCode == 401 || statusCode == 403;
 
@@ -21,6 +21,7 @@ class BackendApiClient {
   BackendApiClient({StorageService? storageService})
     : _storageService = storageService ?? StorageService();
 
+  static const String _defaultBaseUrl = 'http://8.130.108.118:6000';
   static const String _configuredBaseUrl = String.fromEnvironment(
     'API_BASE_URL',
   );
@@ -33,21 +34,7 @@ class BackendApiClient {
     if (configured.isNotEmpty) {
       return configured;
     }
-
-    if (kIsWeb) {
-      return 'http://localhost:8080';
-    }
-
-    switch (defaultTargetPlatform) {
-      case TargetPlatform.android:
-        return 'http://10.0.2.2:8080';
-      case TargetPlatform.iOS:
-      case TargetPlatform.macOS:
-      case TargetPlatform.linux:
-      case TargetPlatform.windows:
-      case TargetPlatform.fuchsia:
-        return 'http://localhost:8080';
-    }
+    return _defaultBaseUrl;
   }
 
   Future<Map<String, dynamic>> get(
@@ -62,19 +49,120 @@ class BackendApiClient {
     try {
       response = await http.get(uri, headers: headers);
     } catch (_) {
-      throw const BackendApiException('网络异常，请稍后重试');
+      throw const BackendApiException('缃戠粶寮傚父锛岃绋嶅悗閲嶈瘯');
     }
 
     final body = _decodeBody(response.body);
     final success = _isSuccessful(response.statusCode, body);
     if (!success) {
       throw BackendApiException(
-        _extractMessage(body) ?? '请求失败(${response.statusCode})',
+        _buildFailureMessage(response.statusCode, body),
         statusCode: response.statusCode,
+        apiCode: _toInt(body?['code']),
       );
     }
 
     return body ?? <String, dynamic>{};
+  }
+
+  Future<Map<String, dynamic>> post(
+    String path, {
+    Map<String, dynamic>? body,
+    Map<String, String>? queryParameters,
+    bool requireAuth = true,
+  }) async {
+    return _send(
+      'POST',
+      path,
+      body: body,
+      queryParameters: queryParameters,
+      requireAuth: requireAuth,
+    );
+  }
+
+  Future<Map<String, dynamic>> put(
+    String path, {
+    Map<String, dynamic>? body,
+    Map<String, String>? queryParameters,
+    bool requireAuth = true,
+  }) async {
+    return _send(
+      'PUT',
+      path,
+      body: body,
+      queryParameters: queryParameters,
+      requireAuth: requireAuth,
+    );
+  }
+
+  Future<Map<String, dynamic>> putMultipartFile(
+    String path, {
+    required String fieldName,
+    required String filePath,
+    Map<String, String>? fields,
+    Map<String, String>? queryParameters,
+    bool requireAuth = true,
+  }) async {
+    final uri = _buildUri(path, queryParameters: queryParameters);
+    final headers = await _buildHeaders(requireAuth: requireAuth);
+
+    final request = http.MultipartRequest('PUT', uri);
+    for (final entry in headers.entries) {
+      if (entry.key.toLowerCase() == 'content-type') continue;
+      request.headers[entry.key] = entry.value;
+    }
+
+    if (fields != null && fields.isNotEmpty) {
+      for (final entry in fields.entries) {
+        final key = entry.key.trim();
+        final value = entry.value.trim();
+        if (key.isEmpty || value.isEmpty) continue;
+        request.fields[key] = value;
+      }
+    }
+
+    try {
+      request.files.add(await http.MultipartFile.fromPath(fieldName, filePath));
+    } catch (_) {
+      throw const BackendApiException('Invalid upload file path.');
+    }
+
+    http.Response response;
+    try {
+      final streamed = await request.send();
+      response = await http.Response.fromStream(streamed);
+    } catch (_) {
+      throw const BackendApiException(
+        'Network request failed. Please try again later.',
+      );
+    }
+
+    final decoded = _decodeBody(response.body);
+    final success = _isSuccessful(response.statusCode, decoded);
+    if (!success) {
+      throw BackendApiException(
+        _buildFailureMessage(response.statusCode, decoded),
+        statusCode: response.statusCode,
+        apiCode: _toInt(decoded?['code']),
+      );
+    }
+
+    return decoded ?? <String, dynamic>{};
+  }
+
+  Future<Map<String, dynamic>> delete(
+    String path, {
+    Map<String, dynamic>? body,
+    Map<String, String>? queryParameters,
+    bool requireAuth = true,
+  }) async {
+    return _send(
+      'DELETE',
+      path,
+      body: body,
+      queryParameters: queryParameters,
+      requireAuth: requireAuth,
+    );
   }
 
   Future<Map<String, String>> _buildHeaders({required bool requireAuth}) async {
@@ -114,6 +202,72 @@ class BackendApiClient {
     }
 
     return uri.replace(queryParameters: sanitized);
+  }
+
+  Future<Map<String, dynamic>> _send(
+    String method,
+    String path, {
+    Map<String, dynamic>? body,
+    Map<String, String>? queryParameters,
+    required bool requireAuth,
+  }) async {
+    final uri = _buildUri(path, queryParameters: queryParameters);
+    final headers = await _buildHeaders(requireAuth: requireAuth);
+
+    http.Response response;
+    try {
+      switch (method) {
+        case 'POST':
+          response = await http.post(
+            uri,
+            headers: headers,
+            body: body == null ? null : jsonEncode(body),
+          );
+          break;
+        case 'PUT':
+          response = await http.put(
+            uri,
+            headers: headers,
+            body: body == null ? null : jsonEncode(body),
+          );
+          break;
+        case 'DELETE':
+          response = await http.delete(
+            uri,
+            headers: headers,
+            body: body == null ? null : jsonEncode(body),
+          );
+          break;
+        default:
+          throw const BackendApiException('娑撳秵鏁幐浣烘畱鐠囬攱鐪伴弬瑙勭《');
+      }
+    } catch (_) {
+      throw const BackendApiException(
+        'Network request failed. Please try again later.',
+      );
+    }
+
+    final decoded = _decodeBody(response.body);
+    final success = _isSuccessful(response.statusCode, decoded);
+    if (!success) {
+      throw BackendApiException(
+        _buildFailureMessage(response.statusCode, decoded),
+        statusCode: response.statusCode,
+        apiCode: _toInt(decoded?['code']),
+      );
+    }
+
+    return decoded ?? <String, dynamic>{};
+  }
+
+  static String _buildFailureMessage(
+    int statusCode,
+    Map<String, dynamic>? body,
+  ) {
+    if (statusCode == 401 || statusCode == 403) {
+      return '登录已失效，请重新登录';
+    }
+    return _extractMessage(body) ?? '请求失败($statusCode)';
   }
 
   static Map<String, dynamic>? _decodeBody(String raw) {

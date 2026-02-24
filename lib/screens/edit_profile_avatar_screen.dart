@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../services/backend_api_client.dart';
 import '../services/storage_service.dart';
 import '../widgets/resolved_image.dart';
 
@@ -14,6 +15,7 @@ class EditProfileAvatarScreen extends StatefulWidget {
 
 class _EditProfileAvatarScreenState extends State<EditProfileAvatarScreen> {
   final StorageService _storageService = StorageService();
+  final BackendApiClient _apiClient = BackendApiClient();
   final ImagePicker _imagePicker = ImagePicker();
 
   String? _avatarSource;
@@ -64,8 +66,35 @@ class _EditProfileAvatarScreenState extends State<EditProfileAvatarScreen> {
 
     try {
       final source = _avatarSource?.trim() ?? '';
+      var syncedRemote = false;
+
+      final looksLikeLocalFile =
+          source.isNotEmpty &&
+          !source.startsWith('http://') &&
+          !source.startsWith('https://');
+      if (looksLikeLocalFile) {
+        try {
+          await _apiClient.putMultipartFile(
+            '/me/avatar',
+            fieldName: 'avatar',
+            filePath: source,
+            requireAuth: true,
+          );
+          syncedRemote = true;
+        } catch (_) {
+          syncedRemote = false;
+        }
+      }
+
       await _storageService.saveProfileAvatar(source.isEmpty ? null : source);
       if (!mounted) return;
+
+      if (!syncedRemote && looksLikeLocalFile) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('头像未同步到服务器，已保存本地头像')));
+      }
+
       Navigator.pop(context, true);
     } catch (_) {
       if (!mounted) return;

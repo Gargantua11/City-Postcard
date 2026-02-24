@@ -2,14 +2,151 @@ import 'dart:convert';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'backend_api_client.dart';
 import 'discussion_service.dart';
 
 class FavoritePostcardService {
+  FavoritePostcardService({BackendApiClient? apiClient})
+    : _apiClient = apiClient ?? BackendApiClient();
+
   static const String _storageKey = 'favorite_postcards_v1';
   static bool _useVolatileMode = false;
   static List<DiscussionPost> _volatileFavorites = const <DiscussionPost>[];
 
+  final BackendApiClient _apiClient;
+
   Future<List<DiscussionPost>> getFavorites() async {
+    try {
+      final onlineFavorites = await _fetchFavoritesOnline();
+      await _saveFavorites(onlineFavorites);
+      return onlineFavorites;
+    } catch (_) {
+      return _readFavoritesLocal();
+    }
+  }
+
+  Future<bool> isFavorited(DiscussionPost post) async {
+    if (post.id > 0) {
+      try {
+        final body = await _apiClient.get(
+          '/postcard/${post.id}/favorite/status',
+          requireAuth: true,
+        );
+        final favorited = _readFavoritedFlag(body);
+        if (favorited != null) {
+          return favorited;
+        }
+      } catch (_) {}
+    }
+
+    final favorites = await _readFavoritesLocal();
+    return _findPostIndex(favorites, post) >= 0;
+  }
+
+  Future<bool> toggleFavorite(DiscussionPost post) async {
+    if (post.id <= 0) {
+      return _toggleLocalFavorite(post);
+    }
+
+    try {
+      final current = await isFavorited(post);
+      if (current) {
+        await _apiClient.delete('/postcard/${post.id}/favorite');
+      } else {
+        await _apiClient.post('/postcard/${post.id}/favorite');
+      }
+
+      final favorites = List<DiscussionPost>.of(await _readFavoritesLocal());
+      final index = _findPostIndex(favorites, post);
+      if (current) {
+        if (index >= 0) {
+          favorites.removeAt(index);
+        }
+      } else if (index < 0) {
+        favorites.insert(0, post);
+      }
+      await _saveFavorites(favorites);
+      return !current;
+    } catch (_) {
+      return _toggleLocalFavorite(post);
+    }
+  }
+
+  Future<void> removeFavorite(DiscussionPost post) async {
+    if (post.id > 0) {
+      try {
+        await _apiClient.delete('/postcard/${post.id}/favorite');
+      } catch (_) {}
+    }
+
+    final favorites = List<DiscussionPost>.of(await _readFavoritesLocal());
+    favorites.removeWhere((item) => _isSamePost(item, post));
+    await _saveFavorites(favorites);
+  }
+
+  Future<List<DiscussionPost>> _fetchFavoritesOnline() async {
+    final body = await _apiClient.get('/postcard/favorite', requireAuth: true);
+    final data = BackendApiClient.extractData(body);
+    final rawList = BackendApiClient.extractList(data);
+
+    final posts = <DiscussionPost>[];
+    for (final item in rawList) {
+      final map = _asStringMap(item);
+      if (map == null) continue;
+      posts.add(DiscussionPost.fromJson(map));
+    }
+
+    posts.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    return posts;
+  }
+
+  bool? _readFavoritedFlag(Map<String, dynamic> body) {
+    dynamic raw = BackendApiClient.extractData(body);
+    final direct = _toBool(raw);
+    if (direct != null) return direct;
+
+    final map = _asStringMap(raw) ?? body;
+    for (final key in const [
+      'favorited',
+      'isFavorited',
+      'favorite',
+      'status',
+      'liked',
+      'isFavorite',
+    ]) {
+      final parsed = _toBool(map[key]);
+      if (parsed != null) return parsed;
+    }
+    return null;
+  }
+
+  bool? _toBool(dynamic value) {
+    if (value is bool) return value;
+    if (value is num) return value != 0;
+    if (value is String) {
+      final normalized = value.trim().toLowerCase();
+      if (normalized == 'true' || normalized == '1') return true;
+      if (normalized == 'false' || normalized == '0') return false;
+    }
+    return null;
+  }
+
+  Future<bool> _toggleLocalFavorite(DiscussionPost post) async {
+    final favorites = List<DiscussionPost>.of(await _readFavoritesLocal());
+    final index = _findPostIndex(favorites, post);
+
+    if (index >= 0) {
+      favorites.removeAt(index);
+      await _saveFavorites(favorites);
+      return false;
+    }
+
+    favorites.insert(0, post);
+    await _saveFavorites(favorites);
+    return true;
+  }
+
+  Future<List<DiscussionPost>> _readFavoritesLocal() async {
     if (_useVolatileMode) {
       return _sortedCopy(_volatileFavorites);
     }
@@ -64,32 +201,6 @@ class FavoritePostcardService {
       _useVolatileMode = true;
       return _sortedCopy(_volatileFavorites);
     }
-  }
-
-  Future<bool> isFavorited(DiscussionPost post) async {
-    final favorites = await getFavorites();
-    return _findPostIndex(favorites, post) >= 0;
-  }
-
-  Future<bool> toggleFavorite(DiscussionPost post) async {
-    final favorites = List<DiscussionPost>.of(await getFavorites());
-    final index = _findPostIndex(favorites, post);
-
-    if (index >= 0) {
-      favorites.removeAt(index);
-      await _saveFavorites(favorites);
-      return false;
-    }
-
-    favorites.insert(0, post);
-    await _saveFavorites(favorites);
-    return true;
-  }
-
-  Future<void> removeFavorite(DiscussionPost post) async {
-    final favorites = List<DiscussionPost>.of(await getFavorites());
-    favorites.removeWhere((item) => _isSamePost(item, post));
-    await _saveFavorites(favorites);
   }
 
   int _findPostIndex(List<DiscussionPost> posts, DiscussionPost target) {

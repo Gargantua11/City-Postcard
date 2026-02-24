@@ -1,11 +1,11 @@
 import 'dart:convert';
 
-import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import '../models/user.dart';
 
 class AuthService {
+  static const String _defaultBaseUrl = 'http://8.130.108.118:6000';
   static const String _configuredBaseUrl = String.fromEnvironment(
     'API_BASE_URL',
   );
@@ -21,22 +21,7 @@ class AuthService {
     if (configured.isNotEmpty) {
       return configured;
     }
-
-    if (kIsWeb) {
-      return 'http://localhost:8080';
-    }
-
-    switch (defaultTargetPlatform) {
-      case TargetPlatform.android:
-        // Android emulator maps host loopback to 10.0.2.2.
-        return 'http://10.0.2.2:8080';
-      case TargetPlatform.iOS:
-      case TargetPlatform.macOS:
-      case TargetPlatform.linux:
-      case TargetPlatform.windows:
-      case TargetPlatform.fuchsia:
-        return 'http://localhost:8080';
-    }
+    return _defaultBaseUrl;
   }
 
   Future<bool> sendRegisterCode(String phone) async {
@@ -69,11 +54,17 @@ class AuthService {
       return null;
     }
 
-    final regToken = _extractStringField(body, const <String>[
-      'regToken',
-      'registerToken',
-      'token',
-    ]);
+    final regToken = _extractTokenWithFallback(
+      body,
+      const <String>[
+        'regToken',
+        'registerToken',
+        'token',
+        'verifyToken',
+        'reg_token',
+        'register_token',
+      ],
+    );
     if (regToken == null || regToken.isEmpty) {
       _lastError = '注册验证码校验成功，但未返回 regToken';
       return null;
@@ -199,10 +190,15 @@ class AuthService {
       return null;
     }
 
-    final resetToken = _extractStringField(body, const <String>[
-      'resetToken',
-      'token',
-    ]);
+    final resetToken = _extractTokenWithFallback(
+      body,
+      const <String>[
+        'resetToken',
+        'token',
+        'verifyToken',
+        'reset_token',
+      ],
+    );
     if (resetToken == null || resetToken.isEmpty) {
       _lastError = '验证码校验成功，但未返回 resetToken';
       return null;
@@ -401,6 +397,53 @@ class AuthService {
       if (value == null) continue;
       final text = value.toString().trim();
       if (text.isNotEmpty) return text;
+    }
+
+    return null;
+  }
+
+  String? _extractTokenWithFallback(
+    Map<String, dynamic>? body,
+    List<String> keys,
+  ) {
+    final direct = _extractStringField(body, keys);
+    if (direct != null && direct.isNotEmpty) {
+      return direct;
+    }
+    if (body == null || !body.containsKey('data')) {
+      return null;
+    }
+
+    final dynamic data = body['data'];
+    if (data is String) {
+      final text = data.trim();
+      if (text.isNotEmpty && text.toLowerCase() != 'null') {
+        return text;
+      }
+    }
+    if (data is num) {
+      return data.toString();
+    }
+
+    final dataMap = _extractDataMap(body);
+    if (dataMap == null) {
+      return null;
+    }
+
+    final fallbackKeys = <String>[
+      ...keys,
+      'value',
+      'tokenValue',
+      'verify_token',
+      'token_value',
+    ];
+    for (final key in fallbackKeys) {
+      final dynamic value = dataMap[key];
+      if (value == null) continue;
+      final text = value.toString().trim();
+      if (text.isNotEmpty && text.toLowerCase() != 'null') {
+        return text;
+      }
     }
 
     return null;

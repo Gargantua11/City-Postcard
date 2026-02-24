@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../data/city_code_name.dart';
 import '../models/user.dart';
+import '../services/backend_api_client.dart';
 import '../services/edited_postcard_service.dart';
 import '../services/storage_service.dart';
 import 'city_search_screen.dart';
@@ -16,6 +17,7 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
+  final BackendApiClient _apiClient = BackendApiClient();
   final StorageService _storageService = StorageService();
   final EditedPostcardService _editedPostcardService = EditedPostcardService();
 
@@ -61,6 +63,159 @@ class _ProfileScreenState extends State<ProfileScreen> {
       _cityCode = cityCode;
       _createdPostcardCount = editedPostcards.length;
     });
+
+    await _syncProfileFromBackend();
+  }
+
+  Future<void> _syncProfileFromBackend() async {
+    String? remoteAvatar;
+    String? remoteCityName;
+    String? remoteCityCode;
+
+    try {
+      final avatarBody = await _apiClient.get('/me/avatar', requireAuth: true);
+      remoteAvatar = _extractRootStringValue(avatarBody);
+    } on BackendApiException catch (e) {
+      if (e.isUnauthorized) {
+        return;
+      }
+    } catch (_) {}
+
+    try {
+      final cityBody = await _apiClient.get('/me/city', requireAuth: true);
+      remoteCityName = _extractCityName(cityBody);
+      remoteCityCode = _extractCityCode(cityBody);
+    } on BackendApiException catch (e) {
+      if (e.isUnauthorized) {
+        return;
+      }
+    } catch (_) {}
+
+    final normalizedAvatar = remoteAvatar?.trim();
+    var normalizedCityName = remoteCityName?.trim();
+    var resolvedCityCode = remoteCityCode?.trim();
+
+    if ((resolvedCityCode == null || resolvedCityCode.isEmpty) &&
+        normalizedCityName != null &&
+        normalizedCityName.isNotEmpty) {
+      resolvedCityCode = _findCityCodeByName(normalizedCityName);
+    }
+    if ((normalizedCityName == null || normalizedCityName.isEmpty) &&
+        resolvedCityCode != null &&
+        resolvedCityCode.isNotEmpty) {
+      normalizedCityName = kCityCodeNames[resolvedCityCode]?.trim();
+    }
+
+    if (normalizedAvatar != null && normalizedAvatar.isNotEmpty) {
+      await _storageService.saveProfileAvatar(normalizedAvatar);
+    }
+
+    if (normalizedCityName != null && normalizedCityName.isNotEmpty) {
+      if (resolvedCityCode != null) {
+        await _storageService.saveProfileCity(
+          cityName: normalizedCityName,
+          cityCode: resolvedCityCode,
+        );
+      } else {
+        await _storageService.saveProfileCityNameOnly(normalizedCityName);
+        await _storageService.clearProfileCityCode();
+      }
+    }
+
+    if (!mounted) return;
+    setState(() {
+      if (normalizedAvatar != null && normalizedAvatar.isNotEmpty) {
+        _avatarSource = normalizedAvatar;
+      }
+      if (normalizedCityName != null && normalizedCityName.isNotEmpty) {
+        _cityName = normalizedCityName;
+        _cityCode = resolvedCityCode;
+      }
+    });
+  }
+
+  String? _extractRootStringValue(Map<String, dynamic> body) {
+    final data = BackendApiClient.extractData(body);
+    if (data == null) return null;
+
+    if (data is String) {
+      final text = data.trim();
+      return text.isEmpty ? null : text;
+    }
+    if (data is num || data is bool) {
+      return data.toString();
+    }
+
+    final map = BackendApiClient.asMap(data);
+    if (map == null) return null;
+    return BackendApiClient.readString(map, const ['value', 'avatar', 'url']);
+  }
+
+  String? _extractCityName(Map<String, dynamic> body) {
+    final data = BackendApiClient.extractData(body);
+    final map = BackendApiClient.asMap(data) ?? body;
+
+    final cityName = BackendApiClient.readString(map, const [
+      'cityName',
+      'city',
+      'location',
+      'address',
+      'value',
+    ]);
+    if (cityName != null && cityName.trim().isNotEmpty) {
+      return cityName.trim();
+    }
+
+    final cityCode = _extractCityCode(body);
+    if (cityCode == null || cityCode.isEmpty) {
+      return null;
+    }
+    return kCityCodeNames[cityCode]?.trim();
+  }
+
+  String? _extractCityCode(Map<String, dynamic> body) {
+    final data = BackendApiClient.extractData(body);
+    final map = BackendApiClient.asMap(data) ?? body;
+
+    final codeText = BackendApiClient.readString(map, const [
+      'cityCode',
+      'code',
+      'adCode',
+      'value',
+    ]);
+    final codeInt = BackendApiClient.readInt(map, const [
+      'cityCode',
+      'code',
+      'adCode',
+      'value',
+    ]);
+
+    final raw = codeText ?? (codeInt?.toString() ?? '');
+    final digits = raw.trim().replaceAll(RegExp(r'[^0-9]'), '');
+    if (digits.isEmpty) return null;
+    return digits;
+  }
+
+  String? _findCityCodeByName(String cityName) {
+    final normalized = cityName.trim();
+    if (normalized.isEmpty) return null;
+
+    for (final entry in kCityCodeNames.entries) {
+      final candidate = entry.value.trim();
+      if (candidate == normalized) {
+        return entry.key;
+      }
+    }
+
+    for (final entry in kCityCodeNames.entries) {
+      final candidate = entry.value.trim();
+      if (candidate.isEmpty) continue;
+      if (candidate.contains(normalized) || normalized.contains(candidate)) {
+        return entry.key;
+      }
+    }
+
+    return null;
   }
 
   Future<void> _openPostcardOverview() async {
@@ -99,6 +254,25 @@ class _ProfileScreenState extends State<ProfileScreen> {
       _isSavingCity = true;
     });
 
+    var syncedRemote = false;
+    try {
+      final normalizedCode = selected.code.trim();
+      await _apiClient.put(
+        '/me/city',
+        body: <String, dynamic>{
+          'city': selected.name,
+          'cityName': selected.name,
+          'cityCode': normalizedCode,
+        },
+        requireAuth: true,
+      );
+      syncedRemote = true;
+    } on BackendApiException catch (_) {
+      syncedRemote = false;
+    } catch (_) {
+      syncedRemote = false;
+    }
+
     try {
       await _storageService.saveProfileCity(
         cityName: selected.name,
@@ -110,9 +284,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
         _cityCode = selected.code;
         _isSavingCity = false;
       });
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('已更新城市：${selected.name}')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            syncedRemote
+                ? '已同步城市：${selected.name}'
+                : '网络未同步，已更新本地城市：${selected.name}',
+          ),
+        ),
+      );
     } catch (_) {
       if (!mounted) return;
       setState(() {

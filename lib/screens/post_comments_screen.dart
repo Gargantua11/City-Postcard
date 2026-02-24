@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 
 import '../services/discussion_service.dart';
 import '../services/favorite_postcard_service.dart';
+import '../services/postcard_comment_service.dart';
 import '../widgets/resolved_image.dart';
 
 class PostCommentsScreen extends StatefulWidget {
@@ -18,10 +19,11 @@ class _PostCommentsScreenState extends State<PostCommentsScreen> {
   static const double _postcardAspectRatio = 400 / 258;
 
   final FavoritePostcardService _favoriteService = FavoritePostcardService();
+  final PostcardCommentService _commentService = PostcardCommentService();
   final TextEditingController _inputController = TextEditingController();
   final FocusNode _inputFocusNode = FocusNode();
 
-  late final List<_CommentItem> _comments;
+  List<_CommentItem> _comments = <_CommentItem>[];
 
   int _nextCommentId = 1000;
   int _nextReplyId = 5000;
@@ -37,6 +39,8 @@ class _PostCommentsScreenState extends State<PostCommentsScreen> {
   void initState() {
     super.initState();
     _comments = _buildMockComments(widget.post);
+    _nextCommentId = _resolveNextCommentId(_comments);
+    _loadCommentsFromApi();
     _loadFavoriteState();
   }
 
@@ -99,10 +103,63 @@ class _PostCommentsScreenState extends State<PostCommentsScreen> {
     }
   }
 
-  void _toggleLike(_CommentItem item) {
+  Future<void> _loadCommentsFromApi() async {
+    if (widget.post.id <= 0) return;
+
+    try {
+      final comments = await _commentService.fetchComments(
+        postcardId: widget.post.id,
+        page: 1,
+        size: 50,
+      );
+      if (!mounted) return;
+
+      setState(() {
+        _comments = comments
+            .map(
+              (item) => _CommentItem(
+                id: item.id,
+                username: item.username,
+                location: item.location,
+                content: item.content,
+                createdAt: item.createdAt,
+                liked: item.liked,
+                replies: <_ReplyItem>[],
+              ),
+            )
+            .toList(growable: false);
+        _nextCommentId = _resolveNextCommentId(_comments);
+      });
+    } catch (e, stackTrace) {
+      debugPrint('加载评论失败: $e\n$stackTrace');
+    }
+  }
+
+  int _resolveNextCommentId(List<_CommentItem> comments) {
+    var maxId = 1000;
+    for (final comment in comments) {
+      if (comment.id >= maxId) {
+        maxId = comment.id + 1;
+      }
+    }
+    return maxId;
+  }
+
+  Future<void> _toggleLike(_CommentItem item) async {
+    final next = !item.liked;
     setState(() {
-      item.liked = !item.liked;
+      item.liked = next;
     });
+
+    if (!next || item.id <= 0) {
+      return;
+    }
+
+    try {
+      await _commentService.likeComment(item.id);
+    } catch (e, stackTrace) {
+      debugPrint('点赞评论失败: $e\n$stackTrace');
+    }
   }
 
   void _startReply({
@@ -135,12 +192,14 @@ class _PostCommentsScreenState extends State<PostCommentsScreen> {
     });
   }
 
-  void _submitInput() {
+  Future<void> _submitInput() async {
     final content = _inputController.text.trim();
     if (content.isEmpty) return;
 
+    final isReplying = _replyingCommentId != null;
+
     setState(() {
-      if (_replyingCommentId != null) {
+      if (isReplying) {
         final target = _findCommentById(_replyingCommentId!);
         if (target != null) {
           target.replies.insert(
@@ -175,6 +234,20 @@ class _PostCommentsScreenState extends State<PostCommentsScreen> {
       _replyingCommentId = null;
       _replyToUsername = null;
     });
+
+    if (isReplying || widget.post.id <= 0) {
+      return;
+    }
+
+    try {
+      await _commentService.addComment(
+        postcardId: widget.post.id,
+        content: content,
+      );
+      await _loadCommentsFromApi();
+    } catch (e, stackTrace) {
+      debugPrint('发布评论失败: $e\n$stackTrace');
+    }
   }
 
   _CommentItem? _findCommentById(int id) {
@@ -305,7 +378,9 @@ class _PostCommentsScreenState extends State<PostCommentsScreen> {
                               repliesExpanded: _expandedReplyCommentIds
                                   .contains(item.id),
                               onReplyAreaTap: () => _toggleReplySection(item),
-                              onLikeTap: () => _toggleLike(item),
+                              onLikeTap: () {
+                                _toggleLike(item);
+                              },
                               onReplyCommentTap: () => _startReply(
                                 comment: item,
                                 targetUsername: item.username,
@@ -342,7 +417,9 @@ class _PostCommentsScreenState extends State<PostCommentsScreen> {
                               border: InputBorder.none,
                               isCollapsed: true,
                               suffixIcon: IconButton(
-                                onPressed: _submitInput,
+                                onPressed: () {
+                                  _submitInput();
+                                },
                                 icon: const Icon(
                                   Icons.send_rounded,
                                   color: Color(0xFF7B8C72),
@@ -353,7 +430,9 @@ class _PostCommentsScreenState extends State<PostCommentsScreen> {
                             ),
                             style: const TextStyle(fontSize: 15),
                             textInputAction: TextInputAction.send,
-                            onSubmitted: (_) => _submitInput(),
+                            onSubmitted: (_) {
+                              _submitInput();
+                            },
                           ),
                         ),
                       ),

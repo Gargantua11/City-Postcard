@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../models/user.dart';
+import '../services/backend_api_client.dart';
 import '../services/discussion_service.dart';
 import '../services/edited_postcard_service.dart';
 import '../services/storage_service.dart';
@@ -48,21 +49,38 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
       _isLoading = true;
     });
 
-    final results = await Future.wait<dynamic>([
-      _editedPostcardService.getDraftPostcards(),
-      _storageService.getUser(),
-    ]);
+    try {
+      final results = await Future.wait<dynamic>([
+        _editedPostcardService.getDraftPostcards(),
+        _editedPostcardService.getEditedPostcards(),
+        _storageService.getUser(),
+      ]);
 
-    if (!mounted) return;
-    final postcards = results[0] as List<EditedPostcard>;
-    final user = results[1] as User?;
+      if (!mounted) return;
+      final draftPostcards = results[0] as List<EditedPostcard>;
+      final allPostcards = results[1] as List<EditedPostcard>;
+      final user = results[2] as User?;
+      final postcards = draftPostcards.isNotEmpty
+          ? draftPostcards
+          : allPostcards;
 
-    setState(() {
-      _postcards = postcards;
-      _user = user;
-      _selectedIndex = postcards.isEmpty ? null : 0;
-      _isLoading = false;
-    });
+      setState(() {
+        _postcards = postcards;
+        _user = user;
+        _selectedIndex = postcards.isEmpty ? null : 0;
+        _isLoading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _postcards = const [];
+        _selectedIndex = null;
+        _isLoading = false;
+      });
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('加载发帖数据失败，请重试')));
+    }
   }
 
   Future<void> _publish() async {
@@ -87,17 +105,27 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
     final address = _resolveAddress(postcard);
 
     try {
-      await _discussionService.publishLocalPost(
+      await _discussionService.publishPost(
         username: (username == null || username.isEmpty) ? '我' : username,
         avatar: avatar == null || avatar.isEmpty ? null : avatar,
         imageUrl: postcard.imageUrl,
         address: address,
         hotComment: content,
+        cityName: postcard.cityName,
+        cityCode: postcard.cityCode,
+        provinceName: postcard.provinceName,
+        latitude: postcard.latitude,
+        longitude: postcard.longitude,
       );
       await _editedPostcardService.markPostcardPublished(postcard.draftId);
 
       if (!mounted) return;
       Navigator.pop(context, true);
+    } on BackendApiException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(e.message)));
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(

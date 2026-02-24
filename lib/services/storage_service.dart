@@ -69,6 +69,29 @@ class StorageService {
     }
   }
 
+  Future<void> saveProfileCityNameOnly(String cityName) async {
+    final normalizedName = cityName.trim();
+    if (normalizedName.isEmpty) return;
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_profileCityNameKey, normalizedName);
+
+    final user = await getUser();
+    if (user != null) {
+      await saveUser(user.copyWith(cityName: normalizedName));
+    }
+  }
+
+  Future<void> clearProfileCityCode() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_profileCityCodeKey);
+
+    final user = await getUser();
+    if (user != null) {
+      await saveUser(user.copyWith(cityCode: null));
+    }
+  }
+
   Future<String?> getProfileCityName() async {
     final user = await getUser();
     final fromUser = user?.cityName?.trim();

@@ -57,3 +57,14 @@ apifox_endpoints_with_samples.json
 apifox_forget_verify.html
 apifox_login.html
 apifox_register_verify.html
+tmp_apifox.html
+tmp_client.js
+tmp_route.js
+tmp_apifox_used_endpoints.json
+tmp_apifox_all_endpoints.json
+tmp_apifox_ids.txt
+tmp_network_test_results.json
+scripts/apifox_network_smoke_test.ps1
+apifox_network_smoke_test.ps1
+apifox_interface_check_2026-02-24.md
+tmp_login_api.html
