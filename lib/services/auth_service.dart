@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:http/http.dart' as http;
 
@@ -9,6 +11,7 @@ class AuthService {
   static const String _configuredBaseUrl = String.fromEnvironment(
     'API_BASE_URL',
   );
+  static const Duration _requestTimeout = Duration(seconds: 15);
   static final String _baseUrl = _resolveBaseUrl();
 
   String? _lastError;
@@ -247,15 +250,15 @@ class AuthService {
           'Content-Type': 'application/json; charset=utf-8',
           'Authorization': 'Bearer $token',
         },
-      );
+      ).timeout(_requestTimeout);
       final body = _decodeResponseBody(response);
       if (_isRequestSuccessful(response.statusCode, body)) {
         return true;
       }
       _lastError = _extractErrorMessage(body, fallback: '认证状态校验失败');
       return false;
-    } catch (_) {
-      _lastError = '网络异常，请稍后重试';
+    } catch (error) {
+      _lastError = _buildNetworkErrorMessage(error);
       return false;
     }
   }
@@ -286,21 +289,34 @@ class AuthService {
           uri,
           headers: const <String, String>{'Content-Type': 'application/json'},
           body: jsonEncode(payload),
-        );
+        ).timeout(_requestTimeout);
       }
       if (method == 'PUT') {
         return await http.put(
           uri,
           headers: const <String, String>{'Content-Type': 'application/json'},
           body: jsonEncode(payload),
-        );
+        ).timeout(_requestTimeout);
       }
       _lastError = '不支持的请求方法: $method';
       return null;
-    } catch (_) {
-      _lastError = '网络异常，请稍后重试';
+    } catch (error) {
+      _lastError = _buildNetworkErrorMessage(error);
       return null;
     }
+  }
+
+  String _buildNetworkErrorMessage(Object error) {
+    if (error is TimeoutException) {
+      return '连接服务器超时，请稍后重试';
+    }
+    if (error is SocketException) {
+      return '无法连接服务器（$_baseUrl），请确认后端服务可用';
+    }
+    if (error is FormatException) {
+      return '接口地址配置错误：$_baseUrl';
+    }
+    return '网络异常，请稍后重试';
   }
 
   Map<String, dynamic>? _decodeResponseBody(http.Response response) {

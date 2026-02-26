@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../data/city_code_name.dart';
 import '../models/user.dart';
+import '../services/avatar_upload_service.dart';
 import '../services/backend_api_client.dart';
 import '../services/edited_postcard_service.dart';
 import '../services/storage_service.dart';
@@ -20,6 +21,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   final BackendApiClient _apiClient = BackendApiClient();
   final StorageService _storageService = StorageService();
   final EditedPostcardService _editedPostcardService = EditedPostcardService();
+  final AvatarUploadService _avatarUploadService = AvatarUploadService();
 
   String _username = '嘻嘻嘻';
   String? _avatarSource;
@@ -43,12 +45,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
       _storageService.getProfileCityCode(),
       _editedPostcardService.getEditedPostcards(),
     ]);
+    final storedAvatar = AvatarUploadService.normalizeAvatarStorageSource(
+      (results[2] as String?)?.trim() ?? '',
+    );
+    final displayAvatar = await _resolveAvatarDisplaySource(storedAvatar);
 
     if (!mounted) return;
     setState(() {
       final user = results[0] as User?;
       final nickname = (results[1] as String?)?.trim() ?? '';
-      final avatarSource = (results[2] as String?)?.trim();
       final cityName = results[3] as String?;
       final cityCode = results[4] as String?;
       final editedPostcards = results[5] as List<EditedPostcard>;
@@ -56,9 +61,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ? nickname
           : (user?.username.trim() ?? '');
       _username = username.isEmpty ? '嘻嘻嘻' : username;
-      _avatarSource = (avatarSource == null || avatarSource.isEmpty)
-          ? null
-          : avatarSource;
+      _avatarSource = displayAvatar.isEmpty
+          ? (storedAvatar.isEmpty ? null : storedAvatar)
+          : displayAvatar;
       _cityName = cityName;
       _cityCode = cityCode;
       _createdPostcardCount = editedPostcards.length;
@@ -91,7 +96,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
       }
     } catch (_) {}
 
-    final normalizedAvatar = remoteAvatar?.trim();
+    String? normalizedAvatarStorage;
+    String? normalizedAvatarDisplay;
+    final remoteAvatarSource = AvatarUploadService.normalizeAvatarStorageSource(
+      remoteAvatar?.trim() ?? '',
+    );
+    if (remoteAvatarSource.isNotEmpty) {
+      normalizedAvatarStorage = remoteAvatarSource;
+      normalizedAvatarDisplay = await _resolveAvatarDisplaySource(
+        remoteAvatarSource,
+      );
+      if (normalizedAvatarDisplay.isEmpty) {
+        normalizedAvatarDisplay = AvatarUploadService.normalizeAvatarSource(
+          remoteAvatarSource,
+        );
+      }
+    }
     var normalizedCityName = remoteCityName?.trim();
     var resolvedCityCode = remoteCityCode?.trim();
 
@@ -106,8 +126,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
       normalizedCityName = kCityCodeNames[resolvedCityCode]?.trim();
     }
 
-    if (normalizedAvatar != null && normalizedAvatar.isNotEmpty) {
-      await _storageService.saveProfileAvatar(normalizedAvatar);
+    if (normalizedAvatarStorage != null && normalizedAvatarStorage.isNotEmpty) {
+      await _storageService.saveProfileAvatar(normalizedAvatarStorage);
     }
 
     if (normalizedCityName != null && normalizedCityName.isNotEmpty) {
@@ -124,14 +144,30 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     if (!mounted) return;
     setState(() {
-      if (normalizedAvatar != null && normalizedAvatar.isNotEmpty) {
-        _avatarSource = normalizedAvatar;
+      if (normalizedAvatarStorage != null &&
+          normalizedAvatarStorage.isNotEmpty) {
+        _avatarSource = normalizedAvatarDisplay ?? normalizedAvatarStorage;
       }
       if (normalizedCityName != null && normalizedCityName.isNotEmpty) {
         _cityName = normalizedCityName;
         _cityCode = resolvedCityCode;
       }
     });
+  }
+
+  Future<String> _resolveAvatarDisplaySource(String source) async {
+    final normalizedStorage = AvatarUploadService.normalizeAvatarStorageSource(
+      source,
+    );
+    if (normalizedStorage.isEmpty) return '';
+
+    try {
+      return await _avatarUploadService.resolveAvatarDisplaySource(
+        normalizedStorage,
+      );
+    } catch (_) {
+      return AvatarUploadService.normalizeAvatarSource(normalizedStorage);
+    }
   }
 
   String? _extractRootStringValue(Map<String, dynamic> body) {
@@ -148,7 +184,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     final map = BackendApiClient.asMap(data);
     if (map == null) return null;
-    return BackendApiClient.readString(map, const ['value', 'avatar', 'url']);
+    return BackendApiClient.readString(map, const [
+      'value',
+      'avatar',
+      'avatarUrl',
+      'url',
+      'key',
+      'objectKey',
+      'fileKey',
+    ]);
   }
 
   String? _extractCityName(Map<String, dynamic> body) {

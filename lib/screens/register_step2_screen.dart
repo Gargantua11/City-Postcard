@@ -125,11 +125,10 @@ class _RegisterStep2ScreenState extends State<RegisterStep2Screen> {
 
     if (!mounted) return;
 
-    setState(() {
-      _isSubmitting = false;
-    });
-
     if (result == null) {
+      setState(() {
+        _isSubmitting = false;
+      });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(authProvider.error ?? '注册失败，请稍后重试')),
       );
@@ -137,13 +136,46 @@ class _RegisterStep2ScreenState extends State<RegisterStep2Screen> {
     }
 
     final code = result['code'];
-    final msg = result['msg']?.toString() ?? (code == 0 ? '注册成功' : '注册失败');
-
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
-
-    if (code == 0) {
-      Navigator.pushReplacementNamed(context, '/login');
+    final registerSuccess = _isRegistrationSuccess(code);
+    final msg =
+        result['msg']?.toString() ?? (registerSuccess ? '注册成功，正在自动登录' : '注册失败');
+    if (!registerSuccess) {
+      setState(() {
+        _isSubmitting = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+      return;
     }
+
+    final loginSuccess = await authProvider.login(
+      widget.phone,
+      _passwordController.text,
+    );
+    if (!mounted) return;
+
+    setState(() {
+      _isSubmitting = false;
+    });
+
+    if (loginSuccess) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('注册成功，已自动登录')));
+      Navigator.pushNamedAndRemoveUntil(context, '/home', (route) => false);
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(authProvider.error ?? '注册成功，但自动登录失败，请手动登录')),
+    );
+    Navigator.pushReplacementNamed(context, '/login');
+  }
+
+  bool _isRegistrationSuccess(dynamic code) {
+    if (code == null) return true;
+    if (code is int) return code == 0 || code == 200;
+    if (code is String) return code == '0' || code == '200';
+    return false;
   }
 
   @override

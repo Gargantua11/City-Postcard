@@ -68,3 +68,4 @@ scripts/apifox_network_smoke_test.ps1
 apifox_network_smoke_test.ps1
 apifox_interface_check_2026-02-24.md
 tmp_login_api.html
+.tmp_apifox.html

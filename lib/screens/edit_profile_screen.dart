@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../services/avatar_upload_service.dart';
 import '../services/storage_service.dart';
 import '../widgets/resolved_image.dart';
 import 'edit_profile_avatar_screen.dart';
@@ -16,6 +17,7 @@ class EditProfileScreen extends StatefulWidget {
 
 class _EditProfileScreenState extends State<EditProfileScreen> {
   final StorageService _storageService = StorageService();
+  final AvatarUploadService _avatarUploadService = AvatarUploadService();
 
   bool _isLoading = true;
   String _nickname = '用户';
@@ -40,16 +42,37 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       _storageService.getProfileAvatar(),
       _storageService.getProfilePassword(),
     ]);
+    final storedAvatar = AvatarUploadService.normalizeAvatarStorageSource(
+      (results[2] as String?)?.trim() ?? '',
+    );
+    final displayAvatar = await _resolveAvatarDisplaySource(storedAvatar);
 
     if (!mounted) return;
     setState(() {
       final nickname = (results[0] as String?)?.trim() ?? '';
       _nickname = nickname.isEmpty ? '用户' : nickname;
       _phone = ((results[1] as String?) ?? '').trim();
-      _avatarSource = (results[2] as String?)?.trim();
+      _avatarSource = displayAvatar.isEmpty
+          ? (storedAvatar.isEmpty ? null : storedAvatar)
+          : displayAvatar;
       _hasPassword = ((results[3] as String?) ?? '').isNotEmpty;
       _isLoading = false;
     });
+  }
+
+  Future<String> _resolveAvatarDisplaySource(String source) async {
+    final normalizedStorage = AvatarUploadService.normalizeAvatarStorageSource(
+      source,
+    );
+    if (normalizedStorage.isEmpty) return '';
+
+    try {
+      return await _avatarUploadService.resolveAvatarDisplaySource(
+        normalizedStorage,
+      );
+    } catch (_) {
+      return AvatarUploadService.normalizeAvatarSource(normalizedStorage);
+    }
   }
 
   Future<void> _openAvatarEdit() async {

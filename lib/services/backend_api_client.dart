@@ -103,10 +103,49 @@ class BackendApiClient {
     Map<String, String>? queryParameters,
     bool requireAuth = true,
   }) async {
+    return _sendMultipartFile(
+      'PUT',
+      path,
+      fieldName: fieldName,
+      filePath: filePath,
+      fields: fields,
+      queryParameters: queryParameters,
+      requireAuth: requireAuth,
+    );
+  }
+
+  Future<Map<String, dynamic>> postMultipartFile(
+    String path, {
+    required String fieldName,
+    required String filePath,
+    Map<String, String>? fields,
+    Map<String, String>? queryParameters,
+    bool requireAuth = true,
+  }) async {
+    return _sendMultipartFile(
+      'POST',
+      path,
+      fieldName: fieldName,
+      filePath: filePath,
+      fields: fields,
+      queryParameters: queryParameters,
+      requireAuth: requireAuth,
+    );
+  }
+
+  Future<Map<String, dynamic>> _sendMultipartFile(
+    String method,
+    String path, {
+    required String fieldName,
+    required String filePath,
+    Map<String, String>? fields,
+    Map<String, String>? queryParameters,
+    required bool requireAuth,
+  }) async {
     final uri = _buildUri(path, queryParameters: queryParameters);
     final headers = await _buildHeaders(requireAuth: requireAuth);
 
-    final request = http.MultipartRequest('PUT', uri);
+    final request = http.MultipartRequest(method, uri);
     for (final entry in headers.entries) {
       if (entry.key.toLowerCase() == 'content-type') continue;
       request.headers[entry.key] = entry.value;

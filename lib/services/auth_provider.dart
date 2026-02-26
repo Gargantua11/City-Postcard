@@ -16,7 +16,8 @@ class AuthProvider extends ChangeNotifier {
   User? get user => _user;
   bool get isLoading => _isLoading;
   String? get error => _error;
-  bool get isAuthenticated => _user != null;
+  bool get isAuthenticated =>
+      _user != null && _user!.accessToken.trim().isNotEmpty;
 
   Future<void> init() async {
     _isLoading = true;
@@ -24,7 +25,7 @@ class AuthProvider extends ChangeNotifier {
 
     try {
       final savedUser = await _storageService.getUser();
-      if (savedUser != null) {
+      if (savedUser != null && savedUser.accessToken.trim().isNotEmpty) {
         _user = savedUser;
       }
     } catch (e) {

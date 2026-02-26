@@ -49,6 +49,14 @@ packages:
       url: "https://mirrors.tuna.tsinghua.edu.cn/dart-pub/"
     source: hosted
     version: "0.3.5+2"
+  crypto:
+    dependency: transitive
+    description:
+      name: crypto
+      sha256: c8ea0233063ba03258fbcf2ca4d6dadfefe14f02fab57702265467a19f27fadf
+      url: "https://mirrors.tuna.tsinghua.edu.cn/dart-pub/"
+    source: hosted
+    version: "3.0.7"
   cupertino_icons:
     dependency: "direct main"
     description:
@@ -57,6 +65,14 @@ packages:
       url: "https://mirrors.tuna.tsinghua.edu.cn/dart-pub/"
     source: hosted
     version: "1.0.8"
+  dio:
+    dependency: transitive
+    description:
+      name: dio
+      sha256: "7d328c4d898a61efc3cd93655a0955858e29a0aa647f0f9e02d59b3bb275e2e8"
+      url: "https://mirrors.tuna.tsinghua.edu.cn/dart-pub/"
+    source: hosted
+    version: "4.0.6"
   fake_async:
     dependency: transitive
     description:
@@ -126,6 +142,14 @@ packages:
       url: "https://mirrors.tuna.tsinghua.edu.cn/dart-pub/"
     source: hosted
     version: "6.0.0"
+  flutter_oss_aliyun:
+    dependency: "direct main"
+    description:
+      name: flutter_oss_aliyun
+      sha256: "29f9121f4f26a74c86394cdd30fcebe6e7c217de9903bd4fcfd8ddd7f1e92c60"
+      url: "https://mirrors.tuna.tsinghua.edu.cn/dart-pub/"
+    source: hosted
+    version: "5.3.0"
   flutter_plugin_android_lifecycle:
     dependency: transitive
     description:
@@ -304,6 +328,14 @@ packages:
       url: "https://mirrors.tuna.tsinghua.edu.cn/dart-pub/"
     source: hosted
     version: "2.0.0"
+  mime_type:
+    dependency: transitive
+    description:
+      name: mime_type
+      sha256: d652b613e84dac1af28030a9fba82c0999be05b98163f9e18a0849c6e63838bb
+      url: "https://mirrors.tuna.tsinghua.edu.cn/dart-pub/"
+    source: hosted
+    version: "1.0.1"
   nested:
     dependency: transitive
     description:
