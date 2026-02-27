@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../services/avatar_upload_service.dart';
-import '../services/backend_api_client.dart';
 import '../services/storage_service.dart';
 import '../widgets/resolved_image.dart';
 
@@ -46,17 +45,25 @@ class _EditProfileAvatarScreenState extends State<EditProfileAvatarScreen> {
   }
 
   Future<String> _resolveDisplaySource(String source) async {
-    final normalizedStorage = AvatarUploadService.normalizeAvatarStorageSource(
-      source,
-    );
-    if (normalizedStorage.isEmpty) return '';
+    final normalizedSource = source.trim();
+    if (normalizedSource.isEmpty) return '';
 
     try {
-      return await _avatarUploadService.resolveAvatarDisplaySource(
+      final resolved = await _avatarUploadService.resolveAvatarDisplaySource(
+        normalizedSource,
+      );
+      return AvatarUploadService.isRenderableImageSource(resolved)
+          ? resolved
+          : '';
+    } catch (_) {
+      final normalizedStorage =
+          AvatarUploadService.normalizeAvatarStorageSource(normalizedSource);
+      final fallback = AvatarUploadService.normalizeAvatarSource(
         normalizedStorage,
       );
-    } catch (_) {
-      return AvatarUploadService.normalizeAvatarSource(normalizedStorage);
+      return AvatarUploadService.isRenderableImageSource(fallback)
+          ? fallback
+          : '';
     }
   }
 
@@ -90,31 +97,8 @@ class _EditProfileAvatarScreenState extends State<EditProfileAvatarScreen> {
     try {
       final source =
           _avatarStorageSource?.trim() ?? (_avatarSource?.trim() ?? '');
-      var syncedRemote = false;
-      var nextStorageSource = source;
-      String? syncErrorMessage;
-
-      final looksLikeLocalFile =
-          source.isNotEmpty &&
-          !source.startsWith('http://') &&
-          !source.startsWith('https://');
-      if (looksLikeLocalFile) {
-        try {
-          nextStorageSource = await _avatarUploadService.uploadAvatarAndSync(
-            source,
-          );
-          syncedRemote = true;
-        } catch (error) {
-          syncedRemote = false;
-          final text = error.toString().trim();
-          if (text.isNotEmpty) {
-            syncErrorMessage = text;
-          }
-        }
-      }
-
       final normalizedStorageSource =
-          AvatarUploadService.normalizeAvatarStorageSource(nextStorageSource);
+          AvatarUploadService.normalizeAvatarStorageSource(source);
       final resolvedDisplaySource = await _resolveDisplaySource(
         normalizedStorageSource,
       );
@@ -123,27 +107,16 @@ class _EditProfileAvatarScreenState extends State<EditProfileAvatarScreen> {
       );
       if (!mounted) return;
 
-      if (!syncedRemote && looksLikeLocalFile) {
-        String detail;
-        if (syncErrorMessage == null) {
-          detail = 'Avatar was not synced to server; saved locally.';
-        } else if (syncErrorMessage.contains('Network request failed')) {
-          detail =
-              'Avatar sync failed: network unavailable (${BackendApiClient.baseUrl}).';
-        } else {
-          detail = 'Avatar sync failed: $syncErrorMessage';
-        }
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(detail)));
-      }
-
       setState(() {
         _avatarStorageSource = normalizedStorageSource.isEmpty
             ? null
             : normalizedStorageSource;
+        final storageDisplayFallback =
+            AvatarUploadService.isRenderableImageSource(normalizedStorageSource)
+            ? normalizedStorageSource
+            : null;
         _avatarSource = resolvedDisplaySource.isEmpty
-            ? _avatarStorageSource
+            ? storageDisplayFallback
             : resolvedDisplaySource;
       });
       Navigator.pop(context, true);

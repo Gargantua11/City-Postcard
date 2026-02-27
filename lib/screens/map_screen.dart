@@ -1,11 +1,18 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:interactive_country_map/interactive_country_map.dart';
+import 'package:intl/intl.dart';
 
 import '../data/city_code_center.dart';
 import '../data/city_code_name.dart';
+import '../models/postcard_element_layer.dart';
 import '../services/backend_api_client.dart';
+import '../services/edited_postcard_service.dart';
 import '../services/map_backend_service.dart';
+import '../services/storage_service.dart';
 import '../widgets/app_bottom_nav_bar.dart';
+import '../widgets/resolved_image.dart';
 
 class MapScreen extends StatefulWidget {
   const MapScreen({super.key});
@@ -18,24 +25,74 @@ class _MapScreenState extends State<MapScreen> {
   static const String _headerAsset = 'assets/images/map/地图.png';
 
   final MapBackendService _mapService = MapBackendService();
+  final EditedPostcardService _editedPostcardService = EditedPostcardService();
+  final StorageService _storageService = StorageService();
 
   bool _isLoading = true;
+  bool _isPostcardsLoading = true;
   bool _isOfflineMode = false;
+  bool _isHome3dPreviewEnabled = true;
   String? _errorMessage;
   String? _offlineNotice;
   String? _loadingProvinceCode;
   Set<String> _litProvinceCodes = const {};
   Map<String, List<_CitySpot>> _citySpotsByProvince = const {};
   List<_CitySpot> _citySpots = const [];
+  List<EditedPostcard> _editedPostcards = const [];
   String? _selectedProvinceCode;
+  String? _selectedCityCode;
+  String? _selectedCityLabel;
+  String? _selectedCityProvinceCode;
 
   @override
   void initState() {
     super.initState();
     _loadMapData();
+    _loadEditedPostcards();
+    _loadHome3dPreviewSetting();
+  }
+
+  Future<void> _loadHome3dPreviewSetting() async {
+    final saved = await _storageService.getHome3dPreviewEnabled();
+    if (!mounted || saved == null) return;
+    setState(() {
+      _isHome3dPreviewEnabled = saved;
+    });
+  }
+
+  Future<void> _loadEditedPostcards() async {
+    setState(() {
+      _isPostcardsLoading = true;
+    });
+
+    try {
+      final postcards = await _editedPostcardService.getEditedPostcards();
+      if (!mounted) return;
+      setState(() {
+        _editedPostcards = postcards;
+        _isPostcardsLoading = false;
+      });
+      if (postcards.isEmpty) {
+        _clearMapMarksForNoPostcards();
+      } else {
+        _loadMapData();
+      }
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _editedPostcards = const <EditedPostcard>[];
+        _isPostcardsLoading = false;
+      });
+      _clearMapMarksForNoPostcards();
+    }
   }
 
   Future<void> _loadMapData() async {
+    if (_editedPostcards.isEmpty) {
+      _clearMapMarksForNoPostcards();
+      return;
+    }
+
     setState(() {
       _isLoading = true;
       _errorMessage = null;
@@ -87,6 +144,10 @@ class _MapScreenState extends State<MapScreen> {
         ..sort((a, b) => b.editedAt.compareTo(a.editedAt));
 
       if (!mounted) return;
+      if (_editedPostcards.isEmpty) {
+        _clearMapMarksForNoPostcards();
+        return;
+      }
       setState(() {
         _litProvinceCodes = litProvinces;
         _citySpotsByProvince = citySpotsByProvince;
@@ -115,7 +176,26 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
+  void _clearMapMarksForNoPostcards() {
+    if (!mounted) return;
+    setState(() {
+      _litProvinceCodes = const <String>{};
+      _citySpotsByProvince = const <String, List<_CitySpot>>{};
+      _citySpots = const <_CitySpot>[];
+      _selectedProvinceCode = null;
+      _selectedCityCode = null;
+      _selectedCityLabel = null;
+      _selectedCityProvinceCode = null;
+      _loadingProvinceCode = null;
+      _isOfflineMode = false;
+      _offlineNotice = null;
+      _errorMessage = null;
+      _isLoading = false;
+    });
+  }
+
   Future<void> _loadProvinceDetails(String provinceCode) async {
+    if (_editedPostcards.isEmpty) return;
     if (_loadingProvinceCode == provinceCode) return;
     if (_isOfflineMode) return;
 
@@ -275,10 +355,107 @@ class _MapScreenState extends State<MapScreen> {
     return digits.length >= 4 ? digits.substring(0, 4) : digits;
   }
 
+  List<EditedPostcard> _selectedPostcardsForPlace() {
+    final selectedProvince = _selectedProvinceCode;
+    if (selectedProvince == null) return const <EditedPostcard>[];
+
+    final provincePrefix = _provincePrefixFromCode(selectedProvince);
+    if (provincePrefix == null || provincePrefix.isEmpty) {
+      return const <EditedPostcard>[];
+    }
+
+    final selectedProvinceName = _normalizeCityName(
+      _provinceNameByCode[selectedProvince],
+    );
+    final selectedCityCode = _selectedCityCode;
+    final selectedCityName = _normalizeCityName(_selectedCityLabel);
+    final result = <EditedPostcard>[];
+
+    for (final card in _editedPostcards) {
+      final cityCode = _normalizeCityCode(card.cityCode);
+      final inSelectedProvince = cityCode != null
+          ? cityCode.startsWith(provincePrefix)
+          : (selectedProvinceName != null &&
+                selectedProvinceName.isNotEmpty &&
+                _normalizeCityName(card.provinceName) == selectedProvinceName);
+      if (!inSelectedProvince) {
+        continue;
+      }
+
+      if (selectedCityCode != null && selectedCityCode.isNotEmpty) {
+        final cardCity = _normalizeCityName(card.cityName);
+        final matchByCode = cityCode != null && cityCode == selectedCityCode;
+        final matchByName =
+            selectedCityName != null &&
+            selectedCityName.isNotEmpty &&
+            cardCity != null &&
+            cardCity == selectedCityName;
+        if (!matchByCode && !matchByName) {
+          continue;
+        }
+      } else if (selectedCityName != null && selectedCityName.isNotEmpty) {
+        final cardCity = _normalizeCityName(card.cityName);
+        if (cardCity == null || cardCity != selectedCityName) {
+          continue;
+        }
+      }
+
+      result.add(card);
+    }
+
+    result.sort((a, b) => b.editedAt.compareTo(a.editedAt));
+    return result;
+  }
+
+  String? _resolvePostcardLocation(EditedPostcard postcard) {
+    final city = _normalizeCityName(postcard.cityName);
+    final province = _normalizeCityName(postcard.provinceName);
+    final cityCode = _normalizeCityCode(postcard.cityCode);
+
+    if (city != null &&
+        city.isNotEmpty &&
+        province != null &&
+        province.isNotEmpty) {
+      if (city == province) return city;
+      return '$province $city';
+    }
+    if (city != null && city.isNotEmpty) return city;
+    if (province != null && province.isNotEmpty) return province;
+    if (cityCode != null && cityCode.isNotEmpty) return cityCode;
+    return null;
+  }
+
+  void _onCityTap(_CitySpot spot) {
+    final nextCityCode = _normalizeCityCode(spot.cityCode);
+    final sameSelection =
+        _selectedCityProvinceCode == spot.provinceCode &&
+        _selectedCityCode == nextCityCode &&
+        _selectedCityLabel == spot.cityLabel;
+
+    setState(() {
+      if (sameSelection) {
+        _selectedCityCode = null;
+        _selectedCityLabel = null;
+        _selectedCityProvinceCode = null;
+        return;
+      }
+
+      _selectedProvinceCode = spot.provinceCode;
+      _selectedCityCode = nextCityCode;
+      _selectedCityLabel = spot.cityLabel;
+      _selectedCityProvinceCode = spot.provinceCode;
+    });
+
+    _loadProvinceDetails(spot.provinceCode);
+  }
+
   void _onProvinceTap(String code) {
     final nextCode = _selectedProvinceCode == code ? null : code;
     setState(() {
       _selectedProvinceCode = nextCode;
+      _selectedCityCode = null;
+      _selectedCityLabel = null;
+      _selectedCityProvinceCode = null;
     });
 
     if (nextCode != null) {
@@ -317,6 +494,10 @@ class _MapScreenState extends State<MapScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final mapHeight = (MediaQuery.sizeOf(context).height * 0.34)
+        .clamp(250.0, 320.0)
+        .toDouble();
+
     final sortedProvinceCodes = _litProvinceCodes.toList()
       ..sort((a, b) {
         final aName = _provinceNameByCode[a] ?? a;
@@ -327,32 +508,37 @@ class _MapScreenState extends State<MapScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFF4F6FA),
       body: SafeArea(
-        child: Column(
-          children: [
-            const SizedBox(height: 8),
-            _buildHeader(),
-            const SizedBox(height: 10),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: _buildMapCard(),
-              ),
-            ),
-            const SizedBox(height: 10),
-            _buildSummary(
-              provinceCount: sortedProvinceCodes.length,
-              cityCount: _citySpots.length,
-            ),
-            if (_isOfflineMode && _offlineNotice != null) ...[
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          child: Column(
+            children: [
               const SizedBox(height: 8),
-              _buildOfflineNotice(_offlineNotice!),
+              _buildHeader(),
+              const SizedBox(height: 10),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: SizedBox(height: mapHeight, child: _buildMapCard()),
+              ),
+              const SizedBox(height: 10),
+              _buildSummary(
+                provinceCount: sortedProvinceCodes.length,
+                cityCount: _citySpots.length,
+              ),
+              if (_isOfflineMode && _offlineNotice != null) ...[
+                const SizedBox(height: 8),
+                _buildOfflineNotice(_offlineNotice!),
+              ],
+              const SizedBox(height: 8),
+              _buildProvinceChips(sortedProvinceCodes),
+              const SizedBox(height: 8),
+              _buildCityChips(),
+              if (_selectedProvinceCode != null) ...[
+                const SizedBox(height: 12),
+                _buildSelectedPostcardsSection(),
+              ],
+              const SizedBox(height: 14),
             ],
-            const SizedBox(height: 8),
-            _buildProvinceChips(sortedProvinceCodes),
-            const SizedBox(height: 8),
-            _buildCityChips(),
-            const SizedBox(height: 12),
-          ],
+          ),
         ),
       ),
       bottomNavigationBar: AppBottomNavBar(
@@ -653,23 +839,39 @@ class _MapScreenState extends State<MapScreen> {
               final cityName = selectedProvinceName == null
                   ? '${_provinceNameByCode[spot.provinceCode] ?? spot.provinceCode}-${spot.cityLabel}'
                   : spot.cityLabel;
+              final normalizedSpotCode = _normalizeCityCode(spot.cityCode);
+              final selected =
+                  _selectedCityProvinceCode == spot.provinceCode &&
+                  _selectedCityCode == normalizedSpotCode &&
+                  _selectedCityLabel == spot.cityLabel;
 
-              return Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 7,
-                ),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFEAF2FF),
-                  borderRadius: BorderRadius.circular(999),
-                  border: Border.all(color: const Color(0xFFBBD2FF)),
-                ),
-                child: Text(
-                  cityName,
-                  style: const TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF284B8D),
+              return GestureDetector(
+                onTap: () => _onCityTap(spot),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 7,
+                  ),
+                  decoration: BoxDecoration(
+                    color: selected
+                        ? const Color(0xFFD9E8FF)
+                        : const Color(0xFFEAF2FF),
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(
+                      color: selected
+                          ? const Color(0xFF5C86D6)
+                          : const Color(0xFFBBD2FF),
+                    ),
+                  ),
+                  child: Text(
+                    cityName,
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: selected
+                          ? const Color(0xFF1F3F7A)
+                          : const Color(0xFF284B8D),
+                    ),
                   ),
                 ),
               );
@@ -677,6 +879,100 @@ class _MapScreenState extends State<MapScreen> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildSelectedPostcardsSection() {
+    final selectedProvinceCode = _selectedProvinceCode;
+    final selectedProvinceName = selectedProvinceCode == null
+        ? null
+        : _provinceNameByCode[selectedProvinceCode] ?? selectedProvinceCode;
+    final selectedCityName = _selectedCityLabel?.trim();
+
+    final title = selectedProvinceName == null
+        ? '选中地点后显示明信片'
+        : (selectedCityName != null && selectedCityName.isNotEmpty)
+        ? '$selectedProvinceName · $selectedCityName'
+        : '$selectedProvinceName 明信片';
+
+    final postcards = _selectedPostcardsForPlace();
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFCBE6BB),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFE0E4EA)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF2C3649),
+            ),
+          ),
+          const SizedBox(height: 8),
+          if (selectedProvinceCode == null)
+            const Text(
+              '请先在地图或城市标签中选中地点',
+              style: TextStyle(
+                fontSize: 12,
+                color: Color(0xFF788092),
+                fontWeight: FontWeight.w500,
+              ),
+            )
+          else if (_isPostcardsLoading)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 8),
+              child: Center(
+                child: SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2.2),
+                ),
+              ),
+            )
+          else if (postcards.isEmpty)
+            const Text(
+              '该地点暂无明信片',
+              style: TextStyle(
+                fontSize: 12,
+                color: Color(0xFF788092),
+                fontWeight: FontWeight.w500,
+              ),
+            )
+          else ...[
+            Text(
+              '共 ${postcards.length} 张',
+              style: const TextStyle(
+                fontSize: 12,
+                color: Color(0xFF5D6678),
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 10),
+            ListView.separated(
+              itemCount: postcards.length,
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              separatorBuilder: (_, _) => const SizedBox(height: 10),
+              itemBuilder: (context, index) {
+                final postcard = postcards[index];
+                return _MapPostcardCard(
+                  postcard: postcard,
+                  locationText: _resolvePostcardLocation(postcard),
+                  enable3dPreview: _isHome3dPreviewEnabled,
+                );
+              },
+            ),
+          ],
+        ],
+      ),
     );
   }
 }
@@ -699,6 +995,309 @@ class _CitySpot {
   });
 
   bool get hasCoordinate => latitude != null && longitude != null;
+}
+
+class _MapPostcardCard extends StatelessWidget {
+  const _MapPostcardCard({
+    required this.postcard,
+    required this.enable3dPreview,
+    this.locationText,
+  });
+
+  final EditedPostcard postcard;
+  final bool enable3dPreview;
+  final String? locationText;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 184,
+      decoration: BoxDecoration(
+        color: const Color(0xFFCBE6BB),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: const Color(0xFF9EB694)),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(21),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            _MapPostcardImage(
+              imageSource: postcard.imageUrl,
+              layers: postcard.layers,
+              enable3dPreview: enable3dPreview,
+            ),
+            Positioned(
+              right: 10,
+              left: 10,
+              bottom: 10,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.45),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.schedule_rounded,
+                      size: 12,
+                      color: Colors.white70,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      DateFormat('yyyy-MM-dd HH:mm').format(postcard.editedAt),
+                      style: const TextStyle(color: Colors.white, fontSize: 12),
+                    ),
+                    if (locationText != null && locationText!.isNotEmpty) ...[
+                      const SizedBox(width: 8),
+                      const Icon(
+                        Icons.place_rounded,
+                        size: 12,
+                        color: Colors.white70,
+                      ),
+                      const SizedBox(width: 2),
+                      Expanded(
+                        child: Text(
+                          locationText!,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _MapPostcardImage extends StatefulWidget {
+  const _MapPostcardImage({
+    required this.imageSource,
+    this.layers = const [],
+    this.enable3dPreview = true,
+  });
+
+  final String imageSource;
+  final List<PostcardElementLayer> layers;
+  final bool enable3dPreview;
+
+  @override
+  State<_MapPostcardImage> createState() => _MapPostcardImageState();
+}
+
+class _MapPostcardImageState extends State<_MapPostcardImage>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _effectController;
+
+  bool get _hasDynamicLayer {
+    if (!widget.enable3dPreview) return false;
+    return widget.layers.any((layer) => layer.is3dEnabled);
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _effectController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 12),
+    );
+    _syncAnimationState();
+  }
+
+  @override
+  void didUpdateWidget(covariant _MapPostcardImage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _syncAnimationState();
+  }
+
+  @override
+  void dispose() {
+    _effectController.dispose();
+    super.dispose();
+  }
+
+  void _syncAnimationState() {
+    if (_hasDynamicLayer) {
+      if (!_effectController.isAnimating) {
+        _effectController.repeat();
+      }
+      return;
+    }
+
+    if (_effectController.isAnimating) {
+      _effectController.stop();
+    }
+    _effectController.value = 0;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        ResolvedImage(
+          source: widget.imageSource,
+          fit: BoxFit.cover,
+          filterQuality: FilterQuality.high,
+          fallbackBuilder: (_) => _buildFallback(),
+          loadingBuilder: (_) => _buildFallback(showProgress: true),
+        ),
+        if (widget.layers.isNotEmpty)
+          if (_hasDynamicLayer)
+            AnimatedBuilder(
+              animation: _effectController,
+              builder: (_, _) => _MapPostcardLayerOverlay(
+                layers: widget.layers,
+                animationProgress: _effectController.value,
+                enable3dPreview: widget.enable3dPreview,
+              ),
+            )
+          else
+            _MapPostcardLayerOverlay(
+              layers: widget.layers,
+              animationProgress: 0,
+              enable3dPreview: widget.enable3dPreview,
+            ),
+      ],
+    );
+  }
+
+  Widget _buildFallback({bool showProgress = false}) {
+    return ColoredBox(
+      color: const Color(0xFFCBE6BB),
+      child: Center(
+        child: showProgress
+            ? const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : const Icon(
+                Icons.image_not_supported_outlined,
+                size: 34,
+                color: Color(0xFF6E7E68),
+              ),
+      ),
+    );
+  }
+}
+
+class _MapPostcardLayerOverlay extends StatelessWidget {
+  const _MapPostcardLayerOverlay({
+    required this.layers,
+    required this.animationProgress,
+    required this.enable3dPreview,
+  });
+
+  final List<PostcardElementLayer> layers;
+  final double animationProgress;
+  final bool enable3dPreview;
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final width = constraints.maxWidth;
+          final height = constraints.maxHeight;
+          final sortedLayers = List<PostcardElementLayer>.from(layers)
+            ..sort((a, b) => a.zIndex.compareTo(b.zIndex));
+
+          return Stack(
+            fit: StackFit.expand,
+            children: [
+              for (final layer in sortedLayers)
+                _buildLayer(layer, width: width, height: height),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildLayer(
+    PostcardElementLayer layer, {
+    required double width,
+    required double height,
+  }) {
+    final path = layer.assetPath.trim();
+    if (path.isEmpty) return const SizedBox.shrink();
+
+    final rawScale = layer.scale <= 0 ? 1.0 : layer.scale;
+    final itemSize = (width * 0.22 * rawScale).clamp(20.0, width * 0.45);
+    final offset = _resolveLayerOffset(layer, width, height);
+    final left = width / 2 + offset.dx - itemSize / 2;
+    final top = height / 2 + offset.dy - itemSize / 2;
+
+    final image = Image.asset(
+      path,
+      fit: BoxFit.contain,
+      filterQuality: FilterQuality.high,
+      errorBuilder: (_, _, _) => const SizedBox.shrink(),
+    );
+
+    Widget transformed = image;
+    if (enable3dPreview && layer.is3dEnabled) {
+      final speed = layer.rotationSpeed <= 0 ? 1.0 : layer.rotationSpeed;
+      final directionSign = layer.rotationDirection == 'counterclockwise'
+          ? -1.0
+          : 1.0;
+      final cycleAngle =
+          animationProgress * math.pi * 2 * speed * directionSign;
+
+      final matrix = Matrix4.identity()..setEntry(3, 2, layer.perspective);
+      if (layer.rotationAxis == 'horizontal') {
+        matrix
+          ..rotateX(layer.rotateX + cycleAngle)
+          ..rotateY(layer.rotateY);
+      } else {
+        matrix
+          ..rotateY(layer.rotateY + cycleAngle)
+          ..rotateX(layer.rotateX);
+      }
+      transformed = Transform(
+        alignment: Alignment.center,
+        transform: matrix,
+        child: image,
+      );
+    } else if (layer.rotation2d != 0) {
+      transformed = Transform.rotate(angle: layer.rotation2d, child: image);
+    }
+
+    return Positioned(
+      left: left,
+      top: top,
+      width: itemSize,
+      height: itemSize,
+      child: transformed,
+    );
+  }
+
+  Offset _resolveLayerOffset(
+    PostcardElementLayer layer,
+    double previewWidth,
+    double previewHeight,
+  ) {
+    final useFallbackOffset = layer.x == 0 && layer.y == 0;
+    if (!useFallbackOffset) {
+      return Offset(layer.x, layer.y);
+    }
+
+    final fallbackX = ((layer.zIndex % 4) - 1.5) * (previewWidth * 0.16);
+    final fallbackY =
+        (((layer.zIndex ~/ 4) % 3) - 1.0) * (previewHeight * 0.14);
+    return Offset(fallbackX, fallbackY);
+  }
 }
 
 const Map<String, String> _provinceCodeByCityPrefix = {

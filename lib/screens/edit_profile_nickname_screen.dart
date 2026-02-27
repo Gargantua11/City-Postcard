@@ -141,7 +141,7 @@ class _EditProfileNicknameScreenState extends State<EditProfileNicknameScreen> {
                             _ActionButton(
                               isLoading: _isSaving,
                               onTap: _save,
-                              text: '保存昵称',
+                              text: '',
                             ),
                           ],
                         ),

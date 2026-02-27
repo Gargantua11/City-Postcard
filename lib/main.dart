@@ -21,9 +21,11 @@ import './screens/add_screen.dart';
 import './screens/search_index.dart';
 import './screens/search_screen.dart';
 import './services/auth_provider.dart';
+import './services/storage_service.dart';
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await StorageService().clearPostcardAvatarDiscussionLocalDataOnce();
   SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
   runApp(const MyApp());
 }

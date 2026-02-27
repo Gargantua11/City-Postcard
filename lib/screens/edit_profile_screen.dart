@@ -52,8 +52,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       final nickname = (results[0] as String?)?.trim() ?? '';
       _nickname = nickname.isEmpty ? '用户' : nickname;
       _phone = ((results[1] as String?) ?? '').trim();
+      final storedAvatarDisplay =
+          AvatarUploadService.isRenderableImageSource(storedAvatar)
+          ? storedAvatar
+          : null;
       _avatarSource = displayAvatar.isEmpty
-          ? (storedAvatar.isEmpty ? null : storedAvatar)
+          ? storedAvatarDisplay
           : displayAvatar;
       _hasPassword = ((results[3] as String?) ?? '').isNotEmpty;
       _isLoading = false;
@@ -61,17 +65,25 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   }
 
   Future<String> _resolveAvatarDisplaySource(String source) async {
-    final normalizedStorage = AvatarUploadService.normalizeAvatarStorageSource(
-      source,
-    );
-    if (normalizedStorage.isEmpty) return '';
+    final normalizedSource = source.trim();
+    if (normalizedSource.isEmpty) return '';
 
     try {
-      return await _avatarUploadService.resolveAvatarDisplaySource(
+      final resolved = await _avatarUploadService.resolveAvatarDisplaySource(
+        normalizedSource,
+      );
+      return AvatarUploadService.isRenderableImageSource(resolved)
+          ? resolved
+          : '';
+    } catch (_) {
+      final normalizedStorage =
+          AvatarUploadService.normalizeAvatarStorageSource(normalizedSource);
+      final fallback = AvatarUploadService.normalizeAvatarSource(
         normalizedStorage,
       );
-    } catch (_) {
-      return AvatarUploadService.normalizeAvatarSource(normalizedStorage);
+      return AvatarUploadService.isRenderableImageSource(fallback)
+          ? fallback
+          : '';
     }
   }
 

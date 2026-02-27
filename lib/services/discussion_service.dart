@@ -46,14 +46,13 @@ class DiscussionPost {
     return DiscussionPost(
       id:
           BackendApiClient.readInt(json, const [
-            'id',
             'postcardId',
             'cardId',
+            'id',
+            'postId',
           ]) ??
           0,
-      username:
-          BackendApiClient.readString(json, const ['username', 'nickname']) ??
-          '匿名用户',
+      username: _extractUsername(json) ?? '匿名用户',
       avatar: BackendApiClient.readString(json, const ['avatar', 'avatarUrl']),
       imageUrl:
           BackendApiClient.readString(json, const [
@@ -127,6 +126,58 @@ class DiscussionPost {
     return nestedContent ?? '';
   }
 
+  static String? _extractUsername(Map<String, dynamic> json) {
+    final directNickname = BackendApiClient.readString(json, const [
+      'nickname',
+      'nickName',
+      'userNickname',
+      'displayName',
+    ]);
+    if (directNickname != null && directNickname.isNotEmpty) {
+      return directNickname;
+    }
+
+    final directUsername = BackendApiClient.readString(json, const [
+      'username',
+      'userName',
+    ]);
+    if (directUsername != null &&
+        directUsername.isNotEmpty &&
+        !_looksLikePhone(directUsername)) {
+      return directUsername;
+    }
+
+    final nestedUser = BackendApiClient.asMap(
+      json['user'] ?? json['author'] ?? json['publisher'],
+    );
+    final nestedNickname = BackendApiClient.readString(nestedUser, const [
+      'nickname',
+      'nickName',
+      'userNickname',
+      'displayName',
+    ]);
+    if (nestedNickname != null && nestedNickname.isNotEmpty) {
+      return nestedNickname;
+    }
+
+    final nestedUsername = BackendApiClient.readString(nestedUser, const [
+      'username',
+      'userName',
+    ]);
+    if (nestedUsername != null &&
+        nestedUsername.isNotEmpty &&
+        !_looksLikePhone(nestedUsername)) {
+      return nestedUsername;
+    }
+
+    return null;
+  }
+
+  static bool _looksLikePhone(String value) {
+    final digits = value.trim().replaceAll(RegExp(r'[^0-9]'), '');
+    return digits.length == 11;
+  }
+
   static DateTime _parseDateTime(String raw) {
     if (raw.trim().isEmpty) {
       return DateTime.now();
@@ -145,6 +196,7 @@ class DiscussionPost {
 class DiscussionService {
   static const String _postsCacheKey = 'discussion_posts_cache_v1';
   static const String _localPostsKey = 'discussion_local_posts_v1';
+  static const String _defaultHotComment = '分享一张明信片';
   static const List<String> _publishEndpoints = <String>[
     '/discussion/postcards',
     '/discussion/postcard',
@@ -177,7 +229,10 @@ class DiscussionService {
     final normalizedCityName = cityName?.trim();
     final normalizedCityCode = cityCode?.trim();
     final normalizedProvinceName = provinceName?.trim();
-    final normalizedHotComment = hotComment.trim();
+    final trimmedHotComment = hotComment.trim();
+    final normalizedHotComment = trimmedHotComment.isEmpty
+        ? _defaultHotComment
+        : trimmedHotComment;
 
     final payload = <String, dynamic>{
       'imageUrl': source,
@@ -250,7 +305,7 @@ class DiscussionService {
       hotComment: hotComment.trim(),
     );
 
-    final localPosts = await _readLocalPosts();
+    final localPosts = List<DiscussionPost>.from(await _readLocalPosts());
     localPosts.insert(0, post);
     await _saveLocalPosts(localPosts);
   }
@@ -346,7 +401,7 @@ class DiscussionService {
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getString(_localPostsKey);
     if (raw == null || raw.trim().isEmpty) {
-      return const [];
+      return <DiscussionPost>[];
     }
 
     try {
@@ -362,7 +417,7 @@ class DiscussionService {
       posts.sort((a, b) => b.createdAt.compareTo(a.createdAt));
       return posts;
     } catch (_) {
-      return const [];
+      return <DiscussionPost>[];
     }
   }
 

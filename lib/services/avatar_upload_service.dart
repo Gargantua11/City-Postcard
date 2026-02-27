@@ -18,8 +18,21 @@ class AvatarUploadService {
 
   final BackendApiClient _apiClient;
 
-  String? _ossEndpoint;
-  String? _bucketName;
+  static String? _cachedOssEndpoint;
+  static String? _cachedBucketName;
+
+  static bool isRenderableImageSource(String source) {
+    final trimmed = source.trim();
+    if (trimmed.isEmpty) return false;
+    if (_looksLikeAvatarApiEndpointValue(trimmed)) return false;
+    if (_looksLikeAssetOrLocal(trimmed)) return true;
+    if (_looksLikeRelativeApiPath(trimmed)) return true;
+    return _isHttpSource(trimmed);
+  }
+
+  static bool isLikelyAvatarApiEndpoint(String source) {
+    return _looksLikeAvatarApiEndpointValue(source.trim());
+  }
 
   Future<String> uploadAvatarAndSync(String filePath) async {
     final normalizedPath = filePath.trim();
@@ -42,11 +55,13 @@ class AvatarUploadService {
     final context = await _resolveOssUploadContext();
     _initClient(endpoint: context.endpoint, bucketName: context.bucketName);
 
-    await Client().putObjectFile(
-      file,
-      fileKey: objectKey,
-      option: const PutRequestOption(aclModel: AclMode.publicRead),
-    );
+    try {
+      // Do not force object ACL here. Some STS policies allow PutObject but
+      // forbid setting x-oss-object-acl, which causes 403 on upload.
+      await Client().putObjectFile(file, fileKey: objectKey);
+    } catch (error) {
+      throw BackendApiException(_buildOssUploadFailureMessage(error));
+    }
 
     final updateBody = await _syncAvatarKeyToBackend(objectKey);
 
@@ -59,18 +74,6 @@ class AvatarUploadService {
       );
     }
 
-    try {
-      final avatarBody = await _apiClient.get('/me/avatar', requireAuth: true);
-      final avatarFromGet = _extractAvatarSource(avatarBody);
-      if (avatarFromGet != null && avatarFromGet.isNotEmpty) {
-        return normalizeAvatarStorageSource(
-          avatarFromGet,
-          endpoint: context.endpoint,
-          bucketName: context.bucketName,
-        );
-      }
-    } catch (_) {}
-
     return normalizeAvatarStorageSource(
       objectKey,
       endpoint: context.endpoint,
@@ -78,11 +81,32 @@ class AvatarUploadService {
     );
   }
 
+  String _buildOssUploadFailureMessage(Object error) {
+    final text = error.toString();
+    if (text.contains('Http status error [403]') ||
+        text.toLowerCase().contains('status error [403]')) {
+      return 'oss upload forbidden (403): check sts policy for PutObject.';
+    }
+    if (text.contains('Http status error [401]') ||
+        text.toLowerCase().contains('status error [401]')) {
+      return 'oss sts token expired or invalid (401).';
+    }
+    if (text.toLowerCase().contains('socket') ||
+        text.toLowerCase().contains('timed out') ||
+        text.toLowerCase().contains('network')) {
+      return 'oss upload network error.';
+    }
+    return 'oss upload failed.';
+  }
+
   Future<Map<String, dynamic>> _syncAvatarKeyToBackend(String objectKey) async {
     final bodies = <Map<String, dynamic>>[
       <String, dynamic>{'key': objectKey},
       <String, dynamic>{'avatar': objectKey},
       <String, dynamic>{'avatarKey': objectKey},
+      <String, dynamic>{'objectKey': objectKey},
+      <String, dynamic>{'fileKey': objectKey},
+      <String, dynamic>{'path': objectKey},
       <String, dynamic>{'url': objectKey},
       <String, dynamic>{'avatarUrl': objectKey},
     ];
@@ -109,15 +133,22 @@ class AvatarUploadService {
     bool preferSignedUrl = true,
     int signedUrlExpireSeconds = 3600,
   }) async {
-    final normalizedStorageSource = normalizeAvatarStorageSource(source);
-    if (normalizedStorageSource.isEmpty) return '';
-    if (_looksLikeAssetOrLocal(normalizedStorageSource) ||
-        _isHttpSource(normalizedStorageSource)) {
-      return normalizedStorageSource;
+    final rawSource = source.trim();
+    if (rawSource.isEmpty) return '';
+    if (_looksLikeAvatarApiEndpointValue(rawSource)) return '';
+    if (_looksLikeRelativeApiPath(rawSource)) {
+      return _toAbsoluteApiUrl(rawSource);
+    }
+    if (_looksLikeAssetOrLocal(rawSource) || _isHttpSource(rawSource)) {
+      return rawSource;
     }
 
+    final normalizedStorageSource = normalizeAvatarStorageSource(rawSource);
+    if (normalizedStorageSource.isEmpty) return '';
+
+    _OssUploadContext? context;
     try {
-      final context = await _resolveOssUploadContext();
+      context = await _resolveOssUploadContext();
       _initClient(endpoint: context.endpoint, bucketName: context.bucketName);
 
       if (preferSignedUrl) {
@@ -137,7 +168,11 @@ class AvatarUploadService {
         bucketName: context.bucketName,
       );
     } catch (_) {
-      return normalizeAvatarSource(normalizedStorageSource);
+      return normalizeAvatarSource(
+        normalizedStorageSource,
+        endpoint: context?.endpoint,
+        bucketName: context?.bucketName,
+      );
     }
   }
 
@@ -148,16 +183,45 @@ class AvatarUploadService {
   }) {
     final trimmed = source.trim();
     if (trimmed.isEmpty) return '';
+    if (_looksLikeAvatarApiEndpointValue(trimmed)) return '';
+    if (_looksLikeRelativeApiPath(trimmed)) return trimmed;
     if (_looksLikeAssetOrLocal(trimmed)) return trimmed;
 
     final uri = Uri.tryParse(trimmed);
     if (uri != null && (uri.isScheme('http') || uri.isScheme('https'))) {
-      final normalizedEndpoint = _normalizeEndpointHost(
-        endpoint ?? _configuredOssEndpoint,
-      );
-      final normalizedBucket = (bucketName ?? _configuredOssBucketName).trim();
       final host = _normalizeEndpointHost(uri.host);
-      final keyFromUrl = uri.path.replaceFirst(RegExp(r'^/+'), '');
+      final inferredContext = _inferOssContextFromHost(host);
+      if (inferredContext != null) {
+        _cachedOssEndpoint = inferredContext.endpoint;
+        _cachedBucketName = inferredContext.bucketName;
+      }
+
+      final normalizedEndpoint = _normalizeEndpointHost(
+        _firstNonEmpty(<String?>[
+          endpoint,
+          _cachedOssEndpoint,
+          _configuredOssEndpoint,
+        ]),
+      );
+      final normalizedBucket = _firstNonEmpty(<String?>[
+        bucketName,
+        _cachedBucketName,
+        _configuredOssBucketName,
+      ]).trim();
+      final keyFromUrl = _extractObjectKeyFromUriPath(
+        uri,
+        bucketName: normalizedBucket.isEmpty
+            ? inferredContext?.bucketName
+            : normalizedBucket,
+      );
+
+      final canNormalizeToObjectKey =
+          keyFromUrl.isNotEmpty &&
+          (inferredContext != null ||
+              (normalizedEndpoint.isNotEmpty && normalizedBucket.isNotEmpty));
+      if (_looksLikeSignedUrl(uri)) {
+        return canNormalizeToObjectKey ? keyFromUrl : trimmed;
+      }
 
       final hostMatchesBucket =
           normalizedBucket.isNotEmpty &&
@@ -165,10 +229,11 @@ class AvatarUploadService {
       final hostMatchesEndpoint =
           normalizedEndpoint.isNotEmpty &&
           (host == normalizedEndpoint || host.endsWith('.$normalizedEndpoint'));
-      final looksLikeOssHost = host.contains('.oss-') || host.contains('-oss-');
 
       if (keyFromUrl.isNotEmpty &&
-          (hostMatchesBucket || hostMatchesEndpoint || looksLikeOssHost)) {
+          (hostMatchesBucket ||
+              hostMatchesEndpoint ||
+              inferredContext != null)) {
         return keyFromUrl;
       }
       return trimmed;
@@ -184,10 +249,14 @@ class AvatarUploadService {
   }) {
     final trimmed = source.trim();
     if (trimmed.isEmpty) return '';
+    if (_looksLikeAvatarApiEndpointValue(trimmed)) return '';
 
     final uri = Uri.tryParse(trimmed);
     if (uri != null && (uri.isScheme('http') || uri.isScheme('https'))) {
       return trimmed;
+    }
+    if (_looksLikeRelativeApiPath(trimmed)) {
+      return _toAbsoluteApiUrl(trimmed);
     }
     if (_looksLikeAssetOrLocal(trimmed)) {
       return trimmed;
@@ -195,11 +264,19 @@ class AvatarUploadService {
 
     final normalizedKey = trimmed.replaceFirst(RegExp(r'^/+'), '');
     final normalizedEndpoint = _normalizeEndpointHost(
-      endpoint ?? _configuredOssEndpoint,
+      _firstNonEmpty(<String?>[
+        endpoint,
+        _cachedOssEndpoint,
+        _configuredOssEndpoint,
+      ]),
     );
-    final normalizedBucket = (bucketName ?? _configuredOssBucketName).trim();
+    final normalizedBucket = _firstNonEmpty(<String?>[
+      bucketName,
+      _cachedBucketName,
+      _configuredOssBucketName,
+    ]).trim();
     if (normalizedEndpoint.isEmpty || normalizedBucket.isEmpty) {
-      return normalizedKey;
+      return '';
     }
     return 'https://$normalizedBucket.$normalizedEndpoint/$normalizedKey';
   }
@@ -260,8 +337,8 @@ class AvatarUploadService {
   }
 
   Future<_OssUploadContext> _resolveOssUploadContext() async {
-    final cachedEndpoint = _ossEndpoint?.trim() ?? '';
-    final cachedBucket = _bucketName?.trim() ?? '';
+    final cachedEndpoint = _cachedOssEndpoint?.trim() ?? '';
+    final cachedBucket = _cachedBucketName?.trim() ?? '';
     if (cachedEndpoint.isNotEmpty && cachedBucket.isNotEmpty) {
       return _OssUploadContext(
         endpoint: cachedEndpoint,
@@ -311,8 +388,8 @@ class AvatarUploadService {
       );
     }
 
-    _ossEndpoint = endpoint;
-    _bucketName = bucketName;
+    _cachedOssEndpoint = endpoint;
+    _cachedBucketName = bucketName;
     return _OssUploadContext(endpoint: endpoint, bucketName: bucketName);
   }
 
@@ -393,14 +470,102 @@ class AvatarUploadService {
   static bool _looksLikeAssetOrLocal(String source) {
     if (source.startsWith('assets/')) return true;
     if (source.startsWith('file://')) return true;
-    if (source.startsWith('/')) return true;
     final windowsPath = RegExp(r'^[a-zA-Z]:[\\/]');
-    return windowsPath.hasMatch(source);
+    if (windowsPath.hasMatch(source)) return true;
+
+    return _looksLikeUnixLocalPath(source);
+  }
+
+  static bool _looksLikeUnixLocalPath(String source) {
+    if (!source.startsWith('/')) return false;
+    final localPrefixes = const <String>[
+      '/storage/',
+      '/sdcard/',
+      '/data/',
+      '/var/',
+      '/private/var/',
+      '/tmp/',
+      '/home/',
+      '/Users/',
+      '/mnt/',
+      '/proc/',
+      '/system/',
+    ];
+    for (final prefix in localPrefixes) {
+      if (source.startsWith(prefix)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  static bool _looksLikeRelativeApiPath(String source) {
+    final trimmed = source.trim();
+    if (trimmed.isEmpty) return false;
+    if (!trimmed.startsWith('/')) return false;
+    if (trimmed.startsWith('//')) return false;
+    return !_looksLikeUnixLocalPath(trimmed);
+  }
+
+  static bool _looksLikeAvatarApiEndpointValue(String source) {
+    final trimmed = source.trim();
+    if (trimmed.isEmpty) return false;
+
+    if (_looksLikeRelativeApiPath(trimmed)) {
+      final normalized = trimmed.replaceFirst(RegExp(r'/+$'), '');
+      return normalized.endsWith('/me/avatar');
+    }
+
+    final uri = Uri.tryParse(trimmed);
+    if (uri != null && (uri.isScheme('http') || uri.isScheme('https'))) {
+      final normalizedPath = uri.path.trim().replaceFirst(RegExp(r'/+$'), '');
+      if (normalizedPath.isEmpty) return false;
+      return normalizedPath.endsWith('/me/avatar');
+    }
+
+    return false;
+  }
+
+  static String _toAbsoluteApiUrl(String relativePath) {
+    final base = BackendApiClient.baseUrl.trim().replaceFirst(
+      RegExp(r'/+$'),
+      '',
+    );
+    final path = relativePath.trim();
+    if (base.isEmpty) return path;
+    return '$base$path';
   }
 
   static bool _isHttpSource(String source) {
     final uri = Uri.tryParse(source);
     return uri != null && (uri.isScheme('http') || uri.isScheme('https'));
+  }
+
+  static bool _looksLikeSignedUrl(Uri uri) {
+    if (uri.queryParameters.isEmpty) return false;
+
+    final keys = uri.queryParameters.keys
+        .map((item) => item.trim().toLowerCase())
+        .toSet();
+
+    for (final signatureKey in const <String>[
+      'x-oss-signature',
+      'x-oss-credential',
+      'x-oss-security-token',
+      'x-oss-date',
+      'x-oss-expires',
+      'ossaccesskeyid',
+      'signature',
+      'expires',
+      'security-token',
+      'token',
+    ]) {
+      if (keys.contains(signatureKey)) {
+        return true;
+      }
+    }
+
+    return false;
   }
 
   static String _normalizeEndpointHost(String raw) {
@@ -429,7 +594,7 @@ class AvatarUploadService {
     final data = BackendApiClient.extractData(body);
     if (data is String || data is num) {
       final text = data.toString().trim();
-      if (text.isNotEmpty) {
+      if (text.isNotEmpty && !_looksLikeAvatarApiEndpointValue(text)) {
         return text.replaceFirst(RegExp(r'^/+'), '');
       }
     }
@@ -445,7 +610,7 @@ class AvatarUploadService {
     if (raw == null) return null;
 
     final text = raw.toString().trim();
-    if (text.isEmpty) return null;
+    if (text.isEmpty || _looksLikeAvatarApiEndpointValue(text)) return null;
     return text.replaceFirst(RegExp(r'^/+'), '');
   }
 
@@ -453,15 +618,16 @@ class AvatarUploadService {
     final data = BackendApiClient.extractData(body);
     if (data is String || data is num) {
       final text = data.toString().trim();
-      if (text.isNotEmpty) {
+      if (text.isNotEmpty && !_looksLikeAvatarApiEndpointValue(text)) {
         return text;
       }
     }
 
     final raw = _readDeepValue(body, const <String>[
+      'avatarUrl',
       'url',
       'avatar',
-      'avatarUrl',
+      'avatarKey',
       'value',
       'key',
       'objectKey',
@@ -470,7 +636,7 @@ class AvatarUploadService {
     if (raw == null) return null;
 
     final text = raw.toString().trim();
-    if (text.isEmpty) return null;
+    if (text.isEmpty || _looksLikeAvatarApiEndpointValue(text)) return null;
     return text;
   }
 
@@ -508,16 +674,20 @@ class AvatarUploadService {
   }
 
   dynamic _readDeepValue(dynamic raw, List<String> keys) {
-    final normalizedKeys = keys.map((item) => item.toLowerCase()).toSet();
+    final normalizedKeys = keys
+        .map((item) => item.toLowerCase())
+        .toList(growable: false);
 
     dynamic visit(dynamic node) {
       if (node == null) return null;
 
       final map = BackendApiClient.asMap(node);
       if (map != null) {
-        for (final entry in map.entries) {
-          if (normalizedKeys.contains(entry.key.toLowerCase())) {
-            return entry.value;
+        for (final key in normalizedKeys) {
+          for (final entry in map.entries) {
+            if (entry.key.toLowerCase() == key) {
+              return entry.value;
+            }
           }
         }
         for (final value in map.values) {
@@ -566,31 +736,67 @@ class AvatarUploadService {
     if (uri != null &&
         (uri.isScheme('http') || uri.isScheme('https')) &&
         uri.host.trim().isNotEmpty) {
-      final host = _normalizeEndpointHost(uri.host.trim());
-      var bucket = '';
-      var endpoint = host;
-
-      final parts = host.split('.');
-      if (parts.length >= 3 && parts[1].startsWith('oss-')) {
-        bucket = parts.first;
-        endpoint = parts.sublist(1).join('.');
-      } else if (host.contains('.oss-')) {
-        bucket = host.split('.').first;
-        endpoint = host.substring(bucket.length + 1);
+      final inferred = _inferOssContextFromHost(uri.host.trim());
+      if (inferred != null) {
+        _cachedOssEndpoint = inferred.endpoint;
+        _cachedBucketName = inferred.bucketName;
       }
 
-      if (bucket.isNotEmpty && endpoint.isNotEmpty) {
-        _bucketName ??= bucket;
-        _ossEndpoint ??= endpoint;
-      }
-
-      final keyFromPath = uri.path.replaceFirst(RegExp(r'^/+'), '');
+      final keyFromPath = _extractObjectKeyFromUriPath(
+        uri,
+        bucketName: inferred?.bucketName,
+      );
       if (keyFromPath.isNotEmpty) {
         return keyFromPath;
       }
     }
 
     return text.replaceFirst(RegExp(r'^/+'), '');
+  }
+
+  static String _firstNonEmpty(Iterable<String?> candidates) {
+    for (final candidate in candidates) {
+      final text = candidate?.trim() ?? '';
+      if (text.isNotEmpty) return text;
+    }
+    return '';
+  }
+
+  static _OssUploadContext? _inferOssContextFromHost(String hostText) {
+    final host = _normalizeEndpointHost(hostText);
+    if (host.isEmpty) return null;
+
+    var bucketName = '';
+    var endpoint = '';
+    final parts = host.split('.');
+    if (parts.length >= 3 && parts[1].startsWith('oss-')) {
+      bucketName = parts.first;
+      endpoint = parts.sublist(1).join('.');
+    } else if (host.contains('.oss-')) {
+      bucketName = host.split('.').first;
+      endpoint = host.substring(bucketName.length + 1);
+    }
+
+    if (bucketName.isEmpty || endpoint.isEmpty) {
+      return null;
+    }
+    return _OssUploadContext(endpoint: endpoint, bucketName: bucketName);
+  }
+
+  static String _extractObjectKeyFromUriPath(Uri uri, {String? bucketName}) {
+    final segments = uri.pathSegments
+        .map((item) => item.trim())
+        .where((item) => item.isNotEmpty)
+        .toList(growable: false);
+    if (segments.isEmpty) return '';
+
+    final normalizedBucket = bucketName?.trim() ?? '';
+    if (normalizedBucket.isNotEmpty &&
+        segments.length > 1 &&
+        segments.first.toLowerCase() == normalizedBucket.toLowerCase()) {
+      return segments.skip(1).join('/');
+    }
+    return segments.join('/');
   }
 }
 

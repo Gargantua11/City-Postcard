@@ -24,7 +24,6 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
   final EditedPostcardService _editedPostcardService = EditedPostcardService();
   final DiscussionService _discussionService = DiscussionService();
   final StorageService _storageService = StorageService();
-  final TextEditingController _textController = TextEditingController();
 
   bool _isLoading = true;
   bool _isPublishing = false;
@@ -36,12 +35,6 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
   void initState() {
     super.initState();
     _loadData();
-  }
-
-  @override
-  void dispose() {
-    _textController.dispose();
-    super.dispose();
   }
 
   Future<void> _loadData() async {
@@ -98,9 +91,12 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
       _isPublishing = true;
     });
 
-    final username = _user?.username.trim();
+    final profileNickname = (await _storageService.getProfileNickname())
+        ?.trim();
+    final username = profileNickname == null || profileNickname.isEmpty
+        ? _user?.username.trim()
+        : profileNickname;
     final avatar = _user?.avatar?.trim();
-    final content = _textController.text.trim();
 
     final address = _resolveAddress(postcard);
 
@@ -110,14 +106,17 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
         avatar: avatar == null || avatar.isEmpty ? null : avatar,
         imageUrl: postcard.imageUrl,
         address: address,
-        hotComment: content,
         cityName: postcard.cityName,
         cityCode: postcard.cityCode,
         provinceName: postcard.provinceName,
         latitude: postcard.latitude,
         longitude: postcard.longitude,
       );
-      await _editedPostcardService.markPostcardPublished(postcard.draftId);
+      try {
+        await _editedPostcardService.markPostcardPublished(postcard.draftId);
+      } catch (_) {
+        // Ignore draft mark failures to avoid blocking successful publish.
+      }
 
       if (!mounted) return;
       Navigator.pop(context, true);
@@ -126,7 +125,8 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(e.message)));
-    } catch (_) {
+    } catch (e, stackTrace) {
+      debugPrint('publish post failed: $e\n$stackTrace');
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
@@ -307,27 +307,6 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                   fontSize: 12,
                   color: Color(0xFF6D7680),
                   fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: _textController,
-                minLines: 2,
-                maxLines: 4,
-                enabled: !_isPublishing,
-                decoration: InputDecoration(
-                  hintText: '输入一句话作为帖子热评（可选）',
-                  filled: true,
-                  fillColor: Colors.white,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: Color(0xFFD6DDE5)),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: Color(0xFFD6DDE5)),
-                  ),
-                  contentPadding: const EdgeInsets.all(12),
                 ),
               ),
               const SizedBox(height: 10),

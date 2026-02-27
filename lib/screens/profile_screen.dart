@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../data/city_code_name.dart';
 import '../models/user.dart';
 import '../services/avatar_upload_service.dart';
+import '../services/auth_provider.dart';
 import '../services/backend_api_client.dart';
 import '../services/edited_postcard_service.dart';
 import '../services/storage_service.dart';
@@ -29,6 +31,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   String? _cityCode;
   int _createdPostcardCount = 0;
   bool _isSavingCity = false;
+  bool _isLoggingOut = false;
 
   @override
   void initState() {
@@ -61,8 +64,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ? nickname
           : (user?.username.trim() ?? '');
       _username = username.isEmpty ? '嘻嘻嘻' : username;
+      final storedAvatarDisplay =
+          AvatarUploadService.isRenderableImageSource(storedAvatar)
+          ? storedAvatar
+          : null;
       _avatarSource = displayAvatar.isEmpty
-          ? (storedAvatar.isEmpty ? null : storedAvatar)
+          ? storedAvatarDisplay
           : displayAvatar;
       _cityName = cityName;
       _cityCode = cityCode;
@@ -73,18 +80,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _syncProfileFromBackend() async {
-    String? remoteAvatar;
     String? remoteCityName;
     String? remoteCityCode;
-
-    try {
-      final avatarBody = await _apiClient.get('/me/avatar', requireAuth: true);
-      remoteAvatar = _extractRootStringValue(avatarBody);
-    } on BackendApiException catch (e) {
-      if (e.isUnauthorized) {
-        return;
-      }
-    } catch (_) {}
 
     try {
       final cityBody = await _apiClient.get('/me/city', requireAuth: true);
@@ -96,22 +93,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
       }
     } catch (_) {}
 
-    String? normalizedAvatarStorage;
-    String? normalizedAvatarDisplay;
-    final remoteAvatarSource = AvatarUploadService.normalizeAvatarStorageSource(
-      remoteAvatar?.trim() ?? '',
-    );
-    if (remoteAvatarSource.isNotEmpty) {
-      normalizedAvatarStorage = remoteAvatarSource;
-      normalizedAvatarDisplay = await _resolveAvatarDisplaySource(
-        remoteAvatarSource,
-      );
-      if (normalizedAvatarDisplay.isEmpty) {
-        normalizedAvatarDisplay = AvatarUploadService.normalizeAvatarSource(
-          remoteAvatarSource,
-        );
-      }
-    }
     var normalizedCityName = remoteCityName?.trim();
     var resolvedCityCode = remoteCityCode?.trim();
 
@@ -124,10 +105,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
         resolvedCityCode != null &&
         resolvedCityCode.isNotEmpty) {
       normalizedCityName = kCityCodeNames[resolvedCityCode]?.trim();
-    }
-
-    if (normalizedAvatarStorage != null && normalizedAvatarStorage.isNotEmpty) {
-      await _storageService.saveProfileAvatar(normalizedAvatarStorage);
     }
 
     if (normalizedCityName != null && normalizedCityName.isNotEmpty) {
@@ -144,10 +121,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     if (!mounted) return;
     setState(() {
-      if (normalizedAvatarStorage != null &&
-          normalizedAvatarStorage.isNotEmpty) {
-        _avatarSource = normalizedAvatarDisplay ?? normalizedAvatarStorage;
-      }
       if (normalizedCityName != null && normalizedCityName.isNotEmpty) {
         _cityName = normalizedCityName;
         _cityCode = resolvedCityCode;
@@ -156,43 +129,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<String> _resolveAvatarDisplaySource(String source) async {
-    final normalizedStorage = AvatarUploadService.normalizeAvatarStorageSource(
-      source,
-    );
-    if (normalizedStorage.isEmpty) return '';
+    final normalizedSource = source.trim();
+    if (normalizedSource.isEmpty) return '';
 
     try {
-      return await _avatarUploadService.resolveAvatarDisplaySource(
+      final resolved = await _avatarUploadService.resolveAvatarDisplaySource(
+        normalizedSource,
+      );
+      return AvatarUploadService.isRenderableImageSource(resolved)
+          ? resolved
+          : '';
+    } catch (_) {
+      final normalizedStorage =
+          AvatarUploadService.normalizeAvatarStorageSource(normalizedSource);
+      final fallback = AvatarUploadService.normalizeAvatarSource(
         normalizedStorage,
       );
-    } catch (_) {
-      return AvatarUploadService.normalizeAvatarSource(normalizedStorage);
+      return AvatarUploadService.isRenderableImageSource(fallback)
+          ? fallback
+          : '';
     }
-  }
-
-  String? _extractRootStringValue(Map<String, dynamic> body) {
-    final data = BackendApiClient.extractData(body);
-    if (data == null) return null;
-
-    if (data is String) {
-      final text = data.trim();
-      return text.isEmpty ? null : text;
-    }
-    if (data is num || data is bool) {
-      return data.toString();
-    }
-
-    final map = BackendApiClient.asMap(data);
-    if (map == null) return null;
-    return BackendApiClient.readString(map, const [
-      'value',
-      'avatar',
-      'avatarUrl',
-      'url',
-      'key',
-      'objectKey',
-      'fileKey',
-    ]);
   }
 
   String? _extractCityName(Map<String, dynamic> body) {
@@ -348,6 +304,27 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
+  Future<void> _logout() async {
+    if (_isLoggingOut) return;
+
+    setState(() {
+      _isLoggingOut = true;
+    });
+
+    try {
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      await authProvider.logout();
+      if (!mounted) return;
+      Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoggingOut = false;
+        });
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final cityLabel = _buildProvinceCityLabel();
@@ -434,6 +411,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         icon: Icons.folder_open_outlined,
                         text: '收藏夹',
                         onTap: () => Navigator.pushNamed(context, '/favorites'),
+                      ),
+                      const SizedBox(height: 16),
+                      _ProfileMenuItem(
+                        width: rowWidth,
+                        height: rowHeight,
+                        icon: Icons.logout_outlined,
+                        text: _isLoggingOut ? '退出登录中...' : '退出登录',
+                        onTap: _logout,
                       ),
                     ],
                   ),

@@ -48,11 +48,13 @@ class BackendApiClient {
     http.Response response;
     try {
       response = await http.get(uri, headers: headers);
-    } catch (_) {
-      throw const BackendApiException('缃戠粶寮傚父锛岃绋嶅悗閲嶈瘯');
+    } catch (error) {
+      throw BackendApiException(
+        'Network request failed [GET $path]: ${error.runtimeType}: $error',
+      );
     }
 
-    final body = _decodeBody(response.body);
+    final body = _decodeBodyFromBytes(response.bodyBytes);
     final success = _isSuccessful(response.statusCode, body);
     if (!success) {
       throw BackendApiException(
@@ -170,13 +172,14 @@ class BackendApiClient {
     try {
       final streamed = await request.send();
       response = await http.Response.fromStream(streamed);
-    } catch (_) {
-      throw const BackendApiException(
-        'Network request failed. Please try again later.',
+    } catch (error) {
+      throw BackendApiException(
+        'Network request failed [${method.toUpperCase()} $path]: '
+        '${error.runtimeType}: $error',
       );
     }
 
-    final decoded = _decodeBody(response.body);
+    final decoded = _decodeBodyFromBytes(response.bodyBytes);
     final success = _isSuccessful(response.statusCode, decoded);
     if (!success) {
       throw BackendApiException(
@@ -215,9 +218,36 @@ class BackendApiClient {
 
     final token = await _storageService.getToken();
     if (token != null && token.trim().isNotEmpty) {
-      headers['Authorization'] = 'Bearer ${token.trim()}';
+      String? tokenType;
+      try {
+        tokenType = (await _storageService.getUser())?.tokenType;
+      } catch (_) {
+        tokenType = null;
+      }
+      headers['Authorization'] = _buildAuthorizationValue(
+        token,
+        tokenType: tokenType,
+      );
     }
     return headers;
+  }
+
+  static String _buildAuthorizationValue(
+    String rawToken, {
+    String? tokenType,
+  }) {
+    final token = rawToken.trim();
+    if (token.isEmpty) return '';
+
+    // Keep a full "<scheme> <credential>" token untouched.
+    if (RegExp(r'^[A-Za-z][A-Za-z0-9_-]*\s+.+$').hasMatch(token)) {
+      return token;
+    }
+
+    final scheme = tokenType?.trim().isNotEmpty == true
+        ? tokenType!.trim()
+        : 'Bearer';
+    return '$scheme $token';
   }
 
   Uri _buildUri(String path, {Map<String, String>? queryParameters}) {
@@ -278,15 +308,16 @@ class BackendApiClient {
           );
           break;
         default:
-          throw const BackendApiException('娑撳秵鏁幐浣烘畱鐠囬攱鐪伴弬瑙勭《');
+          throw const BackendApiException('Unsupported request method.');
       }
-    } catch (_) {
-      throw const BackendApiException(
-        'Network request failed. Please try again later.',
+    } catch (error) {
+      throw BackendApiException(
+        'Network request failed [${method.toUpperCase()} $path]: '
+        '${error.runtimeType}: $error',
       );
     }
 
-    final decoded = _decodeBody(response.body);
+    final decoded = _decodeBodyFromBytes(response.bodyBytes);
     final success = _isSuccessful(response.statusCode, decoded);
     if (!success) {
       throw BackendApiException(
@@ -304,9 +335,32 @@ class BackendApiClient {
     Map<String, dynamic>? body,
   ) {
     if (statusCode == 401 || statusCode == 403) {
-      return '登录已失效，请重新登录';
+      return 'Login expired. Please sign in again.';
     }
-    return _extractMessage(body) ?? '请求失败($statusCode)';
+    return _extractMessage(body) ?? 'Request failed ($statusCode)';
+  }
+
+  static Map<String, dynamic>? _decodeBodyFromBytes(List<int> bodyBytes) {
+    if (bodyBytes.isEmpty) {
+      return null;
+    }
+
+    final candidates = <String>[];
+    try {
+      candidates.add(utf8.decode(bodyBytes));
+    } catch (_) {
+      candidates.add(utf8.decode(bodyBytes, allowMalformed: true));
+    }
+    candidates.add(latin1.decode(bodyBytes, allowInvalid: true));
+
+    for (final raw in candidates) {
+      final decoded = _decodeBody(raw);
+      if (decoded != null) {
+        return decoded;
+      }
+    }
+
+    return null;
   }
 
   static Map<String, dynamic>? _decodeBody(String raw) {
@@ -348,7 +402,7 @@ class BackendApiClient {
   static String? _extractMessage(Map<String, dynamic>? body) {
     if (body == null) return null;
 
-    for (final key in const ['msg', 'message', 'error']) {
+    for (final key in const ['msg', 'message', 'error', 'detail']) {
       final value = body[key]?.toString().trim();
       if (value != null && value.isNotEmpty) return value;
     }
@@ -357,7 +411,7 @@ class BackendApiClient {
     final map = asMap(data);
     if (map == null) return null;
 
-    for (final key in const ['msg', 'message', 'error']) {
+    for (final key in const ['msg', 'message', 'error', 'detail']) {
       final value = map[key]?.toString().trim();
       if (value != null && value.isNotEmpty) return value;
     }

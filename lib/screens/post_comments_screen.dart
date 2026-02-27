@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../services/discussion_service.dart';
+import '../services/backend_api_client.dart';
 import '../services/favorite_postcard_service.dart';
 import '../services/postcard_comment_service.dart';
 import '../widgets/resolved_image.dart';
@@ -25,11 +26,12 @@ class _PostCommentsScreenState extends State<PostCommentsScreen> {
 
   List<_CommentItem> _comments = <_CommentItem>[];
 
-  int _nextCommentId = 1000;
-  int _nextReplyId = 5000;
   int? _replyingCommentId;
   String? _replyToUsername;
   final Set<int> _expandedReplyCommentIds = <int>{};
+  bool _isCommentsLoading = true;
+  bool _isCommentSubmitting = false;
+  String? _commentsErrorMessage;
   bool _isPostFavorited = false;
   bool _isFavoriteBusy = false;
   bool _favoriteStateLoaded = false;
@@ -38,8 +40,6 @@ class _PostCommentsScreenState extends State<PostCommentsScreen> {
   @override
   void initState() {
     super.initState();
-    _comments = _buildMockComments(widget.post);
-    _nextCommentId = _resolveNextCommentId(_comments);
     _loadCommentsFromApi();
     _loadFavoriteState();
   }
@@ -103,8 +103,23 @@ class _PostCommentsScreenState extends State<PostCommentsScreen> {
     }
   }
 
-  Future<void> _loadCommentsFromApi() async {
-    if (widget.post.id <= 0) return;
+  Future<void> _loadCommentsFromApi({bool showLoading = true}) async {
+    if (showLoading) {
+      setState(() {
+        _isCommentsLoading = true;
+        _commentsErrorMessage = null;
+      });
+    }
+
+    if (widget.post.id <= 0) {
+      if (!mounted) return;
+      setState(() {
+        _isCommentsLoading = false;
+        _commentsErrorMessage = '该明信片尚未同步到服务器，无法加载在线评论';
+        _comments = const <_CommentItem>[];
+      });
+      return;
+    }
 
     try {
       final comments = await _commentService.fetchComments(
@@ -115,34 +130,90 @@ class _PostCommentsScreenState extends State<PostCommentsScreen> {
       if (!mounted) return;
 
       setState(() {
-        _comments = comments
-            .map(
-              (item) => _CommentItem(
-                id: item.id,
-                username: item.username,
-                location: item.location,
-                content: item.content,
-                createdAt: item.createdAt,
-                liked: item.liked,
-                replies: <_ReplyItem>[],
-              ),
-            )
-            .toList(growable: false);
-        _nextCommentId = _resolveNextCommentId(_comments);
+        _comments = _buildCommentItemsFromNetwork(comments);
+        _isCommentsLoading = false;
+        _commentsErrorMessage = null;
+      });
+    } on BackendApiException catch (e, stackTrace) {
+      debugPrint('加载评论失败: $e\n$stackTrace');
+      if (!mounted) return;
+      setState(() {
+        _isCommentsLoading = false;
+        _commentsErrorMessage = e.message;
       });
     } catch (e, stackTrace) {
       debugPrint('加载评论失败: $e\n$stackTrace');
+      if (!mounted) return;
+      setState(() {
+        _isCommentsLoading = false;
+        _commentsErrorMessage = '加载评论失败，请稍后重试';
+      });
     }
   }
 
-  int _resolveNextCommentId(List<_CommentItem> comments) {
-    var maxId = 1000;
-    for (final comment in comments) {
-      if (comment.id >= maxId) {
-        maxId = comment.id + 1;
+  List<_CommentItem> _buildCommentItemsFromNetwork(List<PostcardComment> raw) {
+    final roots = <_CommentItem>[];
+    final rootById = <int, _CommentItem>{};
+    final replies = <PostcardComment>[];
+
+    for (final item in raw) {
+      if (item.isReply) {
+        replies.add(item);
+        continue;
+      }
+
+      final root = _CommentItem(
+        id: item.id,
+        username: item.username,
+        avatar: item.avatar,
+        location: item.location,
+        content: item.content,
+        createdAt: item.createdAt,
+        liked: item.liked,
+        replies: <_ReplyItem>[],
+      );
+      roots.add(root);
+      if (item.id > 0) {
+        rootById[item.id] = root;
       }
     }
-    return maxId;
+
+    for (final item in replies) {
+      final parentId = item.parentCommentId;
+      final parent = parentId == null ? null : rootById[parentId];
+      if (parent != null) {
+        parent.replies.add(
+          _ReplyItem(
+            id: item.id,
+            username: item.username,
+            avatar: item.avatar,
+            content: item.content,
+            createdAt: item.createdAt,
+            replyToUsername: item.replyToUsername,
+          ),
+        );
+        continue;
+      }
+
+      roots.add(
+        _CommentItem(
+          id: item.id,
+          username: item.username,
+          avatar: item.avatar,
+          location: item.location,
+          content: item.content,
+          createdAt: item.createdAt,
+          liked: item.liked,
+          replies: <_ReplyItem>[],
+        ),
+      );
+    }
+
+    roots.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    for (final root in roots) {
+      root.replies.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    }
+    return roots;
   }
 
   Future<void> _toggleLike(_CommentItem item) async {
@@ -194,67 +265,56 @@ class _PostCommentsScreenState extends State<PostCommentsScreen> {
 
   Future<void> _submitInput() async {
     final content = _inputController.text.trim();
-    if (content.isEmpty) return;
+    if (content.isEmpty || _isCommentSubmitting) return;
 
-    final isReplying = _replyingCommentId != null;
-
-    setState(() {
-      if (isReplying) {
-        final target = _findCommentById(_replyingCommentId!);
-        if (target != null) {
-          target.replies.insert(
-            0,
-            _ReplyItem(
-              id: _nextReplyId++,
-              username: '我',
-              content: content,
-              createdAt: DateTime.now(),
-              replyToUsername: _replyToUsername,
-            ),
-          );
-        }
-      } else {
-        _comments.insert(
-          0,
-          _CommentItem(
-            id: _nextCommentId++,
-            username: '我',
-            location: widget.post.address.isEmpty
-                ? '当前城市'
-                : widget.post.address,
-            content: content,
-            createdAt: DateTime.now(),
-            liked: false,
-            replies: <_ReplyItem>[],
-          ),
-        );
-      }
-
-      _inputController.clear();
-      _replyingCommentId = null;
-      _replyToUsername = null;
-    });
-
-    if (isReplying || widget.post.id <= 0) {
+    if (widget.post.id <= 0) {
+      _showHint('该明信片尚未同步到服务器');
       return;
     }
+
+    final parentCommentId = _replyingCommentId;
+    final replyToUsername = _replyToUsername;
+
+    setState(() {
+      _isCommentSubmitting = true;
+    });
 
     try {
       await _commentService.addComment(
         postcardId: widget.post.id,
         content: content,
+        parentCommentId: parentCommentId,
+        replyToUsername: replyToUsername,
       );
-      await _loadCommentsFromApi();
+      if (!mounted) return;
+
+      _inputController.clear();
+      setState(() {
+        _replyingCommentId = null;
+        _replyToUsername = null;
+      });
+      await _loadCommentsFromApi(showLoading: false);
+    } on BackendApiException catch (e, stackTrace) {
+      debugPrint('发布评论失败: $e\n$stackTrace');
+      if (!mounted) return;
+      _showHint(e.message);
     } catch (e, stackTrace) {
       debugPrint('发布评论失败: $e\n$stackTrace');
+      if (!mounted) return;
+      _showHint('发布评论失败，请稍后重试');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isCommentSubmitting = false;
+        });
+      }
     }
   }
 
-  _CommentItem? _findCommentById(int id) {
-    for (final item in _comments) {
-      if (item.id == id) return item;
-    }
-    return null;
+  void _showHint(String message) {
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    messenger?.hideCurrentSnackBar();
+    messenger?.showSnackBar(SnackBar(content: Text(message)));
   }
 
   @override
@@ -366,32 +426,73 @@ class _PostCommentsScreenState extends State<PostCommentsScreen> {
                           ),
                         ),
                       Expanded(
-                        child: ListView.separated(
-                          padding: const EdgeInsets.fromLTRB(14, 8, 14, 88),
-                          itemCount: _comments.length,
-                          separatorBuilder: (_, _) =>
-                              const SizedBox(height: 10),
-                          itemBuilder: (context, index) {
-                            final item = _comments[index];
-                            return _CommentCard(
-                              item: item,
-                              repliesExpanded: _expandedReplyCommentIds
-                                  .contains(item.id),
-                              onReplyAreaTap: () => _toggleReplySection(item),
-                              onLikeTap: () {
-                                _toggleLike(item);
-                              },
-                              onReplyCommentTap: () => _startReply(
-                                comment: item,
-                                targetUsername: item.username,
+                        child: _isCommentsLoading
+                            ? const Center(child: CircularProgressIndicator())
+                            : (_commentsErrorMessage != null &&
+                                  _comments.isEmpty)
+                            ? Center(
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 24,
+                                  ),
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text(
+                                        _commentsErrorMessage!,
+                                        textAlign: TextAlign.center,
+                                        style: const TextStyle(
+                                          color: Color(0xFF4C5A45),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 10),
+                                      OutlinedButton(
+                                        onPressed: _loadCommentsFromApi,
+                                        child: const Text('重试'),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              )
+                            : _comments.isEmpty
+                            ? const Center(
+                                child: Text(
+                                  '暂无评论',
+                                  style: TextStyle(color: Color(0xFF4C5A45)),
+                                ),
+                              )
+                            : ListView.separated(
+                                padding: const EdgeInsets.fromLTRB(
+                                  14,
+                                  8,
+                                  14,
+                                  88,
+                                ),
+                                itemCount: _comments.length,
+                                separatorBuilder: (_, _) =>
+                                    const SizedBox(height: 10),
+                                itemBuilder: (context, index) {
+                                  final item = _comments[index];
+                                  return _CommentCard(
+                                    item: item,
+                                    repliesExpanded: _expandedReplyCommentIds
+                                        .contains(item.id),
+                                    onReplyAreaTap: () =>
+                                        _toggleReplySection(item),
+                                    onLikeTap: () {
+                                      _toggleLike(item);
+                                    },
+                                    onReplyCommentTap: () => _startReply(
+                                      comment: item,
+                                      targetUsername: item.username,
+                                    ),
+                                    onReplyToUserTap: (username) => _startReply(
+                                      comment: item,
+                                      targetUsername: username,
+                                    ),
+                                  );
+                                },
                               ),
-                              onReplyToUserTap: (username) => _startReply(
-                                comment: item,
-                                targetUsername: username,
-                              ),
-                            );
-                          },
-                        ),
                       ),
                       Padding(
                         padding: const EdgeInsets.fromLTRB(14, 0, 14, 12),
@@ -406,6 +507,7 @@ class _PostCommentsScreenState extends State<PostCommentsScreen> {
                           child: TextField(
                             controller: _inputController,
                             focusNode: _inputFocusNode,
+                            enabled: !_isCommentSubmitting,
                             decoration: InputDecoration(
                               hintText: _replyToUsername == null
                                   ? '输入您的评论吧'
@@ -417,9 +519,9 @@ class _PostCommentsScreenState extends State<PostCommentsScreen> {
                               border: InputBorder.none,
                               isCollapsed: true,
                               suffixIcon: IconButton(
-                                onPressed: () {
-                                  _submitInput();
-                                },
+                                onPressed: _isCommentSubmitting
+                                    ? null
+                                    : _submitInput,
                                 icon: const Icon(
                                   Icons.send_rounded,
                                   color: Color(0xFF7B8C72),
@@ -431,7 +533,9 @@ class _PostCommentsScreenState extends State<PostCommentsScreen> {
                             style: const TextStyle(fontSize: 15),
                             textInputAction: TextInputAction.send,
                             onSubmitted: (_) {
-                              _submitInput();
+                              if (!_isCommentSubmitting) {
+                                _submitInput();
+                              }
                             },
                           ),
                         ),
@@ -445,82 +549,6 @@ class _PostCommentsScreenState extends State<PostCommentsScreen> {
         ),
       ),
     );
-  }
-
-  List<_CommentItem> _buildMockComments(DiscussionPost post) {
-    final now = DateTime.now();
-    final baseContent = post.hotComment.trim().isEmpty
-        ? '这张明信片好有氛围感，构图和颜色都很喜欢。'
-        : post.hotComment;
-
-    return <_CommentItem>[
-      _CommentItem(
-        id: 1,
-        username: post.username,
-        location: post.address,
-        content: '$baseContent\n想问下这是哪里拍的？',
-        createdAt: now.subtract(const Duration(hours: 1)),
-        liked: true,
-        replies: <_ReplyItem>[
-          _ReplyItem(
-            id: 101,
-            username: '风景记录',
-            content: '同问，构图真的很有层次。',
-            createdAt: now.subtract(const Duration(minutes: 40)),
-            replyToUsername: post.username,
-          ),
-          _ReplyItem(
-            id: 102,
-            username: '我',
-            content: '色调和留白很舒服。',
-            createdAt: now.subtract(const Duration(minutes: 22)),
-            replyToUsername: '风景记录',
-          ),
-          _ReplyItem(
-            id: 103,
-            username: '旅行者A',
-            content: '画面氛围感很强，赞。',
-            createdAt: now.subtract(const Duration(minutes: 16)),
-            replyToUsername: '我',
-          ),
-        ],
-      ),
-      _CommentItem(
-        id: 2,
-        username: '旅行者A',
-        location: '上海',
-        content: '配色很舒服，看起来很有故事感。',
-        createdAt: now.subtract(const Duration(hours: 3)),
-        liked: false,
-        replies: <_ReplyItem>[
-          _ReplyItem(
-            id: 201,
-            username: '城市漫游',
-            content: '是的，想看同系列。',
-            createdAt: now.subtract(const Duration(hours: 2, minutes: 40)),
-            replyToUsername: '旅行者A',
-          ),
-        ],
-      ),
-      _CommentItem(
-        id: 3,
-        username: '城市漫游',
-        location: '成都',
-        content: '光影细节很棒，已经收藏灵感。',
-        createdAt: now.subtract(const Duration(hours: 6)),
-        liked: false,
-        replies: <_ReplyItem>[],
-      ),
-      _CommentItem(
-        id: 4,
-        username: '风景记录',
-        location: '广州',
-        content: '这张图很适合做系列，期待后续更新。',
-        createdAt: now.subtract(const Duration(hours: 9)),
-        liked: false,
-        replies: <_ReplyItem>[],
-      ),
-    ];
   }
 }
 
@@ -560,6 +588,37 @@ class _PostHeaderImage extends StatelessWidget {
   }
 }
 
+class _AvatarBubble extends StatelessWidget {
+  const _AvatarBubble({required this.imageUrl, required this.radius});
+
+  final String? imageUrl;
+  final double radius;
+
+  @override
+  Widget build(BuildContext context) {
+    final source = imageUrl?.trim() ?? '';
+    if (source.isEmpty) {
+      return CircleAvatar(
+        radius: radius,
+        backgroundColor: const Color(0xFFC8C8C8),
+      );
+    }
+
+    return ClipOval(
+      child: SizedBox(
+        width: radius * 2,
+        height: radius * 2,
+        child: ResolvedImage(
+          source: source,
+          fit: BoxFit.cover,
+          fallbackBuilder: (_) => const ColoredBox(color: Color(0xFFC8C8C8)),
+          loadingBuilder: (_) => const ColoredBox(color: Color(0xFFC8C8C8)),
+        ),
+      ),
+    );
+  }
+}
+
 class _PostOwnerInfo extends StatelessWidget {
   final DiscussionPost post;
   final bool isFavorited;
@@ -577,7 +636,7 @@ class _PostOwnerInfo extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(14, 12, 14, 2),
       child: Row(
         children: [
-          const CircleAvatar(radius: 30, backgroundColor: Color(0xFFC8C8C8)),
+          _AvatarBubble(imageUrl: post.avatar, radius: 30),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -685,10 +744,7 @@ class _CommentCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              const CircleAvatar(
-                radius: 17,
-                backgroundColor: Color(0xFFC8C8C8),
-              ),
+              _AvatarBubble(imageUrl: item.avatar, radius: 17),
               const SizedBox(width: 8),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -814,9 +870,9 @@ class _ReplyCard extends StatelessWidget {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Padding(
+        Padding(
           padding: EdgeInsets.only(top: 2),
-          child: CircleAvatar(radius: 11, backgroundColor: Color(0xFFC8C8C8)),
+          child: _AvatarBubble(imageUrl: reply.avatar, radius: 11),
         ),
         const SizedBox(width: 7),
         Expanded(
@@ -883,6 +939,7 @@ String _formatRelativeTime(DateTime time) {
 class _CommentItem {
   final int id;
   final String username;
+  final String? avatar;
   final String location;
   final String content;
   final DateTime createdAt;
@@ -892,6 +949,7 @@ class _CommentItem {
   _CommentItem({
     required this.id,
     required this.username,
+    this.avatar,
     required this.location,
     required this.content,
     required this.createdAt,
@@ -903,6 +961,7 @@ class _CommentItem {
 class _ReplyItem {
   final int id;
   final String username;
+  final String? avatar;
   final String content;
   final DateTime createdAt;
   final String? replyToUsername;
@@ -910,6 +969,7 @@ class _ReplyItem {
   _ReplyItem({
     required this.id,
     required this.username,
+    this.avatar,
     required this.content,
     required this.createdAt,
     this.replyToUsername,

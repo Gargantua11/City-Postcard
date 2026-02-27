@@ -69,3 +69,8 @@ apifox_network_smoke_test.ps1
 apifox_interface_check_2026-02-24.md
 tmp_login_api.html
 .tmp_apifox.html
+tmp_oss_sts_api.html
+tmp_auth_ping_api.html
+tmp_decoded_auth_login.json
+tmp_decoded_resourceData_data.json
+tmp_me_avatar_put_api.html

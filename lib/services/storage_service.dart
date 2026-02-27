@@ -12,12 +12,19 @@ class StorageService {
   static const String _profileAvatarKey = 'profile_avatar';
   static const String _profilePhoneKey = 'profile_phone';
   static const String _profilePasswordKey = 'profile_password';
+  static const String _editedPostcardsKey = 'edited_postcards';
+  static const String _discussionPostsCacheKey = 'discussion_posts_cache_v1';
+  static const String _discussionLocalPostsKey = 'discussion_local_posts_v1';
+  static const String _targetCleanupDoneKey =
+      'cleanup_postcard_avatar_discussion_done_v1';
 
   // 保存用户信息
   Future<void> saveUser(User user) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_userKey, jsonEncode(user.toJson()));
-    await prefs.setString(_tokenKey, user.accessToken);
+    final normalizedToken = _normalizeAccessToken(user.accessToken);
+    final normalizedUser = user.copyWith(accessToken: normalizedToken);
+    await prefs.setString(_userKey, jsonEncode(normalizedUser.toJson()));
+    await prefs.setString(_tokenKey, normalizedToken);
   }
 
   // 获取用户信息
@@ -33,7 +40,33 @@ class StorageService {
   // 获取token
   Future<String?> getToken() async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_tokenKey);
+    final fromTokenKey = prefs.getString(_tokenKey)?.trim() ?? '';
+    if (fromTokenKey.isNotEmpty) {
+      return _normalizeAccessToken(fromTokenKey);
+    }
+
+    final userJson = prefs.getString(_userKey)?.trim() ?? '';
+    if (userJson.isEmpty) return null;
+    try {
+      final decoded = jsonDecode(userJson);
+      if (decoded is Map<String, dynamic>) {
+        final token = decoded['accessToken']?.toString().trim() ?? '';
+        if (token.isNotEmpty) {
+          final normalized = _normalizeAccessToken(token);
+          await prefs.setString(_tokenKey, normalized);
+          return normalized;
+        }
+      }
+      if (decoded is Map) {
+        final token = decoded['accessToken']?.toString().trim() ?? '';
+        if (token.isNotEmpty) {
+          final normalized = _normalizeAccessToken(token);
+          await prefs.setString(_tokenKey, normalized);
+          return normalized;
+        }
+      }
+    } catch (_) {}
+    return null;
   }
 
   // 清除用户信息
@@ -46,7 +79,13 @@ class StorageService {
   // 检查是否已登录
   Future<bool> isLoggedIn() async {
     final token = await getToken();
-    return token != null;
+    return token != null && token.trim().isNotEmpty;
+  }
+
+  String _normalizeAccessToken(String raw) {
+    final token = raw.trim();
+    if (token.isEmpty) return '';
+    return token.replaceFirst(RegExp(r'^Bearer\s+', caseSensitive: false), '');
   }
 
   Future<void> saveProfileCity({
@@ -225,5 +264,29 @@ class StorageService {
       return null;
     }
     return prefs.getBool(_home3dPreviewEnabledKey);
+  }
+
+  Future<void> clearPostcardAvatarDiscussionLocalData() async {
+    final prefs = await SharedPreferences.getInstance();
+
+    await prefs.remove(_editedPostcardsKey);
+    await prefs.remove(_discussionPostsCacheKey);
+    await prefs.remove(_discussionLocalPostsKey);
+    await prefs.remove(_profileAvatarKey);
+
+    final user = await getUser();
+    if (user != null) {
+      await saveUser(user.copyWith(avatar: ''));
+    }
+  }
+
+  Future<void> clearPostcardAvatarDiscussionLocalDataOnce() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (prefs.getBool(_targetCleanupDoneKey) == true) {
+      return;
+    }
+
+    await clearPostcardAvatarDiscussionLocalData();
+    await prefs.setBool(_targetCleanupDoneKey, true);
   }
 }

@@ -180,7 +180,7 @@ class _EditProfilePasswordScreenState extends State<EditProfilePasswordScreen> {
                       _ActionButton(
                         isLoading: _isSaving,
                         onTap: _save,
-                        text: '保存密码',
+                        text: '',
                       ),
                     ],
                   ),

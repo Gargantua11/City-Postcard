@@ -133,6 +133,33 @@ class _PostcardEditScreenState extends State<PostcardEditScreen>
     return preview;
   }
 
+  Widget _buildPreviewPlaceholder(double scale, {bool showLoading = false}) {
+    const placeholderText =
+        '\u5f00\u59cb\u5b9a\u5236\u4f60\u7684\u4e13\u5c5e\u660e\u4fe1\u7247\u5427\uff01\n'
+        '\u4e0a\u4f20\u7167\u7247\uff0c\u5b9a\u5236\u4e13\u5c5e\u795d\u798f\uff01';
+    return ColoredBox(
+      color: const Color(0xFFEAF7E7),
+      child: Center(
+        child: showLoading
+            ? const SizedBox(
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(strokeWidth: 2.4),
+              )
+            : Text(
+                placeholderText,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 20 * scale,
+                  height: 1.3,
+                  color: Colors.black87,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+      ),
+    );
+  }
+
   Future<void> _pickLocalPreviewImage() async {
     if (_isSaving) return;
 
@@ -816,15 +843,38 @@ class _PostcardEditScreenState extends State<PostcardEditScreen>
                               ),
                             ],
                           ),
-                          child: _AssetTapButton(
-                            assetPath: _defaultPreviewAsset,
-                            imageSource: _currentPreviewSource,
-                            width: previewWidth,
-                            height: previewHeight,
+                          child: GestureDetector(
                             onTap: _pickLocalPreviewImage,
-                            child: _buildLayerOverlay(
-                              previewWidth,
-                              previewHeight,
+                            child: SizedBox(
+                              width: previewWidth,
+                              height: previewHeight,
+                              child: Stack(
+                                fit: StackFit.expand,
+                                children: [
+                                  if (_customPreviewImagePath != null &&
+                                      _customPreviewImagePath!
+                                          .trim()
+                                          .isNotEmpty)
+                                    ResolvedImage(
+                                      source: _customPreviewImagePath!,
+                                      fit: BoxFit.cover,
+                                      filterQuality: FilterQuality.high,
+                                      fallbackBuilder: (_) =>
+                                          _buildPreviewPlaceholder(scale),
+                                      loadingBuilder: (_) =>
+                                          _buildPreviewPlaceholder(
+                                            scale,
+                                            showLoading: true,
+                                          ),
+                                    )
+                                  else
+                                    _buildPreviewPlaceholder(scale),
+                                  _buildLayerOverlay(
+                                    previewWidth,
+                                    previewHeight,
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
                         ),
@@ -1016,7 +1066,6 @@ const Map<String, String> _provinceNameByPrefix = {
 
 class _AssetTapButton extends StatelessWidget {
   final String assetPath;
-  final String? imageSource;
   final double width;
   final double height;
   final VoidCallback? onTap;
@@ -1024,7 +1073,6 @@ class _AssetTapButton extends StatelessWidget {
 
   const _AssetTapButton({
     required this.assetPath,
-    this.imageSource,
     required this.width,
     required this.height,
     this.onTap,
@@ -1041,25 +1089,13 @@ class _AssetTapButton extends StatelessWidget {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            if ((imageSource?.trim().isNotEmpty ?? false))
-              ResolvedImage(
-                source: imageSource!,
-                fit: BoxFit.fill,
-                filterQuality: FilterQuality.high,
-                fallbackBuilder: (_) => Image.asset(
-                  assetPath,
-                  fit: BoxFit.fill,
-                  filterQuality: FilterQuality.high,
-                  errorBuilder: (_, _, _) =>
-                      const ColoredBox(color: Color(0xFFE5E5E5)),
-                ),
-              )
-            else
-              Image.asset(
-                assetPath,
-                fit: BoxFit.fill,
-                filterQuality: FilterQuality.high,
-              ),
+            Image.asset(
+              assetPath,
+              fit: BoxFit.fill,
+              filterQuality: FilterQuality.high,
+              errorBuilder: (_, _, _) =>
+                  const ColoredBox(color: Color(0xFFE5E5E5)),
+            ),
             if (child case final Widget overlay) overlay,
           ],
         ),

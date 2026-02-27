@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
-import '../services/backend_api_client.dart';
 import 'post_comments_screen.dart';
 import '../services/discussion_service.dart';
 import '../widgets/resolved_image.dart';
@@ -15,8 +14,10 @@ class CommentSectionScreen extends StatefulWidget {
 }
 
 class _CommentSectionScreenState extends State<CommentSectionScreen> {
+  static const String _devMessage =
+      '\u8ba8\u8bba\u533a\u529f\u80fd\u5f00\u53d1\u4e2d';
+
   final TextEditingController _searchController = TextEditingController();
-  final DiscussionService _discussionService = DiscussionService();
 
   bool _isLoading = true;
   bool _isOfflineMode = false;
@@ -52,18 +53,9 @@ class _CommentSectionScreenState extends State<CommentSectionScreen> {
   }
 
   Future<void> _openCreatePost() async {
-    setState(() {
-      _isPostBallExpanded = false;
-    });
-    final result = await Navigator.pushNamed(context, '/create_post');
-    if (!mounted) return;
-    if (result == true) {
-      await _loadPosts();
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('发布成功')));
-    }
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text(_devMessage)));
   }
 
   Future<void> _loadPosts() async {
@@ -73,33 +65,14 @@ class _CommentSectionScreenState extends State<CommentSectionScreen> {
       _offlineNotice = null;
     });
 
-    try {
-      final result = await _discussionService.fetchPostsWithOfflineFallback(
-        lastTime: DateTime.now(),
-      );
-      if (!mounted) return;
-
-      setState(() {
-        _posts = result.posts;
-        _isOfflineMode = result.isOffline;
-        _offlineNotice = result.notice;
-        _isLoading = false;
-      });
-    } on BackendApiException catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _isLoading = false;
-        _isOfflineMode = false;
-        _errorMessage = e.message;
-      });
-    } catch (_) {
-      if (!mounted) return;
-      setState(() {
-        _isLoading = false;
-        _isOfflineMode = false;
-        _errorMessage = '加载讨论区失败，请稍后重试';
-      });
-    }
+    if (!mounted) return;
+    setState(() {
+      _isLoading = false;
+      _isOfflineMode = false;
+      _offlineNotice = null;
+      _posts = const <DiscussionPost>[];
+      _errorMessage = _devMessage;
+    });
   }
 
   List<DiscussionPost> get _visiblePosts {
@@ -130,7 +103,7 @@ class _CommentSectionScreenState extends State<CommentSectionScreen> {
                 children: [
                   const Center(
                     child: Text(
-                      '讨论区',
+                      '\u8ba8\u8bba\u533a',
                       style: TextStyle(
                         fontSize: 46,
                         fontWeight: FontWeight.w700,
@@ -154,7 +127,8 @@ class _CommentSectionScreenState extends State<CommentSectionScreen> {
                             controller: _searchController,
                             decoration: const InputDecoration(
                               border: InputBorder.none,
-                              hintText: '输入昵称、地点或热评',
+                              hintText:
+                                  '\u8f93\u5165\u6635\u79f0\u3001\u5730\u70b9\u6216\u70ed\u8bc4',
                               hintStyle: TextStyle(
                                 color: Color(0xFFA7AEA2),
                                 fontSize: 16,
@@ -216,7 +190,7 @@ class _CommentSectionScreenState extends State<CommentSectionScreen> {
                       padding: EdgeInsets.symmetric(vertical: 40),
                       child: Center(
                         child: Text(
-                          '暂无帖子',
+                          '\u6682\u65e0\u5e16\u5b50',
                           style: TextStyle(
                             color: Color(0xFF6D7680),
                             fontSize: 14,
@@ -284,7 +258,7 @@ class _ErrorSection extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFFF8FCF6),
+        color: const Color(0xFFDDE3D9),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: const Color(0xFFDCEAD5), width: 1.5),
       ),
@@ -296,7 +270,7 @@ class _ErrorSection extends StatelessWidget {
             style: const TextStyle(fontSize: 14, color: Color(0xFF43505C)),
           ),
           const SizedBox(height: 10),
-          OutlinedButton(onPressed: onRetry, child: const Text('重试')),
+          OutlinedButton(onPressed: onRetry, child: const Text('\u91cd\u8bd5')),
         ],
       ),
     );
@@ -354,10 +328,7 @@ class _DiscussionPostCard extends StatelessWidget {
                       height: imageHeight,
                       child: Column(
                         children: [
-                          const CircleAvatar(
-                            radius: 16,
-                            backgroundColor: Color(0xFFD2D2D2),
-                          ),
+                          _PostAvatar(imageUrl: item.avatar),
                           const SizedBox(height: 5),
                           Text(
                             item.username,
@@ -427,7 +398,7 @@ class _DiscussionPostCard extends StatelessWidget {
               borderRadius: BorderRadius.circular(28),
             ),
             child: Text(
-              '热评：${item.hotComment.isEmpty ? '暂无热评' : item.hotComment}',
+              "\u70ed\u8bc4\uff1a${item.hotComment.isEmpty ? '\u6682\u65e0\u70ed\u8bc4' : item.hotComment}",
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
@@ -438,6 +409,33 @@ class _DiscussionPostCard extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _PostAvatar extends StatelessWidget {
+  const _PostAvatar({required this.imageUrl});
+
+  final String? imageUrl;
+
+  @override
+  Widget build(BuildContext context) {
+    final source = imageUrl?.trim() ?? '';
+    if (source.isEmpty) {
+      return const CircleAvatar(radius: 16, backgroundColor: Color(0xFFD2D2D2));
+    }
+
+    return ClipOval(
+      child: SizedBox(
+        width: 32,
+        height: 32,
+        child: ResolvedImage(
+          source: source,
+          fit: BoxFit.cover,
+          fallbackBuilder: (_) => const ColoredBox(color: Color(0xFFD2D2D2)),
+          loadingBuilder: (_) => const ColoredBox(color: Color(0xFFD2D2D2)),
+        ),
       ),
     );
   }
@@ -503,7 +501,7 @@ class _PostActionButton extends StatelessWidget {
                         Icon(Icons.add, size: 19, color: Colors.black),
                         SizedBox(width: 4),
                         Text(
-                          '发帖',
+                          '\u53d1\u5e16',
                           style: TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.w700,

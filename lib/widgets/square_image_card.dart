@@ -21,9 +21,7 @@ class SquareImageCard extends StatelessWidget {
         // 点击进入编辑图片页面
         Navigator.push(
           context,
-          MaterialPageRoute(
-            builder: (context) => const EditImagePage(),
-          ),
+          MaterialPageRoute(builder: (context) => const EditImagePage()),
         );
       },
       child: Container(
@@ -31,13 +29,10 @@ class SquareImageCard extends StatelessWidget {
         height: size,
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(15),
-          border: Border.all(
-            color: Colors.grey.shade300,
-            width: 1,
-          ),
+          border: Border.all(color: Colors.grey.shade300, width: 1),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.1),
+              color: Colors.black.withValues(alpha: 0.1),
               blurRadius: 5,
               offset: const Offset(0, 2),
             ),
@@ -69,10 +64,7 @@ class SquareImageCard extends StatelessWidget {
                   alignment: Alignment.center,
                   child: Text(
                     placeholderText ?? '添加图片',
-                    style: TextStyle(
-                      color: Colors.grey.shade500,
-                      fontSize: 12,
-                    ),
+                    style: TextStyle(color: Colors.grey.shade500, fontSize: 12),
                   ),
                 ),
         ),
@@ -100,10 +92,7 @@ class EditImagePage extends StatelessWidget {
       body: const Center(
         child: Text(
           '编辑页面',
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-          ),
+          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
         ),
       ),
     );
