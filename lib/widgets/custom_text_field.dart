@@ -60,9 +60,7 @@ class _CustomTextFieldState extends State<CustomTextField> {
                 : Colors.grey.shade100,
             borderRadius: BorderRadius.circular(15),
             border: Border.all(
-              color: hasError
-                  ? Colors.red
-                  : const Color(0xFF90EE90),
+              color: hasError ? Colors.red : const Color(0xFF90EE90),
               width: 1,
             ),
             boxShadow: [
@@ -102,7 +100,10 @@ class _CustomTextFieldState extends State<CustomTextField> {
                     errorStyle: const TextStyle(height: 0, fontSize: 0),
                     // 只有在没有错误且输入框为空时才显示hintText
                     hintText: (hasError || !isEmpty) ? null : widget.hintText,
-                    hintStyle: const TextStyle(color: Colors.grey, fontSize: 14),
+                    hintStyle: const TextStyle(
+                      color: Colors.grey,
+                      fontSize: 14,
+                    ),
                     contentPadding: EdgeInsets.symmetric(
                       horizontal: widget.prefixIcon != null ? 5 : 20,
                       vertical: 18,
@@ -139,10 +140,7 @@ class _CustomTextFieldState extends State<CustomTextField> {
             ),
             child: Text(
               _errorText ?? '',
-              style: const TextStyle(
-                color: Colors.red,
-                fontSize: 12,
-              ),
+              style: const TextStyle(color: Colors.red, fontSize: 12),
             ),
           ),
         ),

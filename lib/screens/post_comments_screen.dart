@@ -156,7 +156,7 @@ class _PostCommentsScreenState extends State<PostCommentsScreen> {
     bool forSubmit = false,
   }) {
     if (error.isUnauthorized) {
-      return '\u767b\u5f55\u72b6\u6001\u5931\u6548\uff0c\u8bf7\u91cd\u65b0\u767b\u5f55';
+      return '登录状态失效，请重新登录';
     }
 
     final lower = error.message.toLowerCase();
@@ -168,28 +168,27 @@ class _PostCommentsScreenState extends State<PostCommentsScreen> {
         lower.contains('timed out') ||
         lower.contains('connection reset');
     if (isNetworkError) {
-      return '\u7f51\u7edc\u8fde\u63a5\u5931\u8d25\uff0c\u8bf7\u68c0\u67e5\u7f51\u7edc\u540e\u91cd\u8bd5';
+      return '网络连接失败，请检查网络后重试';
     }
 
     final isNotFound =
         lower.contains('not found') ||
-        lower.contains('\u4e0d\u5b58\u5728') ||
-        lower.contains('\u5df2\u5220\u9664');
+        lower.contains('不存在') ||
+        lower.contains('已删除');
     if (isNotFound) {
-      return '\u660e\u4fe1\u7247\u4e0d\u5b58\u5728\u6216\u5df2\u88ab\u5220\u9664';
+      return '明信片不存在或已被删除';
     }
 
     final isUnderDevelopment =
-        lower.contains('\u5f00\u53d1\u4e2d') ||
-        lower.contains('under development');
+        lower.contains('开发中') || lower.contains('under development');
     if (isUnderDevelopment) {
-      return '\u8bc4\u8bba\u529f\u80fd\u6682\u4e0d\u53ef\u7528\uff0c\u8bf7\u7a0d\u540e\u518d\u8bd5';
+      return '评论功能暂不可用，请稍后再试';
     }
 
     if (forSubmit) {
-      return '\u53d1\u5e03\u8bc4\u8bba\u5931\u8d25\uff0c\u8bf7\u7a0d\u540e\u91cd\u8bd5';
+      return '发布评论失败，请稍后重试';
     }
-    return '\u52a0\u8f7d\u8bc4\u8bba\u5931\u8d25\uff0c\u8bf7\u7a0d\u540e\u91cd\u8bd5';
+    return '加载评论失败，请稍后重试';
   }
 
   List<_CommentItem> _buildCommentItemsFromNetwork(List<PostcardComment> raw) {

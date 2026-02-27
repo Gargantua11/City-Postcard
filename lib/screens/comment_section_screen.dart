@@ -62,7 +62,7 @@ class _CommentSectionScreenState extends State<CommentSectionScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('\u53d1\u5e03\u6210\u529f')));
+      ).showSnackBar(const SnackBar(content: Text('发布成功')));
     }
   }
 
@@ -89,24 +89,21 @@ class _CommentSectionScreenState extends State<CommentSectionScreen> {
       if (!mounted) return;
       final backendMessage = e.message.trim().toLowerCase();
       final isUnderDevelopment =
-          backendMessage.contains('\u5f00\u53d1\u4e2d') ||
+          backendMessage.contains('开发中') ||
           backendMessage.contains('under development');
       setState(() {
         _isLoading = false;
         _isOfflineMode = false;
         _errorMessage = e.isUnauthorized
-            ? '\u767b\u5f55\u72b6\u6001\u5931\u6548\uff0c\u8bf7\u91cd\u65b0\u767b\u5f55'
-            : (isUnderDevelopment
-                  ? '\u8ba8\u8bba\u533a\u6682\u4e0d\u53ef\u7528\uff0c\u8bf7\u7a0d\u540e\u518d\u8bd5'
-                  : '\u52a0\u8f7d\u8ba8\u8bba\u533a\u5931\u8d25\uff0c\u8bf7\u7a0d\u540e\u91cd\u8bd5');
+            ? '登录状态失效，请重新登录'
+            : (isUnderDevelopment ? '讨论区暂不可用，请稍后再试' : '加载讨论区失败，请稍后重试');
       });
     } catch (_) {
       if (!mounted) return;
       setState(() {
         _isLoading = false;
         _isOfflineMode = false;
-        _errorMessage =
-            '\u52a0\u8f7d\u8ba8\u8bba\u533a\u5931\u8d25\uff0c\u8bf7\u7a0d\u540e\u91cd\u8bd5';
+        _errorMessage = '加载讨论区失败，请稍后重试';
       });
     }
   }
@@ -139,7 +136,7 @@ class _CommentSectionScreenState extends State<CommentSectionScreen> {
                 children: [
                   const Center(
                     child: Text(
-                      '\u8ba8\u8bba\u533a',
+                      '讨论区',
                       style: TextStyle(
                         fontSize: 46,
                         fontWeight: FontWeight.w700,
@@ -163,8 +160,7 @@ class _CommentSectionScreenState extends State<CommentSectionScreen> {
                             controller: _searchController,
                             decoration: const InputDecoration(
                               border: InputBorder.none,
-                              hintText:
-                                  '\u8f93\u5165\u6635\u79f0\u3001\u5730\u70b9\u6216\u70ed\u8bc4',
+                              hintText: '输入昵称、地点或热评',
                               hintStyle: TextStyle(
                                 color: Color(0xFFA7AEA2),
                                 fontSize: 16,
@@ -226,7 +222,7 @@ class _CommentSectionScreenState extends State<CommentSectionScreen> {
                       padding: EdgeInsets.symmetric(vertical: 40),
                       child: Center(
                         child: Text(
-                          '\u6682\u65e0\u5e16\u5b50',
+                          '暂无帖子',
                           style: TextStyle(
                             color: Color(0xFF6D7680),
                             fontSize: 14,
@@ -306,7 +302,7 @@ class _ErrorSection extends StatelessWidget {
             style: const TextStyle(fontSize: 14, color: Color(0xFF43505C)),
           ),
           const SizedBox(height: 10),
-          OutlinedButton(onPressed: onRetry, child: const Text('\u91cd\u8bd5')),
+          OutlinedButton(onPressed: onRetry, child: const Text('重试')),
         ],
       ),
     );
@@ -434,7 +430,7 @@ class _DiscussionPostCard extends StatelessWidget {
               borderRadius: BorderRadius.circular(28),
             ),
             child: Text(
-              "\u70ed\u8bc4\uff1a${item.hotComment.isEmpty ? '\u6682\u65e0\u70ed\u8bc4' : item.hotComment}",
+              "热评：${item.hotComment.isEmpty ? '暂无热评' : item.hotComment}",
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
@@ -537,7 +533,7 @@ class _PostActionButton extends StatelessWidget {
                         Icon(Icons.add, size: 19, color: Colors.black),
                         SizedBox(width: 4),
                         Text(
-                          '\u53d1\u5e16',
+                          '发帖',
                           style: TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.w700,

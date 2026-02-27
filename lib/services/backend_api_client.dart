@@ -232,10 +232,7 @@ class BackendApiClient {
     return headers;
   }
 
-  static String _buildAuthorizationValue(
-    String rawToken, {
-    String? tokenType,
-  }) {
+  static String _buildAuthorizationValue(String rawToken, {String? tokenType}) {
     final token = rawToken.trim();
     if (token.isEmpty) return '';
 
@@ -404,7 +401,9 @@ class BackendApiClient {
 
     for (final key in const ['msg', 'message', 'error', 'detail']) {
       final value = body[key]?.toString().trim();
-      if (value != null && value.isNotEmpty) return value;
+      if (value != null && value.isNotEmpty) {
+        return _decodeEscapedText(value);
+      }
     }
 
     final data = extractData(body);
@@ -413,7 +412,9 @@ class BackendApiClient {
 
     for (final key in const ['msg', 'message', 'error', 'detail']) {
       final value = map[key]?.toString().trim();
-      if (value != null && value.isNotEmpty) return value;
+      if (value != null && value.isNotEmpty) {
+        return _decodeEscapedText(value);
+      }
     }
 
     return null;
@@ -455,10 +456,36 @@ class BackendApiClient {
       final value = map[key];
       if (value == null) continue;
       final text = value.toString().trim();
-      if (text.isNotEmpty) return text;
+      if (text.isNotEmpty) return _decodeEscapedText(text);
     }
 
     return null;
+  }
+
+  static String _decodeEscapedText(String raw) {
+    if (!raw.contains(r'\')) {
+      return raw;
+    }
+
+    var current = raw;
+    for (var i = 0; i < 2; i++) {
+      final decoded = _tryDecodeEscapedText(current);
+      if (decoded == null || decoded == current) {
+        break;
+      }
+      current = decoded;
+    }
+    return current;
+  }
+
+  static String? _tryDecodeEscapedText(String input) {
+    final escaped = input.replaceAll('"', r'\"');
+    try {
+      final decoded = jsonDecode('"$escaped"');
+      return decoded is String ? decoded : null;
+    } catch (_) {
+      return null;
+    }
   }
 
   static int? readInt(dynamic raw, List<String> keys) {

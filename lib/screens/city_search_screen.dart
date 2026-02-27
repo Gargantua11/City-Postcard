@@ -476,7 +476,10 @@ class _CitySearchScreenState extends State<CitySearchScreen> {
                   borderRadius: BorderRadius.circular(8),
                   borderSide: const BorderSide(color: Colors.blue, width: 2),
                 ),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
               ),
             ),
           ),
@@ -500,12 +503,17 @@ class _CitySearchScreenState extends State<CitySearchScreen> {
                           style: TextStyle(
                             fontSize: 16,
                             color: isSelected ? Colors.blue : Colors.black87,
-                            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                            fontWeight: isSelected
+                                ? FontWeight.bold
+                                : FontWeight.normal,
                           ),
                         ),
                         subtitle: Text(
                           '行政编码: ${city.code}',
-                          style: const TextStyle(fontSize: 12, color: Colors.grey),
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey,
+                          ),
                         ),
                         trailing: isSelected
                             ? const Icon(Icons.check, color: Colors.blue)

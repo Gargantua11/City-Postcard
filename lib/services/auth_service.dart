@@ -57,17 +57,14 @@ class AuthService {
       return null;
     }
 
-    final regToken = _extractTokenWithFallback(
-      body,
-      const <String>[
-        'regToken',
-        'registerToken',
-        'token',
-        'verifyToken',
-        'reg_token',
-        'register_token',
-      ],
-    );
+    final regToken = _extractTokenWithFallback(body, const <String>[
+      'regToken',
+      'registerToken',
+      'token',
+      'verifyToken',
+      'reg_token',
+      'register_token',
+    ]);
     if (regToken == null || regToken.isEmpty) {
       _lastError = '注册验证码校验成功，但未返回 regToken';
       return null;
@@ -193,15 +190,12 @@ class AuthService {
       return null;
     }
 
-    final resetToken = _extractTokenWithFallback(
-      body,
-      const <String>[
-        'resetToken',
-        'token',
-        'verifyToken',
-        'reset_token',
-      ],
-    );
+    final resetToken = _extractTokenWithFallback(body, const <String>[
+      'resetToken',
+      'token',
+      'verifyToken',
+      'reset_token',
+    ]);
     if (resetToken == null || resetToken.isEmpty) {
       _lastError = '验证码校验成功，但未返回 resetToken';
       return null;
@@ -244,13 +238,15 @@ class AuthService {
 
   Future<bool> authPing(String token) async {
     try {
-      final response = await http.get(
-        Uri.parse('$_baseUrl/ping/auth'),
-        headers: {
-          'Content-Type': 'application/json; charset=utf-8',
-          'Authorization': 'Bearer $token',
-        },
-      ).timeout(_requestTimeout);
+      final response = await http
+          .get(
+            Uri.parse('$_baseUrl/ping/auth'),
+            headers: {
+              'Content-Type': 'application/json; charset=utf-8',
+              'Authorization': 'Bearer $token',
+            },
+          )
+          .timeout(_requestTimeout);
       final body = _decodeResponseBody(response);
       if (_isRequestSuccessful(response.statusCode, body)) {
         return true;
@@ -285,18 +281,26 @@ class AuthService {
     try {
       final uri = Uri.parse('$_baseUrl$path');
       if (method == 'POST') {
-        return await http.post(
-          uri,
-          headers: const <String, String>{'Content-Type': 'application/json'},
-          body: jsonEncode(payload),
-        ).timeout(_requestTimeout);
+        return await http
+            .post(
+              uri,
+              headers: const <String, String>{
+                'Content-Type': 'application/json',
+              },
+              body: jsonEncode(payload),
+            )
+            .timeout(_requestTimeout);
       }
       if (method == 'PUT') {
-        return await http.put(
-          uri,
-          headers: const <String, String>{'Content-Type': 'application/json'},
-          body: jsonEncode(payload),
-        ).timeout(_requestTimeout);
+        return await http
+            .put(
+              uri,
+              headers: const <String, String>{
+                'Content-Type': 'application/json',
+              },
+              body: jsonEncode(payload),
+            )
+            .timeout(_requestTimeout);
       }
       _lastError = '不支持的请求方法: $method';
       return null;

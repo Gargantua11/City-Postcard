@@ -135,8 +135,8 @@ class _PostcardEditScreenState extends State<PostcardEditScreen>
 
   Widget _buildPreviewPlaceholder(double scale, {bool showLoading = false}) {
     const placeholderText =
-        '\u5f00\u59cb\u5b9a\u5236\u4f60\u7684\u4e13\u5c5e\u660e\u4fe1\u7247\u5427\uff01\n'
-        '\u4e0a\u4f20\u7167\u7247\uff0c\u5b9a\u5236\u4e13\u5c5e\u795d\u798f\uff01';
+        '开始定制你的专属明信片吧！\n'
+        '上传照片，定制专属祝福！';
     return ColoredBox(
       color: const Color(0xFFEAF7E7),
       child: Center(
@@ -801,7 +801,7 @@ class _PostcardEditScreenState extends State<PostcardEditScreen>
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         Text(
-                          '城市明信片 · 编辑',
+                          '城市明信片·编辑',
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             fontSize: 22 * scale,
