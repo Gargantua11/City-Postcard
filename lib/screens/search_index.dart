@@ -26,31 +26,44 @@ class _SearchIndexScreenState extends State<SearchIndexScreen> {
   // 每个分类下的具体元素
   final Map<String, List<Map<String, dynamic>>> _elementsByCategory = {
     '马年元素': [
-      {'name': '马踏飞燕', 'icon': 'assets/images/add_elements/马踏飞燕.png'},
       {'name': '骏马', 'icon': 'assets/images/add_elements/骏马.png'},
       {'name': '马鞍', 'icon': 'assets/images/add_elements/马鞍.png'},
       {'name': '马蹄', 'icon': 'assets/images/add_elements/马蹄.png'},
+      {'name': '龙马精神', 'icon': 'assets/images/add_elements/horse_spirit.png'},
+      {'name': '一马当先', 'icon': 'assets/images/add_elements/horse_first.png'},
     ],
     '新年元素': [
       {'name': '烟花', 'icon': 'assets/images/add_elements/烟花.png'},
       {'name': '灯笼', 'icon': 'assets/images/add_elements/灯笼.png'},
       {'name': '春联', 'icon': 'assets/images/add_elements/春联.png'},
       {'name': '鞭炮', 'icon': 'assets/images/add_elements/鞭炮.png'},
+      {'name': '中国结', 'icon': 'assets/images/add_elements/china_knot.png'},
+      {'name': '剪纸', 'icon': 'assets/images/add_elements/paper_cut.png'},
+      {
+        'name': '年画',
+        'icon': 'assets/images/add_elements/new_year_painting.png',
+      },
     ],
     '季节元素': [
       {'name': '梅花', 'icon': 'assets/images/add_elements/梅花.png'},
       {'name': '雪花', 'icon': 'assets/images/add_elements/雪花.png'},
       {'name': '绿叶', 'icon': 'assets/images/add_elements/绿叶.png'},
       {'name': '枫叶', 'icon': 'assets/images/add_elements/枫叶.png'},
+      {'name': '樱花', 'icon': 'assets/images/add_elements/cherry_blossom.png'},
+      {'name': '荷花', 'icon': 'assets/images/add_elements/lotus.png'},
+      {'name': '银杏', 'icon': 'assets/images/add_elements/ginkgo.png'},
+      {'name': '腊梅', 'icon': 'assets/images/add_elements/wintersweet.png'},
     ],
   };
 
   // 常用元素（合并所有分类的前几个元素）
   final List<Map<String, dynamic>> _commonElements = [
     {'name': '烟花', 'icon': 'assets/images/add_elements/烟花.png'},
-    {'name': '马踏飞燕', 'icon': 'assets/images/add_elements/马踏飞燕.png'},
+    {'name': '龙马精神', 'icon': 'assets/images/add_elements/horse_spirit.png'},
     {'name': '骏马', 'icon': 'assets/images/add_elements/骏马.png'},
     {'name': '灯笼', 'icon': 'assets/images/add_elements/灯笼.png'},
+    {'name': '中国结', 'icon': 'assets/images/add_elements/china_knot.png'},
+    {'name': '樱花', 'icon': 'assets/images/add_elements/cherry_blossom.png'},
   ];
 
   // 热门元素
@@ -59,18 +72,28 @@ class _SearchIndexScreenState extends State<SearchIndexScreen> {
     {'name': '梅花', 'icon': 'assets/images/add_elements/梅花.png'},
     {'name': '骏马', 'icon': 'assets/images/add_elements/骏马.png'},
     {'name': '雪花', 'icon': 'assets/images/add_elements/雪花.png'},
+    {'name': '龙马精神', 'icon': 'assets/images/add_elements/horse_spirit.png'},
+    {'name': '中国结', 'icon': 'assets/images/add_elements/china_knot.png'},
   ];
 
   // 热搜元素
   final List<Map<String, dynamic>> _hotSearchElements = [
     {'name': '烟花', 'icon': 'assets/images/add_elements/烟花.png'},
-    {'name': '马踏飞燕', 'icon': 'assets/images/add_elements/马踏飞燕.png'},
+    {'name': '龙马精神', 'icon': 'assets/images/add_elements/horse_spirit.png'},
     {'name': '骏马', 'icon': 'assets/images/add_elements/骏马.png'},
     {'name': '梅花', 'icon': 'assets/images/add_elements/梅花.png'},
     {'name': '雪花', 'icon': 'assets/images/add_elements/雪花.png'},
     {'name': '绿叶', 'icon': 'assets/images/add_elements/绿叶.png'},
     {'name': '枫叶', 'icon': 'assets/images/add_elements/枫叶.png'},
     {'name': '灯笼', 'icon': 'assets/images/add_elements/灯笼.png'},
+    {'name': '中国结', 'icon': 'assets/images/add_elements/china_knot.png'},
+    {'name': '剪纸', 'icon': 'assets/images/add_elements/paper_cut.png'},
+    {'name': '年画', 'icon': 'assets/images/add_elements/new_year_painting.png'},
+    {'name': '樱花', 'icon': 'assets/images/add_elements/cherry_blossom.png'},
+    {'name': '荷花', 'icon': 'assets/images/add_elements/lotus.png'},
+    {'name': '银杏', 'icon': 'assets/images/add_elements/ginkgo.png'},
+    {'name': '腊梅', 'icon': 'assets/images/add_elements/wintersweet.png'},
+    {'name': '一马当先', 'icon': 'assets/images/add_elements/horse_first.png'},
   ];
 
   @override

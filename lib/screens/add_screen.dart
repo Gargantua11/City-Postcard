@@ -20,25 +20,57 @@ class _AddIndexPageState extends State<AddIndexPage> {
 
   final Map<String, List<_ElementData>> _elementsByCategory = const {
     '马年元素': [
-      _ElementData(
-        name: '马踏飞燕',
-        iconPath: 'assets/images/add_elements/马踏飞燕.png',
-      ),
       _ElementData(name: '骏马', iconPath: 'assets/images/add_elements/骏马.png'),
       _ElementData(name: '马鞍', iconPath: 'assets/images/add_elements/马鞍.png'),
       _ElementData(name: '马蹄', iconPath: 'assets/images/add_elements/马蹄.png'),
+      _ElementData(
+        name: '龙马精神',
+        iconPath: 'assets/images/add_elements/horse_spirit.png',
+      ),
+      _ElementData(
+        name: '一马当先',
+        iconPath: 'assets/images/add_elements/horse_first.png',
+      ),
     ],
     '新年元素': [
       _ElementData(name: '烟花', iconPath: 'assets/images/add_elements/烟花.png'),
       _ElementData(name: '灯笼', iconPath: 'assets/images/add_elements/灯笼.png'),
       _ElementData(name: '春联', iconPath: 'assets/images/add_elements/春联.png'),
       _ElementData(name: '鞭炮', iconPath: 'assets/images/add_elements/鞭炮.png'),
+      _ElementData(
+        name: '中国结',
+        iconPath: 'assets/images/add_elements/china_knot.png',
+      ),
+      _ElementData(
+        name: '剪纸',
+        iconPath: 'assets/images/add_elements/paper_cut.png',
+      ),
+      _ElementData(
+        name: '年画',
+        iconPath: 'assets/images/add_elements/new_year_painting.png',
+      ),
     ],
     '季节元素': [
       _ElementData(name: '梅花', iconPath: 'assets/images/add_elements/梅花.png'),
       _ElementData(name: '雪花', iconPath: 'assets/images/add_elements/雪花.png'),
       _ElementData(name: '绿叶', iconPath: 'assets/images/add_elements/绿叶.png'),
       _ElementData(name: '枫叶', iconPath: 'assets/images/add_elements/枫叶.png'),
+      _ElementData(
+        name: '樱花',
+        iconPath: 'assets/images/add_elements/cherry_blossom.png',
+      ),
+      _ElementData(
+        name: '荷花',
+        iconPath: 'assets/images/add_elements/lotus.png',
+      ),
+      _ElementData(
+        name: '银杏',
+        iconPath: 'assets/images/add_elements/ginkgo.png',
+      ),
+      _ElementData(
+        name: '腊梅',
+        iconPath: 'assets/images/add_elements/wintersweet.png',
+      ),
     ],
   };
 

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import '../services/backend_api_client.dart';
 import 'post_comments_screen.dart';
 import '../services/discussion_service.dart';
 import '../widgets/resolved_image.dart';
@@ -14,10 +15,8 @@ class CommentSectionScreen extends StatefulWidget {
 }
 
 class _CommentSectionScreenState extends State<CommentSectionScreen> {
-  static const String _devMessage =
-      '\u8ba8\u8bba\u533a\u529f\u80fd\u5f00\u53d1\u4e2d';
-
   final TextEditingController _searchController = TextEditingController();
+  final DiscussionService _discussionService = DiscussionService();
 
   bool _isLoading = true;
   bool _isOfflineMode = false;
@@ -53,9 +52,18 @@ class _CommentSectionScreenState extends State<CommentSectionScreen> {
   }
 
   Future<void> _openCreatePost() async {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text(_devMessage)));
+    setState(() {
+      _isPostBallExpanded = false;
+    });
+    final result = await Navigator.pushNamed(context, '/create_post');
+    if (!mounted) return;
+    if (result == true) {
+      await _loadPosts();
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('\u53d1\u5e03\u6210\u529f')));
+    }
   }
 
   Future<void> _loadPosts() async {
@@ -65,14 +73,42 @@ class _CommentSectionScreenState extends State<CommentSectionScreen> {
       _offlineNotice = null;
     });
 
-    if (!mounted) return;
-    setState(() {
-      _isLoading = false;
-      _isOfflineMode = false;
-      _offlineNotice = null;
-      _posts = const <DiscussionPost>[];
-      _errorMessage = _devMessage;
-    });
+    try {
+      final result = await _discussionService.fetchPostsWithOfflineFallback(
+        lastTime: DateTime.now(),
+      );
+      if (!mounted) return;
+
+      setState(() {
+        _posts = result.posts;
+        _isOfflineMode = result.isOffline;
+        _offlineNotice = result.notice;
+        _isLoading = false;
+      });
+    } on BackendApiException catch (e) {
+      if (!mounted) return;
+      final backendMessage = e.message.trim().toLowerCase();
+      final isUnderDevelopment =
+          backendMessage.contains('\u5f00\u53d1\u4e2d') ||
+          backendMessage.contains('under development');
+      setState(() {
+        _isLoading = false;
+        _isOfflineMode = false;
+        _errorMessage = e.isUnauthorized
+            ? '\u767b\u5f55\u72b6\u6001\u5931\u6548\uff0c\u8bf7\u91cd\u65b0\u767b\u5f55'
+            : (isUnderDevelopment
+                  ? '\u8ba8\u8bba\u533a\u6682\u4e0d\u53ef\u7528\uff0c\u8bf7\u7a0d\u540e\u518d\u8bd5'
+                  : '\u52a0\u8f7d\u8ba8\u8bba\u533a\u5931\u8d25\uff0c\u8bf7\u7a0d\u540e\u91cd\u8bd5');
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+        _isOfflineMode = false;
+        _errorMessage =
+            '\u52a0\u8f7d\u8ba8\u8bba\u533a\u5931\u8d25\uff0c\u8bf7\u7a0d\u540e\u91cd\u8bd5';
+      });
+    }
   }
 
   List<DiscussionPost> get _visiblePosts {

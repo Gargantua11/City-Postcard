@@ -7,7 +7,7 @@ import './screens/register_step2_screen.dart';
 import './screens/forgot_password_screen.dart';
 import './screens/home_screen.dart';
 import './screens/city_search_screen.dart';
-import './screens/comment_section_screen.dart';
+import './screens/discussion_under_development_screen.dart';
 import './screens/create_post_screen.dart';
 import './screens/postcard_edit_screen.dart';
 import './screens/map_screen.dart';
@@ -52,7 +52,8 @@ class MyApp extends StatelessWidget {
           '/forgot_password': (context) => const ForgotPasswordScreen(),
           '/home': (context) => const HomeScreen(),
           '/city_search': (context) => const CitySearchScreen(),
-          '/comment_section': (context) => const CommentSectionScreen(),
+          '/comment_section': (context) =>
+              const DiscussionUnderDevelopmentScreen(),
           '/create_post': (context) => const CreatePostScreen(),
           '/postcard_edit': (context) => const PostcardEditScreen(),
           '/map': (context) => const MapScreen(),
