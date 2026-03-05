@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:image_cropper/image_cropper.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../data/city_code_center.dart';
@@ -167,7 +168,8 @@ class _PostcardEditScreenState extends State<PostcardEditScreen>
       final picked = await _imagePicker.pickImage(source: ImageSource.gallery);
       if (!mounted || picked == null) return;
 
-      final nextPath = picked.path.trim();
+      final nextPath = await _cropPostcardImage(picked.path);
+      if (!mounted || nextPath == null) return;
       if (nextPath.isEmpty ||
           _isSamePreviewSource(_customPreviewImagePath, nextPath)) {
         return;
@@ -175,11 +177,43 @@ class _PostcardEditScreenState extends State<PostcardEditScreen>
 
       _pushUndoState();
       setState(() => _customPreviewImagePath = nextPath);
-      _showHint('Local image selected');
+      _showHint('Image updated');
     } catch (_) {
       if (!mounted) return;
       _showHint('Image pick failed');
     }
+  }
+
+  Future<String?> _cropPostcardImage(String sourcePath) async {
+    final cropped = await ImageCropper().cropImage(
+      sourcePath: sourcePath,
+      aspectRatio: const CropAspectRatio(ratioX: 400, ratioY: 258),
+      compressFormat: ImageCompressFormat.jpg,
+      compressQuality: 92,
+      uiSettings: <PlatformUiSettings>[
+        AndroidUiSettings(
+          toolbarTitle: 'Crop Postcard',
+          toolbarColor: const Color(0xFF2F663A),
+          toolbarWidgetColor: Colors.white,
+          lockAspectRatio: true,
+          hideBottomControls: false,
+          initAspectRatio: CropAspectRatioPreset.original,
+        ),
+        IOSUiSettings(
+          title: 'Crop Postcard',
+          aspectRatioLockEnabled: true,
+          resetAspectRatioEnabled: false,
+        ),
+        WebUiSettings(
+          context: context,
+          presentStyle: WebPresentStyle.dialog,
+          size: const CropperSize(width: 920, height: 620),
+        ),
+      ],
+    );
+    final path = cropped?.path.trim();
+    if (path == null || path.isEmpty) return null;
+    return path;
   }
 
   Future<void> _loadHotTemplates() async {
