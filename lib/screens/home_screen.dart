@@ -35,7 +35,10 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _loadEditedPostcards() async {
-    final postcards = await _editedPostcardService.getEditedPostcards();
+    final allPostcards = await _editedPostcardService.getEditedPostcards();
+    final postcards = allPostcards
+        .where((item) => !item.isDraft)
+        .toList(growable: false);
     if (!mounted) return;
     setState(() {
       _editedPostcards = postcards;

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import 'postcard_edit_screen.dart';
 import '../services/edited_postcard_service.dart';
 import '../widgets/resolved_image.dart';
 
@@ -37,8 +38,13 @@ class _DraftBoxScreenState extends State<DraftBoxScreen> {
     });
   }
 
-  Future<void> _openCreatePost() async {
-    await Navigator.pushNamed(context, '/create_post');
+  Future<void> _openDraftEditor(EditedPostcard draft) async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => PostcardEditScreen(initialDraft: draft),
+      ),
+    );
     if (!mounted) return;
     await _loadDrafts();
   }
@@ -69,7 +75,7 @@ class _DraftBoxScreenState extends State<DraftBoxScreen> {
               child: Row(
                 children: [
                   Text(
-                    '共 ${_drafts.length} 张未发布明信片',
+                    '共 ${_drafts.length} 张草稿',
                     style: const TextStyle(
                       fontSize: 13,
                       color: Color(0xFF6F7880),
@@ -104,7 +110,7 @@ class _DraftBoxScreenState extends State<DraftBoxScreen> {
             Icon(Icons.drafts_outlined, size: 54, color: Color(0xFF9AA2AA)),
             SizedBox(height: 10),
             Text(
-              '暂无未发布草稿',
+              '暂无草稿',
               style: TextStyle(
                 fontSize: 16,
                 color: Color(0xFF666D75),
@@ -137,7 +143,10 @@ class _DraftBoxScreenState extends State<DraftBoxScreen> {
           ),
           itemBuilder: (context, index) {
             final item = _drafts[index];
-            return _DraftPostcardTile(item: item, onTap: _openCreatePost);
+            return _DraftPostcardTile(
+              item: item,
+              onTap: () => _openDraftEditor(item),
+            );
           },
         );
       },

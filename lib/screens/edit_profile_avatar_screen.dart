@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../services/avatar_upload_service.dart';
+import '../services/backend_api_client.dart';
 import '../services/storage_service.dart';
 import '../widgets/resolved_image.dart';
 
@@ -97,8 +98,28 @@ class _EditProfileAvatarScreenState extends State<EditProfileAvatarScreen> {
     try {
       final source =
           _avatarStorageSource?.trim() ?? (_avatarSource?.trim() ?? '');
+      var syncedRemote = false;
+      var nextStorageSource = source;
+      String? syncErrorMessage;
+
+      final looksLikeLocalFile = _looksLikeLocalFilePath(source);
+      if (looksLikeLocalFile) {
+        try {
+          nextStorageSource = await _avatarUploadService.uploadAvatarAndSync(
+            _normalizeLocalUploadPath(source),
+          );
+          syncedRemote = true;
+        } catch (error) {
+          syncedRemote = false;
+          final text = error.toString().trim();
+          if (text.isNotEmpty) {
+            syncErrorMessage = text;
+          }
+        }
+      }
+
       final normalizedStorageSource =
-          AvatarUploadService.normalizeAvatarStorageSource(source);
+          AvatarUploadService.normalizeAvatarStorageSource(nextStorageSource);
       final resolvedDisplaySource = await _resolveDisplaySource(
         normalizedStorageSource,
       );
@@ -106,6 +127,20 @@ class _EditProfileAvatarScreenState extends State<EditProfileAvatarScreen> {
         normalizedStorageSource.isEmpty ? null : normalizedStorageSource,
       );
       if (!mounted) return;
+
+      if (!syncedRemote && looksLikeLocalFile) {
+        String detail;
+        if (syncErrorMessage == null) {
+          detail = '头像未同步到服务器，已仅本地保存';
+        } else if (syncErrorMessage.contains('Network request failed')) {
+          detail = '头像同步失败：网络不可用（${BackendApiClient.baseUrl}）';
+        } else {
+          detail = '头像同步失败：$syncErrorMessage';
+        }
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(detail)));
+      }
 
       setState(() {
         _avatarStorageSource = normalizedStorageSource.isEmpty
@@ -132,6 +167,26 @@ class _EditProfileAvatarScreenState extends State<EditProfileAvatarScreen> {
         });
       }
     }
+  }
+
+  bool _looksLikeLocalFilePath(String source) {
+    final text = source.trim();
+    if (text.isEmpty) return false;
+    if (text.startsWith('http://') || text.startsWith('https://')) {
+      return false;
+    }
+    if (text.startsWith('assets/')) return false;
+    if (text.startsWith('file://')) return true;
+    final windowsPath = RegExp(r'^[a-zA-Z]:[\\/]');
+    return text.startsWith('/') || windowsPath.hasMatch(text);
+  }
+
+  String _normalizeLocalUploadPath(String source) {
+    final text = source.trim();
+    if (!text.startsWith('file://')) return text;
+    final uri = Uri.tryParse(text);
+    if (uri == null || uri.scheme != 'file') return text;
+    return uri.toFilePath();
   }
 
   Future<void> _useDefaultAvatar() async {

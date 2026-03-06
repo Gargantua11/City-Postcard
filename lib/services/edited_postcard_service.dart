@@ -8,6 +8,7 @@ class EditedPostcard {
   final String imageUrl;
   final DateTime editedAt;
   final bool isPublished;
+  final bool isDraft;
   final double? latitude;
   final double? longitude;
   final String? cityName;
@@ -20,6 +21,7 @@ class EditedPostcard {
     required this.imageUrl,
     required this.editedAt,
     this.isPublished = false,
+    this.isDraft = false,
     this.latitude,
     this.longitude,
     this.cityName,
@@ -34,6 +36,7 @@ class EditedPostcard {
       'imageUrl': imageUrl,
       'editedAt': editedAt.toIso8601String(),
       'isPublished': isPublished,
+      'isDraft': isDraft,
       if (latitude != null) 'latitude': latitude,
       if (longitude != null) 'longitude': longitude,
       if (cityName != null && cityName!.trim().isNotEmpty)
@@ -62,6 +65,7 @@ class EditedPostcard {
       imageUrl: imageUrl,
       editedAt: editedAt,
       isPublished: _toBool(json['isPublished']) ?? false,
+      isDraft: _toBool(json['isDraft']) ?? false,
       latitude: _toDouble(json['latitude']),
       longitude: _toDouble(json['longitude']),
       cityName: _toNullableTrimmedString(json['cityName']),
@@ -102,7 +106,9 @@ class EditedPostcardService {
 
   Future<List<EditedPostcard>> getDraftPostcards() async {
     final postcards = await getEditedPostcards();
-    return postcards.where((item) => !item.isPublished).toList(growable: false);
+    return postcards
+        .where((item) => item.isDraft && !item.isPublished)
+        .toList(growable: false);
   }
 
   Future<void> addEditedPostcard(
@@ -122,6 +128,7 @@ class EditedPostcardService {
         imageUrl: imageUrl.trim(),
         editedAt: DateTime.now(),
         isPublished: false,
+        isDraft: false,
         latitude: latitude,
         longitude: longitude,
         cityName: cityName?.trim(),
@@ -131,6 +138,48 @@ class EditedPostcardService {
       ),
     );
     await _savePostcards(postcards);
+  }
+
+  Future<String> saveDraftPostcard({
+    String? draftId,
+    required String imageUrl,
+    double? latitude,
+    double? longitude,
+    String? cityName,
+    String? cityCode,
+    String? provinceName,
+    List<PostcardElementLayer>? layers,
+  }) async {
+    final postcards = await getEditedPostcards();
+    final normalizedId = draftId?.trim() ?? '';
+    final targetId = normalizedId.isEmpty ? _createDraftId() : normalizedId;
+    final updateIndex = normalizedId.isEmpty
+        ? -1
+        : postcards.indexWhere((item) => item.draftId == normalizedId);
+
+    if (updateIndex >= 0) {
+      postcards.removeAt(updateIndex);
+    }
+
+    postcards.insert(
+      0,
+      EditedPostcard(
+        draftId: targetId,
+        imageUrl: imageUrl.trim(),
+        editedAt: DateTime.now(),
+        isPublished: false,
+        isDraft: true,
+        latitude: latitude,
+        longitude: longitude,
+        cityName: cityName?.trim(),
+        cityCode: _toNullableCodeString(cityCode),
+        provinceName: provinceName?.trim(),
+        layers: List<PostcardElementLayer>.from(layers ?? const []),
+      ),
+    );
+
+    await _savePostcards(postcards);
+    return targetId;
   }
 
   Future<bool> deleteEditedPostcardAt(int index) async {
@@ -159,6 +208,7 @@ class EditedPostcardService {
       imageUrl: target.imageUrl,
       editedAt: target.editedAt,
       isPublished: true,
+      isDraft: false,
       latitude: target.latitude,
       longitude: target.longitude,
       cityName: target.cityName,

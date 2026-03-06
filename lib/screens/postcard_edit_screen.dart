@@ -13,7 +13,9 @@ import 'city_search_screen.dart';
 import 'dynamic_effect_screen.dart';
 
 class PostcardEditScreen extends StatefulWidget {
-  const PostcardEditScreen({super.key});
+  final EditedPostcard? initialDraft;
+
+  const PostcardEditScreen({super.key, this.initialDraft});
 
   @override
   State<PostcardEditScreen> createState() => _PostcardEditScreenState();
@@ -33,6 +35,7 @@ class _PostcardEditScreenState extends State<PostcardEditScreen>
   List<EditedPostcard> _hotTemplates = const [];
   City? _selectedCity;
   String? _customPreviewImagePath;
+  String? _editingDraftId;
   Timer? _templateAutoPlayTimer;
   bool _isLoadingHotTemplates = true;
   int _currentTemplateIndex = 0;
@@ -42,6 +45,7 @@ class _PostcardEditScreenState extends State<PostcardEditScreen>
   @override
   void initState() {
     super.initState();
+    _restoreInitialDraft();
     _effectController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 12),
@@ -57,8 +61,29 @@ class _PostcardEditScreenState extends State<PostcardEditScreen>
     super.dispose();
   }
 
-  Future<void> _savePostcard() async {
-    if (_isSaving) return;
+  void _restoreInitialDraft() {
+    final draft = widget.initialDraft;
+    if (draft == null) return;
+
+    final source = draft.imageUrl.trim();
+    final draftId = draft.draftId.trim();
+    final cityName = draft.cityName?.trim() ?? '';
+    final cityCode = draft.cityCode?.trim() ?? '';
+    final provinceName = draft.provinceName?.trim() ?? '';
+    final resolvedName = cityName.isNotEmpty
+        ? cityName
+        : (provinceName.isNotEmpty ? provinceName : 'Unknown');
+
+    _customPreviewImagePath = source.isEmpty ? null : source;
+    _editingDraftId = draftId.isEmpty ? null : draftId;
+    _elementLayers = List<PostcardElementLayer>.from(draft.layers);
+    _selectedCity = (cityName.isEmpty && cityCode.isEmpty)
+        ? null
+        : City(name: resolvedName, code: cityCode);
+  }
+
+  Future<bool> _saveAsDraft() async {
+    if (_isSaving) return false;
     setState(() => _isSaving = true);
 
     final cityCode = _normalizeCityCode(_selectedCity?.code);
@@ -66,23 +91,67 @@ class _PostcardEditScreenState extends State<PostcardEditScreen>
     final provinceName = _resolveProvinceNameFromCityCode(cityCode);
     final coordinate = cityCode == null ? null : kCityCodeCoordinates[cityCode];
 
-    await _editedPostcardService.addEditedPostcard(
-      _currentPreviewSource,
-      cityName: (cityName == null || cityName.isEmpty) ? null : cityName,
-      cityCode: cityCode,
-      provinceName: provinceName,
-      latitude: coordinate?.latitude,
-      longitude: coordinate?.longitude,
-      layers: _elementLayers,
+    try {
+      final draftId = await _editedPostcardService.saveDraftPostcard(
+        draftId: _editingDraftId,
+        imageUrl: _currentPreviewSource,
+        cityName: (cityName == null || cityName.isEmpty) ? null : cityName,
+        cityCode: cityCode,
+        provinceName: provinceName,
+        latitude: coordinate?.latitude,
+        longitude: coordinate?.longitude,
+        layers: _elementLayers,
+      );
+      if (!mounted) return false;
+      setState(() {
+        _isSaving = false;
+        _editingDraftId = draftId;
+      });
+      return true;
+    } catch (_) {
+      if (!mounted) return false;
+      setState(() => _isSaving = false);
+      _showHint('草稿保存失败，请重试');
+      return false;
+    }
+  }
+
+  Future<void> _saveDraftAndExit() async {
+    final saved = await _saveAsDraft();
+    if (!mounted || !saved) return;
+    _showHint('草稿已保存');
+    Navigator.pop(context, true);
+  }
+
+  Future<void> _onBackPressed() async {
+    if (_isSaving) return;
+
+    final action = await showDialog<_EditorExitAction>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('返回编辑'),
+        content: const Text('请选择返回方式'),
+        actions: [
+          TextButton(
+            onPressed: () =>
+                Navigator.pop(dialogContext, _EditorExitAction.discard),
+            child: const Text('不保存返回'),
+          ),
+          FilledButton(
+            onPressed: () =>
+                Navigator.pop(dialogContext, _EditorExitAction.saveDraft),
+            child: const Text('存为草稿'),
+          ),
+        ],
+      ),
     );
 
-    if (!mounted) return;
-    setState(() => _isSaving = false);
-
-    if (cityName != null && cityName.isNotEmpty) {
-      _showHint('已保存并标注：$cityName');
+    if (!mounted || action == null) return;
+    if (action == _EditorExitAction.discard) {
+      Navigator.pop(context, false);
+      return;
     }
-    Navigator.pop(context, true);
+    await _saveDraftAndExit();
   }
 
   Future<void> _selectLocationTag() async {
@@ -115,6 +184,16 @@ class _PostcardEditScreenState extends State<PostcardEditScreen>
   String? _resolveProvinceNameFromCityCode(String? cityCode) {
     if (cityCode == null || cityCode.length < 2) return null;
     return _provinceNameByPrefix[cityCode.substring(0, 2)];
+  }
+
+  String _buildLocationTagText() {
+    final city = _selectedCity;
+    if (city == null) return '未标注地点';
+
+    final name = city.name.trim();
+    final code = city.code.trim();
+    if (code.isEmpty) return '已标注地点：$name';
+    return '已标注地点：$name ($code)';
   }
 
   void _showHint(String message) {
@@ -307,7 +386,7 @@ class _PostcardEditScreenState extends State<PostcardEditScreen>
       return shell(
         const Center(
           child: Text(
-            '暂无热门模板',
+            'No hot templates',
             style: TextStyle(
               fontSize: 12,
               color: Color(0xFF54634C),
@@ -790,276 +869,313 @@ class _PostcardEditScreenState extends State<PostcardEditScreen>
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: Container(
-        color: const Color(0xFFFFFFFF),
-        child: SafeArea(
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              const double designWidth = 400;
-              const double designHeight = 820;
-              final double availableWidth = constraints.maxWidth - 24;
-              final double availableHeight = constraints.maxHeight;
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        _onBackPressed();
+      },
+      child: Scaffold(
+        body: Container(
+          color: const Color(0xFFFFFFFF),
+          child: SafeArea(
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                const double designWidth = 400;
+                const double designHeight = 820;
+                final double availableWidth = constraints.maxWidth - 24;
+                final double availableHeight = constraints.maxHeight;
 
-              double widthScale = availableWidth / designWidth;
-              double heightScale = availableHeight / designHeight;
-              double scale = widthScale < heightScale
-                  ? widthScale
-                  : heightScale;
-              if (scale > 1.0) scale = 1.0;
-              if (scale < 0.68) scale = 0.68;
+                double widthScale = availableWidth / designWidth;
+                double heightScale = availableHeight / designHeight;
+                double scale = widthScale < heightScale
+                    ? widthScale
+                    : heightScale;
+                if (scale > 1.0) scale = 1.0;
+                if (scale < 0.68) scale = 0.68;
 
-              final double contentWidth = designWidth * scale;
-              final double topButtonWidth = 94 * scale;
-              final double topButtonHeight = 41 * scale;
-              final double previewWidth = contentWidth - 16 * scale;
-              final double previewHeight = previewWidth / _postcardAspectRatio;
-              final double actionWidth = 184 * scale;
-              final double actionHeight = 54 * scale;
-              final double templateCardWidth = actionWidth - 20 * scale;
-              final double templateCardHeight =
-                  templateCardWidth / _postcardAspectRatio;
-              final double saveWidth = 353 * scale;
-              final double saveHeight = 87 * scale;
-              double actionGap = contentWidth - actionWidth * 2;
-              if (actionGap < 14 * scale) actionGap = 14 * scale;
-              if (actionGap > 28 * scale) actionGap = 28 * scale;
+                final double contentWidth = designWidth * scale;
+                final double topButtonWidth = 94 * scale;
+                final double topButtonHeight = 41 * scale;
+                final double previewWidth = contentWidth - 16 * scale;
+                final double previewHeight =
+                    previewWidth / _postcardAspectRatio;
+                final double actionWidth = 184 * scale;
+                final double actionHeight = 54 * scale;
+                final double templateCardWidth = actionWidth - 20 * scale;
+                final double templateCardHeight =
+                    templateCardWidth / _postcardAspectRatio;
+                double actionGap = contentWidth - actionWidth * 2;
+                if (actionGap < 14 * scale) actionGap = 14 * scale;
+                if (actionGap > 28 * scale) actionGap = 28 * scale;
 
-              return Align(
-                alignment: Alignment.topCenter,
-                child: SingleChildScrollView(
-                  padding: EdgeInsets.fromLTRB(0, 20 * scale, 0, 22 * scale),
-                  child: SizedBox(
-                    width: contentWidth,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Text(
-                          '城市明信片·编辑',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 22 * scale,
-                            fontWeight: FontWeight.w500,
-                            color: Colors.black,
+                return Align(
+                  alignment: Alignment.topCenter,
+                  child: SingleChildScrollView(
+                    padding: EdgeInsets.fromLTRB(0, 20 * scale, 0, 22 * scale),
+                    child: SizedBox(
+                      width: contentWidth,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Text(
+                            '城市明信片·编辑',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 22 * scale,
+                              fontWeight: FontWeight.w500,
+                              color: Colors.black,
+                            ),
                           ),
-                        ),
-                        SizedBox(height: 14 * scale),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            _AssetTapButton(
-                              assetPath: 'assets/images/edit/编辑-返回.png',
-                              width: topButtonWidth,
-                              height: topButtonHeight,
-                              onTap: _undo,
+                          SizedBox(height: 14 * scale),
+                          SizedBox(
+                            height: topButtonHeight,
+                            child: Stack(
+                              children: [
+                                Align(
+                                  alignment: Alignment.centerLeft,
+                                  child: _TopControlButton(
+                                    icon: Icons.arrow_back_ios_new_rounded,
+                                    label: '返回',
+                                    width: topButtonWidth,
+                                    height: topButtonHeight,
+                                    onTap: _onBackPressed,
+                                  ),
+                                ),
+                                Align(
+                                  alignment: Alignment.center,
+                                  child: _TopControlButton(
+                                    icon: Icons.undo_rounded,
+                                    label: '撤回',
+                                    width: topButtonWidth,
+                                    height: topButtonHeight,
+                                    onTap: _undo,
+                                  ),
+                                ),
+                                Align(
+                                  alignment: Alignment.centerRight,
+                                  child: _IconTextTopButton(
+                                    iconAssetPath:
+                                        'assets/images/edit/share_1.png',
+                                    label: '分享',
+                                    width: topButtonWidth,
+                                    height: topButtonHeight,
+                                    onTap: _share,
+                                  ),
+                                ),
+                              ],
                             ),
-                            _IconTextTopButton(
-                              iconAssetPath: 'assets/images/edit/share_1.png',
-                              label: '分享',
-                              width: topButtonWidth,
-                              height: topButtonHeight,
-                              onTap: _share,
+                          ),
+                          SizedBox(height: 16 * scale),
+                          Container(
+                            padding: EdgeInsets.all(8 * scale),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFEAF7E7),
+                              borderRadius: BorderRadius.circular(20 * scale),
+                              border: Border.all(
+                                color: const Color(0xFFB9D8B7),
+                              ),
+                              boxShadow: const [
+                                BoxShadow(
+                                  color: Color(0x1A5B875B),
+                                  blurRadius: 14,
+                                  offset: Offset(0, 8),
+                                ),
+                              ],
                             ),
-                          ],
-                        ),
-                        SizedBox(height: 16 * scale),
-                        Container(
-                          padding: EdgeInsets.all(8 * scale),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFEAF7E7),
-                            borderRadius: BorderRadius.circular(20 * scale),
-                            border: Border.all(color: const Color(0xFFB9D8B7)),
-                            boxShadow: const [
-                              BoxShadow(
-                                color: Color(0x1A5B875B),
-                                blurRadius: 14,
-                                offset: Offset(0, 8),
+                            child: GestureDetector(
+                              onTap: _pickLocalPreviewImage,
+                              child: SizedBox(
+                                width: previewWidth,
+                                height: previewHeight,
+                                child: Stack(
+                                  fit: StackFit.expand,
+                                  children: [
+                                    if (_customPreviewImagePath != null &&
+                                        _customPreviewImagePath!
+                                            .trim()
+                                            .isNotEmpty)
+                                      ResolvedImage(
+                                        source: _customPreviewImagePath!,
+                                        fit: BoxFit.cover,
+                                        filterQuality: FilterQuality.high,
+                                        fallbackBuilder: (_) =>
+                                            _buildPreviewPlaceholder(scale),
+                                        loadingBuilder: (_) =>
+                                            _buildPreviewPlaceholder(
+                                              scale,
+                                              showLoading: true,
+                                            ),
+                                      )
+                                    else
+                                      _buildPreviewPlaceholder(scale),
+                                    _buildLayerOverlay(
+                                      previewWidth,
+                                      previewHeight,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                          SizedBox(height: 8 * scale),
+                          Text(
+                            '点击明信片可更换图片',
+                            textAlign: TextAlign.right,
+                            style: TextStyle(
+                              fontSize: 12 * scale,
+                              color: const Color(0xFF4D7A56),
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          SizedBox(height: 18 * scale),
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              SizedBox(
+                                width: actionWidth,
+                                child: Column(
+                                  children: [
+                                    _EditorActionButton(
+                                      icon: Icons.auto_awesome_outlined,
+                                      label: '添加元素',
+                                      width: actionWidth,
+                                      height: actionHeight,
+                                      onTap: _openAddElements,
+                                    ),
+                                    SizedBox(height: 10 * scale),
+                                    _EditorActionButton(
+                                      icon: Icons.auto_mode_rounded,
+                                      label: '动态效果',
+                                      width: actionWidth,
+                                      height: actionHeight,
+                                      onTap: _openDynamicEffects,
+                                    ),
+                                    SizedBox(height: 10 * scale),
+                                    _EditorActionButton(
+                                      icon: Icons.place_rounded,
+                                      label: '地点标注',
+                                      width: actionWidth,
+                                      height: actionHeight,
+                                      onTap: _selectLocationTag,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              SizedBox(width: actionGap),
+                              Container(
+                                width: actionWidth,
+                                padding: EdgeInsets.fromLTRB(
+                                  8 * scale,
+                                  8 * scale,
+                                  8 * scale,
+                                  10 * scale,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFEAF7E7),
+                                  borderRadius: BorderRadius.circular(
+                                    16 * scale,
+                                  ),
+                                  border: Border.all(
+                                    color: const Color(0xFFAED0AE),
+                                  ),
+                                ),
+                                child: Column(
+                                  children: [
+                                    SizedBox(
+                                      width: templateCardWidth,
+                                      height: templateCardHeight,
+                                      child: _buildHotTemplateCarousel(
+                                        templateCardWidth,
+                                        templateCardHeight,
+                                      ),
+                                    ),
+                                    SizedBox(height: 8 * scale),
+                                    Text(
+                                      '热门模板',
+                                      style: TextStyle(
+                                        fontSize: 12 * scale,
+                                        color: const Color(0xFF2D5D35),
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
                             ],
                           ),
-                          child: GestureDetector(
-                            onTap: _pickLocalPreviewImage,
-                            child: SizedBox(
-                              width: previewWidth,
-                              height: previewHeight,
-                              child: Stack(
-                                fit: StackFit.expand,
-                                children: [
-                                  if (_customPreviewImagePath != null &&
-                                      _customPreviewImagePath!
-                                          .trim()
-                                          .isNotEmpty)
-                                    ResolvedImage(
-                                      source: _customPreviewImagePath!,
-                                      fit: BoxFit.cover,
-                                      filterQuality: FilterQuality.high,
-                                      fallbackBuilder: (_) =>
-                                          _buildPreviewPlaceholder(scale),
-                                      loadingBuilder: (_) =>
-                                          _buildPreviewPlaceholder(
-                                            scale,
-                                            showLoading: true,
-                                          ),
-                                    )
-                                  else
-                                    _buildPreviewPlaceholder(scale),
-                                  _buildLayerOverlay(
-                                    previewWidth,
-                                    previewHeight,
-                                  ),
-                                ],
+                          SizedBox(height: 12 * scale),
+                          Container(
+                            padding: EdgeInsets.symmetric(
+                              horizontal: 14 * scale,
+                              vertical: 12 * scale,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFEAF7E7),
+                              borderRadius: BorderRadius.circular(14 * scale),
+                              border: Border.all(
+                                color: const Color(0xFFAED0AE),
                               ),
                             ),
-                          ),
-                        ),
-                        SizedBox(height: 8 * scale),
-                        Text(
-                          '点击明信片可更换图片',
-                          textAlign: TextAlign.right,
-                          style: TextStyle(
-                            fontSize: 12 * scale,
-                            color: const Color(0xFF4D7A56),
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                        SizedBox(height: 18 * scale),
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            SizedBox(
-                              width: actionWidth,
-                              child: Column(
-                                children: [
-                                  _EditorActionButton(
-                                    icon: Icons.auto_awesome_outlined,
-                                    label: '添加元素',
-                                    width: actionWidth,
-                                    height: actionHeight,
-                                    onTap: _openAddElements,
-                                  ),
-                                  SizedBox(height: 10 * scale),
-                                  _EditorActionButton(
-                                    icon: Icons.auto_mode_rounded,
-                                    label: '动态效果',
-                                    width: actionWidth,
-                                    height: actionHeight,
-                                    onTap: _openDynamicEffects,
-                                  ),
-                                  SizedBox(height: 10 * scale),
-                                  _EditorActionButton(
-                                    icon: Icons.place_rounded,
-                                    label: '地点标注',
-                                    width: actionWidth,
-                                    height: actionHeight,
-                                    onTap: _selectLocationTag,
-                                  ),
-                                ],
-                              ),
-                            ),
-                            SizedBox(width: actionGap),
-                            Container(
-                              width: actionWidth,
-                              padding: EdgeInsets.fromLTRB(
-                                8 * scale,
-                                8 * scale,
-                                8 * scale,
-                                10 * scale,
-                              ),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFEAF7E7),
-                                borderRadius: BorderRadius.circular(16 * scale),
-                                border: Border.all(
-                                  color: const Color(0xFFAED0AE),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.location_on_rounded,
+                                  size: 18 * scale,
+                                  color: const Color(0xFF3D7C45),
                                 ),
-                              ),
-                              child: Column(
-                                children: [
-                                  SizedBox(
-                                    width: templateCardWidth,
-                                    height: templateCardHeight,
-                                    child: _buildHotTemplateCarousel(
-                                      templateCardWidth,
-                                      templateCardHeight,
-                                    ),
-                                  ),
-                                  SizedBox(height: 8 * scale),
-                                  Text(
-                                    '热门模板',
+                                SizedBox(width: 6 * scale),
+                                Expanded(
+                                  child: Text(
+                                    _buildLocationTagText(),
                                     style: TextStyle(
-                                      fontSize: 12 * scale,
+                                      fontSize: 13 * scale,
                                       color: const Color(0xFF2D5D35),
                                       fontWeight: FontWeight.w600,
                                     ),
                                   ),
-                                ],
-                              ),
+                                ),
+                              ],
                             ),
-                          ],
-                        ),
-                        SizedBox(height: 12 * scale),
-                        Container(
-                          padding: EdgeInsets.symmetric(
-                            horizontal: 14 * scale,
-                            vertical: 12 * scale,
                           ),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFEAF7E7),
-                            borderRadius: BorderRadius.circular(14 * scale),
-                            border: Border.all(color: const Color(0xFFAED0AE)),
+                          SizedBox(height: 16 * scale),
+                          Text(
+                            '点击返回可选择不保存返回或存为草稿',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 12 * scale,
+                              color: const Color(0xFF5B7562),
+                              fontWeight: FontWeight.w500,
+                            ),
                           ),
-                          child: Row(
-                            children: [
-                              Icon(
-                                Icons.location_on_rounded,
-                                size: 18 * scale,
-                                color: const Color(0xFF3D7C45),
-                              ),
-                              SizedBox(width: 6 * scale),
-                              Expanded(
-                                child: Text(
-                                  _selectedCity == null
-                                      ? '未标注地点'
-                                      : '已标注地点：${_selectedCity!.name} (${_selectedCity!.code})',
-                                  style: TextStyle(
-                                    fontSize: 13 * scale,
-                                    color: const Color(0xFF2D5D35),
-                                    fontWeight: FontWeight.w600,
+                          if (_isSaving)
+                            const Padding(
+                              padding: EdgeInsets.only(top: 12),
+                              child: Center(
+                                child: SizedBox(
+                                  width: 24,
+                                  height: 24,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2.6,
                                   ),
                                 ),
                               ),
-                            ],
-                          ),
-                        ),
-                        SizedBox(height: 16 * scale),
-                        _AssetTapButton(
-                          assetPath: 'assets/images/edit/编辑-保存.png',
-                          width: saveWidth,
-                          height: saveHeight,
-                          onTap: _isSaving ? null : _savePostcard,
-                          child: _isSaving
-                              ? const Center(
-                                  child: SizedBox(
-                                    width: 26,
-                                    height: 26,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 3,
-                                    ),
-                                  ),
-                                )
-                              : null,
-                        ),
-                      ],
+                            ),
+                        ],
+                      ),
                     ),
                   ),
-                ),
-              );
-            },
+                );
+              },
+            ),
           ),
         ),
       ),
     );
   }
 }
+
+enum _EditorExitAction { discard, saveDraft }
 
 const Map<String, String> _provinceNameByPrefix = {
   '11': '北京',
@@ -1098,39 +1214,63 @@ const Map<String, String> _provinceNameByPrefix = {
   '82': '澳门',
 };
 
-class _AssetTapButton extends StatelessWidget {
-  final String assetPath;
+class _TopControlButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
   final double width;
   final double height;
   final VoidCallback? onTap;
-  final Widget? child;
 
-  const _AssetTapButton({
-    required this.assetPath,
+  const _TopControlButton({
+    required this.icon,
+    required this.label,
     required this.width,
     required this.height,
     this.onTap,
-    this.child,
   });
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
-      child: SizedBox(
+      child: Container(
         width: width,
         height: height,
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            Image.asset(
-              assetPath,
-              fit: BoxFit.fill,
-              filterQuality: FilterQuality.high,
-              errorBuilder: (_, _, _) =>
-                  const ColoredBox(color: Color(0xFFE5E5E5)),
+        padding: EdgeInsets.symmetric(horizontal: width * 0.14),
+        decoration: BoxDecoration(
+          color: const Color(0xFFEAEFE1),
+          borderRadius: BorderRadius.circular(height / 2),
+          border: Border.all(color: const Color(0xFFAFB6A3)),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x33000000),
+              blurRadius: 8,
+              offset: Offset(0, 3),
             ),
-            if (child case final Widget overlay) overlay,
+            BoxShadow(
+              color: Color(0x18FFFFFF),
+              blurRadius: 2,
+              offset: Offset(0, -1),
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: height * 0.46, color: const Color(0xFF2F372D)),
+            SizedBox(width: width * 0.08),
+            Flexible(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: height * 0.35,
+                  fontWeight: FontWeight.w600,
+                  color: const Color(0xFF2F372D),
+                ),
+              ),
+            ),
           ],
         ),
       ),

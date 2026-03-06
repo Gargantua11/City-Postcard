@@ -46,7 +46,7 @@ class _PostcardOverviewScreenState extends State<PostcardOverviewScreen> {
         elevation: 0,
         centerTitle: true,
         title: const Text(
-          '明信片总览',
+          '闁哄嫬绨兼穱濠囨偋閸ャ劉鍋撻弰蹇ｆ綌',
           style: TextStyle(
             fontSize: 22,
             fontWeight: FontWeight.w700,
@@ -63,7 +63,7 @@ class _PostcardOverviewScreenState extends State<PostcardOverviewScreen> {
               child: Row(
                 children: [
                   Text(
-                    '共 ${_postcards.length} 张明信片',
+                    'Total \\ postcards',
                     style: const TextStyle(
                       fontSize: 13,
                       color: Color(0xFF6F7880),
@@ -73,7 +73,7 @@ class _PostcardOverviewScreenState extends State<PostcardOverviewScreen> {
                   const Spacer(),
                   TextButton(
                     onPressed: _isLoading ? null : _loadPostcards,
-                    child: const Text('刷新'),
+                    child: const Text('Refresh'),
                   ),
                 ],
               ),
@@ -102,7 +102,7 @@ class _PostcardOverviewScreenState extends State<PostcardOverviewScreen> {
             ),
             SizedBox(height: 10),
             Text(
-              '暂无已创作明信片',
+              '闁哄棗鍊瑰Λ銈咁啅閹绘帒鐏″ù锝嗙矋濡叉垶绌遍敍鍕暬',
               style: TextStyle(
                 fontSize: 16,
                 color: Color(0xFF666D75),
@@ -111,7 +111,7 @@ class _PostcardOverviewScreenState extends State<PostcardOverviewScreen> {
             ),
             SizedBox(height: 4),
             Text(
-              '去首页编辑并保存明信片后会显示在这里',
+              'Edit postcards on the home page and they will appear here',
               style: TextStyle(fontSize: 12, color: Color(0xFF8F97A0)),
             ),
           ],
@@ -154,14 +154,15 @@ class _PostcardOverviewTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final editedAtText = DateFormat('yyyy-MM-dd HH:mm').format(item.editedAt);
     final location = _resolveLocation(item);
-    final statusText = item.isPublished ? '已发布' : '未发布';
+    final statusText = item.isPublished
+        ? 'Published'
+        : (item.isDraft ? 'Draft' : 'Unpublished');
     final statusColor = item.isPublished
         ? const Color(0xFF5E9C5B)
-        : const Color(0xFFAA7B39);
+        : (item.isDraft ? const Color(0xFF367FA9) : const Color(0xFFAA7B39));
     final statusBg = item.isPublished
         ? const Color(0xFFE3F2E1)
-        : const Color(0xFFF5E7D5);
-
+        : (item.isDraft ? const Color(0xFFE4F1F8) : const Color(0xFFF5E7D5));
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -269,8 +270,8 @@ class _PostcardOverviewTile extends StatelessWidget {
     if (province != null && province.isNotEmpty) return province;
 
     final code = postcard.cityCode?.trim();
-    if (code != null && code.isNotEmpty) return '城市代码$code';
-    return '未标注地点';
+    if (code != null && code.isNotEmpty) return 'City Code \\';
+    return 'Unknown location';
   }
 }
 

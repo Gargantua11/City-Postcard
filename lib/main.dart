@@ -43,7 +43,7 @@ class MyApp extends StatelessWidget {
           colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
           useMaterial3: true,
         ),
-        home: const _AuthGate(),
+        home: const HomeScreen(),
         routes: {
           '/login': (context) => const LoginScreen(),
           '/register1': (context) => const RegisterStep1Screen(),
@@ -68,29 +68,6 @@ class MyApp extends StatelessWidget {
           '/search_screen': (context) => const SearchScreen(),
         },
       ),
-    );
-  }
-}
-
-class _AuthGate extends StatelessWidget {
-  const _AuthGate();
-
-  @override
-  Widget build(BuildContext context) {
-    return Consumer<AuthProvider>(
-      builder: (context, authProvider, _) {
-        if (authProvider.isLoading) {
-          return const Scaffold(
-            body: Center(child: CircularProgressIndicator()),
-          );
-        }
-
-        if (authProvider.isAuthenticated) {
-          return const HomeScreen();
-        }
-
-        return const LoginScreen();
-      },
     );
   }
 }
