@@ -222,15 +222,12 @@ class MapBackendService {
 
   Future<List<String>> fetchLightedCityCodes() async {
     final localEdited = await _editedPostcardService.getEditedPostcards();
-    if (localEdited.isNotEmpty) {
-      final localCards = _mapLocalPostcards(localEdited);
-      final localCodes = <String>{};
-      for (final card in localCards) {
-        final code = _normalizeCode(card.cityCode);
-        if (code == null || code.isEmpty) continue;
-        localCodes.add(code);
-      }
-      return localCodes.toList(growable: false);
+    final localCards = _mapLocalPostcards(localEdited);
+    final localCodes = <String>{};
+    for (final card in localCards) {
+      final code = _normalizeCode(card.cityCode);
+      if (code == null || code.isEmpty) continue;
+      localCodes.add(code);
     }
 
     try {
@@ -247,20 +244,22 @@ class MapBackendService {
       }
     }
 
-    return _fetchLightedCityCodesFromDiscussion();
+    final fromDiscussion = await _fetchLightedCityCodesFromDiscussion();
+    if (fromDiscussion.isNotEmpty) {
+      return fromDiscussion;
+    }
+
+    return localCodes.toList(growable: false);
   }
 
   Future<List<MapProvincePostcard>> fetchProvincePostcards(
     String provinceCodePrefix,
   ) async {
     final localEdited = await _editedPostcardService.getEditedPostcards();
-    if (localEdited.isNotEmpty) {
-      final localCards = _mapLocalPostcards(
-        localEdited,
-        provinceCodePrefix: provinceCodePrefix,
-      );
-      return localCards;
-    }
+    final localCards = _mapLocalPostcards(
+      localEdited,
+      provinceCodePrefix: provinceCodePrefix,
+    );
 
     try {
       final fromMap = await _fetchProvincePostcardsFromMap(provinceCodePrefix);
@@ -276,7 +275,14 @@ class MapBackendService {
       }
     }
 
-    return _fetchProvincePostcardsFromDiscussion(provinceCodePrefix);
+    final fromDiscussion = await _fetchProvincePostcardsFromDiscussion(
+      provinceCodePrefix,
+    );
+    if (fromDiscussion.isNotEmpty) {
+      return fromDiscussion;
+    }
+
+    return localCards;
   }
 
   List<MapProvincePostcard> _mapLocalPostcards(

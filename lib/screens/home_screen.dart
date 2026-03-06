@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../models/postcard_element_layer.dart';
 import '../services/edited_postcard_service.dart';
+import '../services/postcard_data_refresh_bus.dart';
 import '../services/storage_service.dart';
 import '../widgets/app_bottom_nav_bar.dart';
 import '../widgets/resolved_image.dart';
@@ -30,7 +31,19 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
+    PostcardDataRefreshBus.listenable.addListener(_onPostcardSaved);
     _loadHome3dPreviewSetting();
+    _loadEditedPostcards();
+  }
+
+  @override
+  void dispose() {
+    PostcardDataRefreshBus.listenable.removeListener(_onPostcardSaved);
+    super.dispose();
+  }
+
+  void _onPostcardSaved() {
+    if (!mounted) return;
     _loadEditedPostcards();
   }
 

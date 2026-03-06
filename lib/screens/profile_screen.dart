@@ -82,6 +82,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Future<void> _syncProfileFromBackend() async {
     String? remoteCityName;
     String? remoteCityCode;
+    String? remoteAvatarSource;
+    String? remoteNickname;
 
     try {
       final cityBody = await _apiClient.get('/me/city', requireAuth: true);
@@ -93,8 +95,32 @@ class _ProfileScreenState extends State<ProfileScreen> {
       }
     } catch (_) {}
 
+    try {
+      final avatarBody = await _apiClient.get('/me/avatar', requireAuth: true);
+      remoteAvatarSource = _extractAvatarSource(avatarBody);
+    } on BackendApiException catch (e) {
+      if (e.isUnauthorized) {
+        return;
+      }
+    } catch (_) {}
+
+    try {
+      final profileBody = await _fetchProfileBodyWithFallback();
+      remoteNickname = _extractNickname(profileBody);
+      remoteAvatarSource ??= _extractAvatarSource(profileBody);
+    } on BackendApiException catch (e) {
+      if (e.isUnauthorized) {
+        return;
+      }
+    } catch (_) {}
+
     var normalizedCityName = remoteCityName?.trim();
     var resolvedCityCode = remoteCityCode?.trim();
+    final normalizedNickname = remoteNickname?.trim() ?? '';
+    final normalizedAvatarStorage =
+        AvatarUploadService.normalizeAvatarStorageSource(
+          (remoteAvatarSource ?? '').trim(),
+        );
 
     if ((resolvedCityCode == null || resolvedCityCode.isEmpty) &&
         normalizedCityName != null &&
@@ -119,11 +145,32 @@ class _ProfileScreenState extends State<ProfileScreen> {
       }
     }
 
+    if (normalizedNickname.isNotEmpty) {
+      await _storageService.saveProfileNickname(normalizedNickname);
+    }
+
+    if (normalizedAvatarStorage.isNotEmpty) {
+      await _storageService.saveProfileAvatar(normalizedAvatarStorage);
+    }
+
     if (!mounted) return;
+    final displayAvatar = await _resolveAvatarDisplaySource(
+      normalizedAvatarStorage,
+    );
     setState(() {
       if (normalizedCityName != null && normalizedCityName.isNotEmpty) {
         _cityName = normalizedCityName;
         _cityCode = resolvedCityCode;
+      }
+      if (normalizedNickname.isNotEmpty) {
+        _username = normalizedNickname;
+      }
+      if (displayAvatar.isNotEmpty) {
+        _avatarSource = displayAvatar;
+      } else if (AvatarUploadService.isRenderableImageSource(
+        normalizedAvatarStorage,
+      )) {
+        _avatarSource = normalizedAvatarStorage;
       }
     });
   }
@@ -194,6 +241,52 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final digits = raw.trim().replaceAll(RegExp(r'[^0-9]'), '');
     if (digits.isEmpty) return null;
     return digits;
+  }
+
+  Future<Map<String, dynamic>> _fetchProfileBodyWithFallback() async {
+    BackendApiException? backendError;
+    for (final path in const <String>['/me/profile', '/me/user', '/me']) {
+      try {
+        return await _apiClient.get(path, requireAuth: true);
+      } on BackendApiException catch (e) {
+        backendError = e;
+      }
+    }
+    if (backendError != null) throw backendError;
+    throw const BackendApiException('cannot load user profile');
+  }
+
+  String? _extractNickname(Map<String, dynamic> body) {
+    final data = BackendApiClient.extractData(body);
+    final map = BackendApiClient.asMap(data) ?? body;
+    final nickname = BackendApiClient.readString(map, const [
+      'nickname',
+      'username',
+      'displayName',
+      'name',
+    ]);
+    final text = nickname?.trim() ?? '';
+    if (text.isEmpty) return null;
+    return text;
+  }
+
+  String? _extractAvatarSource(Map<String, dynamic> body) {
+    final data = BackendApiClient.extractData(body);
+    final map = BackendApiClient.asMap(data) ?? body;
+    final avatar = BackendApiClient.readString(map, const [
+      'avatarUrl',
+      'avatar',
+      'avatarKey',
+      'key',
+      'objectKey',
+      'fileKey',
+      'path',
+      'url',
+      'value',
+    ]);
+    final text = avatar?.trim() ?? '';
+    if (text.isEmpty) return null;
+    return text;
   }
 
   String? _findCityCodeByName(String cityName) {

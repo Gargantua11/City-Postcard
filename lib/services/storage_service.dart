@@ -73,12 +73,15 @@ class StorageService {
   }
 
   // 清除用户信息
-  Future<void> clearUser() async {
+  Future<void> clearUser({bool clearProfileCache = false}) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_userKey);
     await prefs.remove(_tokenKey);
-    await _clearProfileCache(prefs);
-    await prefs.remove(_profileCacheOwnerKey);
+
+    if (clearProfileCache) {
+      await _clearProfileCache(prefs);
+      await prefs.remove(_profileCacheOwnerKey);
+    }
   }
 
   // 检查是否已登录
@@ -199,6 +202,62 @@ class StorageService {
     } else {
       await prefs.setString(_profileCityCodeKey, cityCode);
     }
+  }
+
+  Future<User> hydrateUserProfileForLogin(User user) async {
+    final prefs = await SharedPreferences.getInstance();
+    final previousOwner = prefs.getString(_profileCacheOwnerKey)?.trim() ?? '';
+    final nextOwner = _buildProfileCacheOwner(user);
+    if (previousOwner.isEmpty ||
+        nextOwner.isEmpty ||
+        previousOwner != nextOwner) {
+      return user;
+    }
+
+    final cachedNickname = prefs.getString(_profileNicknameKey)?.trim() ?? '';
+    final cachedAvatar = prefs.getString(_profileAvatarKey)?.trim() ?? '';
+    final cachedCityName = prefs.getString(_profileCityNameKey)?.trim() ?? '';
+    final cachedCityCode = prefs.getString(_profileCityCodeKey)?.trim() ?? '';
+    final cachedPhone = prefs.getString(_profilePhoneKey)?.trim() ?? '';
+
+    final incomingUsername = user.username.trim();
+    final incomingPhone = user.phone?.trim() ?? '';
+    final shouldUseCachedNickname =
+        cachedNickname.isNotEmpty &&
+        (incomingUsername.isEmpty || incomingUsername == incomingPhone);
+    final mergedUsername = shouldUseCachedNickname
+        ? cachedNickname
+        : incomingUsername;
+
+    final incomingAvatar = user.avatar?.trim() ?? '';
+    final mergedAvatar = incomingAvatar.isNotEmpty
+        ? incomingAvatar
+        : (cachedAvatar.isEmpty ? user.avatar : cachedAvatar);
+
+    final mergedCityName =
+        (user.cityName?.trim().isNotEmpty == true) || cachedCityName.isEmpty
+        ? user.cityName
+        : cachedCityName;
+    final mergedCityCode =
+        (user.cityCode?.trim().isNotEmpty == true) || cachedCityCode.isEmpty
+        ? user.cityCode
+        : cachedCityCode;
+    final mergedPhone = incomingPhone.isNotEmpty
+        ? incomingPhone
+        : (cachedPhone.isEmpty ? user.phone : cachedPhone);
+
+    return User(
+      id: user.id,
+      username: mergedUsername.isEmpty ? user.username : mergedUsername,
+      avatar: mergedAvatar,
+      phone: mergedPhone,
+      cityName: mergedCityName,
+      cityCode: mergedCityCode,
+      accessToken: user.accessToken,
+      refreshToken: user.refreshToken,
+      tokenType: user.tokenType,
+      expiresInSeconds: user.expiresInSeconds,
+    );
   }
 
   Future<void> saveProfileCity({

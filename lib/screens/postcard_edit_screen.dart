@@ -8,7 +8,9 @@ import 'package:image_picker/image_picker.dart';
 
 import '../data/city_code_center.dart';
 import '../models/postcard_element_layer.dart';
+import '../services/backend_api_client.dart';
 import '../services/edited_postcard_service.dart';
+import '../services/postcard_data_refresh_bus.dart';
 import '../widgets/resolved_image.dart';
 import 'city_search_screen.dart';
 import 'dynamic_effect_screen.dart';
@@ -108,7 +110,12 @@ class _PostcardEditScreenState extends State<PostcardEditScreen>
         _isSaving = false;
         _editingDraftId = savedId;
       });
+      PostcardDataRefreshBus.notifySaved();
       Navigator.pop(context, true);
+    } on BackendApiException catch (e) {
+      if (!mounted) return;
+      setState(() => _isSaving = false);
+      _showHint(e.message);
     } catch (_) {
       if (!mounted) return;
       setState(() => _isSaving = false);

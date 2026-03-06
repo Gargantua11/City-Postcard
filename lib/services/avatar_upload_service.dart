@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:crypto/crypto.dart';
 import 'package:flutter_oss_aliyun/flutter_oss_aliyun.dart';
 
 import 'backend_api_client.dart';
@@ -20,6 +21,8 @@ class AvatarUploadService {
 
   static String? _cachedOssEndpoint;
   static String? _cachedBucketName;
+  static final Map<String, _CachedSignedUrl> _signedGetUrlCache =
+      <String, _CachedSignedUrl>{};
 
   static bool isRenderableImageSource(String source) {
     final trimmed = source.trim();
@@ -152,12 +155,22 @@ class AvatarUploadService {
       _initClient(endpoint: context.endpoint, bucketName: context.bucketName);
 
       if (preferSignedUrl) {
+        final signedUrl = await _buildSignedGetUrlWithStsV1(
+          source: normalizedStorageSource,
+          endpoint: context.endpoint,
+          bucketName: context.bucketName,
+          expireSeconds: signedUrlExpireSeconds,
+        );
+        if (signedUrl.isNotEmpty) {
+          return signedUrl;
+        }
+
         try {
-          final signedUrl = await Client().getSignedUrl(
+          final signedByPlugin = await Client().getSignedUrl(
             normalizedStorageSource,
             expireSeconds: signedUrlExpireSeconds,
           );
-          final text = signedUrl.trim();
+          final text = signedByPlugin.trim();
           if (text.isNotEmpty) return text;
         } catch (_) {}
       }
@@ -405,6 +418,150 @@ class AvatarUploadService {
     final stsBody = await _requestOssSts();
     final tokenMap = _extractStsToken(stsBody);
     return jsonEncode(tokenMap);
+  }
+
+  Future<String> _buildSignedGetUrlWithStsV1({
+    required String source,
+    required String endpoint,
+    required String bucketName,
+    required int expireSeconds,
+  }) async {
+    final objectKey = _normalizeObjectKeyForSigning(
+      source,
+      bucketName: bucketName,
+      endpoint: endpoint,
+    );
+    if (objectKey.isEmpty) return '';
+
+    final cacheKey = _buildSignedUrlCacheKey(
+      endpoint: endpoint,
+      bucketName: bucketName,
+      objectKey: objectKey,
+    );
+    final nowEpochSeconds =
+        DateTime.now().toUtc().millisecondsSinceEpoch ~/ 1000;
+    final cached = _signedGetUrlCache[cacheKey];
+    if (cached != null && cached.expiresEpochSeconds > nowEpochSeconds + 30) {
+      return cached.url;
+    }
+
+    try {
+      final stsBody = await _requestOssSts();
+      final credential = _extractStsCredential(stsBody);
+      final expires = _buildSignedUrlExpires(expireSeconds);
+      final stringToSignRawToken = _buildStringToSignForGet(
+        bucketName: bucketName,
+        objectKey: objectKey,
+        expires: expires,
+        securityToken: credential.securityToken,
+      );
+      final signatureRawToken = _signStsString(
+        stringToSignRawToken,
+        accessKeySecret: credential.accessKeySecret,
+      );
+
+      final uri =
+          Uri.https('$bucketName.$endpoint', '/$objectKey', <String, String>{
+            'OSSAccessKeyId': credential.accessKeyId,
+            'Expires': '$expires',
+            'Signature': signatureRawToken,
+            'security-token': credential.securityToken,
+          });
+      final signedUrl = uri.toString();
+      _signedGetUrlCache[cacheKey] = _CachedSignedUrl(
+        url: signedUrl,
+        expiresEpochSeconds: expires,
+      );
+      return signedUrl;
+    } catch (_) {
+      return '';
+    }
+  }
+
+  String _buildSignedUrlCacheKey({
+    required String endpoint,
+    required String bucketName,
+    required String objectKey,
+  }) {
+    final normalizedEndpoint = endpoint.trim().toLowerCase();
+    final normalizedBucket = bucketName.trim().toLowerCase();
+    final normalizedObjectKey = objectKey.trim();
+    return '$normalizedBucket@$normalizedEndpoint/$normalizedObjectKey';
+  }
+
+  _OssStsCredential _extractStsCredential(Map<String, dynamic> body) {
+    final tokenMap = _extractStsToken(body);
+    final accessKeyId = tokenMap['AccessKeyId']?.toString().trim() ?? '';
+    final accessKeySecret =
+        tokenMap['AccessKeySecret']?.toString().trim() ?? '';
+    final securityToken = tokenMap['SecurityToken']?.toString().trim() ?? '';
+    if (accessKeyId.isEmpty ||
+        accessKeySecret.isEmpty ||
+        securityToken.isEmpty) {
+      throw const BackendApiException('invalid /oss/sts response');
+    }
+    return _OssStsCredential(
+      accessKeyId: accessKeyId,
+      accessKeySecret: accessKeySecret,
+      securityToken: securityToken,
+    );
+  }
+
+  int _buildSignedUrlExpires(int expireSeconds) {
+    final normalized = expireSeconds <= 0
+        ? 3600
+        : (expireSeconds > 7 * 24 * 3600 ? 7 * 24 * 3600 : expireSeconds);
+    final nowSeconds = DateTime.now().toUtc().millisecondsSinceEpoch ~/ 1000;
+    return nowSeconds + normalized;
+  }
+
+  String _buildStringToSignForGet({
+    required String bucketName,
+    required String objectKey,
+    required int expires,
+    required String securityToken,
+  }) {
+    return 'GET\n\n\n$expires\n/$bucketName/$objectKey?security-token=$securityToken';
+  }
+
+  String _signStsString(
+    String stringToSign, {
+    required String accessKeySecret,
+  }) {
+    final hmac = Hmac(sha1, utf8.encode(accessKeySecret));
+    final digest = hmac.convert(utf8.encode(stringToSign));
+    return base64Encode(digest.bytes);
+  }
+
+  String _normalizeObjectKeyForSigning(
+    String source, {
+    required String bucketName,
+    required String endpoint,
+  }) {
+    final trimmed = source.trim();
+    if (trimmed.isEmpty) return '';
+
+    final normalized = normalizeAvatarStorageSource(
+      trimmed,
+      endpoint: endpoint,
+      bucketName: bucketName,
+    ).trim();
+    if (normalized.isEmpty) return '';
+    if (_looksLikeRelativeApiPath(normalized) ||
+        _looksLikeAssetOrLocal(normalized)) {
+      return '';
+    }
+
+    final normalizedUri = Uri.tryParse(normalized);
+    if (normalizedUri != null &&
+        (normalizedUri.isScheme('http') || normalizedUri.isScheme('https'))) {
+      return _extractObjectKeyFromUriPath(
+        normalizedUri,
+        bucketName: bucketName,
+      ).replaceFirst(RegExp(r'^/+'), '');
+    }
+
+    return normalized.replaceFirst(RegExp(r'^/+'), '');
   }
 
   Future<Map<String, dynamic>> _requestOssSts() async {
@@ -805,4 +962,26 @@ class _OssUploadContext {
 
   final String endpoint;
   final String bucketName;
+}
+
+class _OssStsCredential {
+  const _OssStsCredential({
+    required this.accessKeyId,
+    required this.accessKeySecret,
+    required this.securityToken,
+  });
+
+  final String accessKeyId;
+  final String accessKeySecret;
+  final String securityToken;
+}
+
+class _CachedSignedUrl {
+  const _CachedSignedUrl({
+    required this.url,
+    required this.expiresEpochSeconds,
+  });
+
+  final String url;
+  final int expiresEpochSeconds;
 }

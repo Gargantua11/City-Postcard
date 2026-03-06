@@ -10,6 +10,7 @@ import '../models/postcard_element_layer.dart';
 import '../services/backend_api_client.dart';
 import '../services/edited_postcard_service.dart';
 import '../services/map_backend_service.dart';
+import '../services/postcard_data_refresh_bus.dart';
 import '../services/storage_service.dart';
 import '../widgets/app_bottom_nav_bar.dart';
 import '../widgets/resolved_image.dart';
@@ -47,9 +48,20 @@ class _MapScreenState extends State<MapScreen> {
   @override
   void initState() {
     super.initState();
-    _loadMapData();
+    PostcardDataRefreshBus.listenable.addListener(_onPostcardSaved);
     _loadEditedPostcards();
     _loadHome3dPreviewSetting();
+  }
+
+  @override
+  void dispose() {
+    PostcardDataRefreshBus.listenable.removeListener(_onPostcardSaved);
+    super.dispose();
+  }
+
+  void _onPostcardSaved() {
+    if (!mounted) return;
+    _loadEditedPostcards();
   }
 
   Future<void> _loadHome3dPreviewSetting() async {
@@ -72,27 +84,18 @@ class _MapScreenState extends State<MapScreen> {
         _editedPostcards = postcards;
         _isPostcardsLoading = false;
       });
-      if (postcards.isEmpty) {
-        _clearMapMarksForNoPostcards();
-      } else {
-        _loadMapData();
-      }
+      await _loadMapData();
     } catch (_) {
       if (!mounted) return;
       setState(() {
         _editedPostcards = const <EditedPostcard>[];
         _isPostcardsLoading = false;
       });
-      _clearMapMarksForNoPostcards();
+      await _loadMapData();
     }
   }
 
   Future<void> _loadMapData() async {
-    if (_editedPostcards.isEmpty) {
-      _clearMapMarksForNoPostcards();
-      return;
-    }
-
     setState(() {
       _isLoading = true;
       _errorMessage = null;
@@ -144,10 +147,6 @@ class _MapScreenState extends State<MapScreen> {
         ..sort((a, b) => b.editedAt.compareTo(a.editedAt));
 
       if (!mounted) return;
-      if (_editedPostcards.isEmpty) {
-        _clearMapMarksForNoPostcards();
-        return;
-      }
       setState(() {
         _litProvinceCodes = litProvinces;
         _citySpotsByProvince = citySpotsByProvince;
@@ -176,26 +175,7 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
-  void _clearMapMarksForNoPostcards() {
-    if (!mounted) return;
-    setState(() {
-      _litProvinceCodes = const <String>{};
-      _citySpotsByProvince = const <String, List<_CitySpot>>{};
-      _citySpots = const <_CitySpot>[];
-      _selectedProvinceCode = null;
-      _selectedCityCode = null;
-      _selectedCityLabel = null;
-      _selectedCityProvinceCode = null;
-      _loadingProvinceCode = null;
-      _isOfflineMode = false;
-      _offlineNotice = null;
-      _errorMessage = null;
-      _isLoading = false;
-    });
-  }
-
   Future<void> _loadProvinceDetails(String provinceCode) async {
-    if (_editedPostcards.isEmpty) return;
     if (_loadingProvinceCode == provinceCode) return;
     if (_isOfflineMode) return;
 

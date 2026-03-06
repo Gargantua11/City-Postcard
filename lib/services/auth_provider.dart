@@ -98,8 +98,9 @@ class AuthProvider extends ChangeNotifier {
     try {
       final user = await _authService.login(phone, password);
       if (user != null) {
-        _user = user;
-        await _storageService.saveUser(user);
+        final hydrated = await _storageService.hydrateUserProfileForLogin(user);
+        _user = hydrated;
+        await _storageService.saveUser(hydrated);
         return true;
       }
 
@@ -123,8 +124,9 @@ class AuthProvider extends ChangeNotifier {
     try {
       final user = await _authService.loginWithCode(phone, code);
       if (user != null) {
-        _user = user;
-        await _storageService.saveUser(user);
+        final hydrated = await _storageService.hydrateUserProfileForLogin(user);
+        _user = hydrated;
+        await _storageService.saveUser(hydrated);
         return true;
       }
 
