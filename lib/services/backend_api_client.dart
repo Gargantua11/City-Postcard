@@ -50,7 +50,7 @@ class BackendApiClient {
       response = await http.get(uri, headers: headers);
     } catch (error) {
       throw BackendApiException(
-        'Network request failed [GET $path]: ${error.runtimeType}: $error',
+        '网络请求失败 [GET $path]: ${error.runtimeType}: $error',
       );
     }
 
@@ -165,7 +165,7 @@ class BackendApiClient {
     try {
       request.files.add(await http.MultipartFile.fromPath(fieldName, filePath));
     } catch (_) {
-      throw const BackendApiException('Invalid upload file path.');
+      throw const BackendApiException('上传文件路径无效。');
     }
 
     http.Response response;
@@ -174,7 +174,7 @@ class BackendApiClient {
       response = await http.Response.fromStream(streamed);
     } catch (error) {
       throw BackendApiException(
-        'Network request failed [${method.toUpperCase()} $path]: '
+        '网络请求失败 [${method.toUpperCase()} $path]: '
         '${error.runtimeType}: $error',
       );
     }
@@ -305,11 +305,11 @@ class BackendApiClient {
           );
           break;
         default:
-          throw const BackendApiException('Unsupported request method.');
+          throw const BackendApiException('不支持的请求方法。');
       }
     } catch (error) {
       throw BackendApiException(
-        'Network request failed [${method.toUpperCase()} $path]: '
+        '网络请求失败 [${method.toUpperCase()} $path]: '
         '${error.runtimeType}: $error',
       );
     }
@@ -332,9 +332,9 @@ class BackendApiClient {
     Map<String, dynamic>? body,
   ) {
     if (statusCode == 401 || statusCode == 403) {
-      return 'Login expired. Please sign in again.';
+      return '登录已过期，请重新登录。';
     }
-    return _extractMessage(body) ?? 'Request failed ($statusCode)';
+    return _extractMessage(body) ?? '请求失败（$statusCode）';
   }
 
   static Map<String, dynamic>? _decodeBodyFromBytes(List<int> bodyBytes) {

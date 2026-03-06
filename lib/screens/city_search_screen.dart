@@ -509,7 +509,7 @@ class _CitySearchScreenState extends State<CitySearchScreen> {
                           ),
                         ),
                         subtitle: Text(
-                          '行政编码: ${city.code}',
+                          '行政编码：${city.code}',
                           style: const TextStyle(
                             fontSize: 12,
                             color: Colors.grey,

@@ -29,8 +29,8 @@ class AuthProvider extends ChangeNotifier {
         _user = savedUser;
       }
     } catch (e) {
-      _error = 'Failed to initialize auth state';
-      debugPrint('Failed to initialize auth state: $e');
+      _error = '初始化登录状态失败';
+      debugPrint('初始化登录状态失败: $e');
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -60,19 +60,14 @@ class AuthProvider extends ChangeNotifier {
       );
 
       if (result == null) {
-        _error =
-            _authService.lastError ??
-            'Registration failed, please try again later';
+        _error = _authService.lastError ?? '注册失败，请稍后重试';
         return null;
       }
 
       final code = _toInt(result['code']);
       final success = code == null || code == 0 || code == 200;
       if (!success) {
-        _error =
-            result['msg']?.toString() ??
-            _authService.lastError ??
-            'Registration failed';
+        _error = result['msg']?.toString() ?? _authService.lastError ?? '注册失败';
       } else {
         await _persistRegistrationProfile(
           phone: phone,
@@ -83,8 +78,8 @@ class AuthProvider extends ChangeNotifier {
 
       return result;
     } catch (e) {
-      _error = 'Registration failed: $e';
-      debugPrint('Registration failed: $e');
+      _error = '注册失败: $e';
+      debugPrint('注册失败: $e');
       return null;
     } finally {
       _isLoading = false;
@@ -105,13 +100,11 @@ class AuthProvider extends ChangeNotifier {
         return true;
       }
 
-      _error =
-          _authService.lastError ??
-          'Login failed, please check phone number and password';
+      _error = _authService.lastError ?? '登录失败，请检查手机号和密码';
       return false;
     } catch (e) {
-      _error = 'Login failed: $e';
-      debugPrint('Login failed: $e');
+      _error = '登录失败: $e';
+      debugPrint('登录失败: $e');
       return false;
     } finally {
       _isLoading = false;
@@ -132,11 +125,11 @@ class AuthProvider extends ChangeNotifier {
         return true;
       }
 
-      _error = _authService.lastError ?? 'Login failed, please check the code';
+      _error = _authService.lastError ?? '登录失败，请检查验证码';
       return false;
     } catch (e) {
-      _error = 'Login failed: $e';
-      debugPrint('Login failed: $e');
+      _error = '登录失败: $e';
+      debugPrint('登录失败: $e');
       return false;
     } finally {
       _isLoading = false;
@@ -155,8 +148,8 @@ class AuthProvider extends ChangeNotifier {
       await _storageService.clearUser();
       _user = null;
     } catch (e) {
-      _error = 'Logout failed';
-      debugPrint('Logout failed: $e');
+      _error = '退出登录失败';
+      debugPrint('退出登录失败: $e');
     } finally {
       _isLoading = false;
       notifyListeners();

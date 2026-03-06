@@ -72,7 +72,7 @@ class _PostcardEditScreenState extends State<PostcardEditScreen>
     final provinceName = draft.provinceName?.trim() ?? '';
     final resolvedName = cityName.isNotEmpty
         ? cityName
-        : (provinceName.isNotEmpty ? provinceName : 'Unknown');
+        : (provinceName.isNotEmpty ? provinceName : '未知地点');
 
     _customPreviewImagePath = source.isEmpty ? null : source;
     _editingDraftId = draftId.isEmpty ? null : draftId;
@@ -256,10 +256,10 @@ class _PostcardEditScreenState extends State<PostcardEditScreen>
 
       _pushUndoState();
       setState(() => _customPreviewImagePath = nextPath);
-      _showHint('Image updated');
+      _showHint('图片已更新');
     } catch (_) {
       if (!mounted) return;
-      _showHint('Image pick failed');
+      _showHint('图片选择失败');
     }
   }
 
@@ -271,7 +271,7 @@ class _PostcardEditScreenState extends State<PostcardEditScreen>
       compressQuality: 92,
       uiSettings: <PlatformUiSettings>[
         AndroidUiSettings(
-          toolbarTitle: 'Crop Postcard',
+          toolbarTitle: '裁剪明信片',
           toolbarColor: const Color(0xFF2F663A),
           toolbarWidgetColor: Colors.white,
           lockAspectRatio: true,
@@ -279,7 +279,7 @@ class _PostcardEditScreenState extends State<PostcardEditScreen>
           initAspectRatio: CropAspectRatioPreset.original,
         ),
         IOSUiSettings(
-          title: 'Crop Postcard',
+          title: '裁剪明信片',
           aspectRatioLockEnabled: true,
           resetAspectRatioEnabled: false,
         ),
@@ -300,7 +300,7 @@ class _PostcardEditScreenState extends State<PostcardEditScreen>
     if (!mounted) return;
 
     final templates = postcards
-        .where((item) => item.imageUrl.trim().isNotEmpty)
+        .where((item) => !item.isDraft && item.imageUrl.trim().isNotEmpty)
         .toList(growable: false);
 
     List<EditedPostcard> selected = templates;
@@ -386,7 +386,7 @@ class _PostcardEditScreenState extends State<PostcardEditScreen>
       return shell(
         const Center(
           child: Text(
-            'No hot templates',
+            '暂无热门模板',
             style: TextStyle(
               fontSize: 12,
               color: Color(0xFF54634C),

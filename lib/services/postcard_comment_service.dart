@@ -45,7 +45,7 @@ class PostcardComment {
           'text',
         ]) ??
         '';
-    final parsedUsername = _extractUsername(json) ?? 'Anonymous';
+    final parsedUsername = _extractUsername(json) ?? '匿名用户';
     final parsedAvatar =
         BackendApiClient.readString(json, const ['avatar', 'avatarUrl']) ??
         BackendApiClient.readString(
@@ -58,7 +58,7 @@ class PostcardComment {
           'cityName',
           'address',
         ]) ??
-        'Unknown location';
+        '未知地点';
     final parsedTimeText =
         BackendApiClient.readString(json, const [
           'createdAt',
@@ -260,7 +260,7 @@ class PostcardCommentService {
     if (lastError != null) {
       throw lastError;
     }
-    throw const BackendApiException('comment publish failed');
+    throw const BackendApiException('评论发布失败');
   }
 
   Future<void> likeComment(int commentId) async {
@@ -283,7 +283,7 @@ class PostcardCommentService {
     if (lastError != null) {
       throw lastError;
     }
-    throw const BackendApiException('like comment failed');
+    throw const BackendApiException('评论点赞失败');
   }
 
   List<PostcardComment> _flattenCommentRecord(

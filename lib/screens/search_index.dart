@@ -134,7 +134,7 @@ class _SearchIndexScreenState extends State<SearchIndexScreen> {
               fit: BoxFit.contain,
             ),
             const SizedBox(width: 8),
-            Text('已选择: $elementName'),
+            Text('已选择：$elementName'),
           ],
         ),
         duration: const Duration(milliseconds: 800),

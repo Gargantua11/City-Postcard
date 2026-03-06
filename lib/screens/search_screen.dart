@@ -401,7 +401,7 @@ class _ResultCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    '元素: $elementText',
+                    '元素：$elementText',
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
