@@ -8,6 +8,7 @@ import 'storage_service.dart';
 class AuthProvider extends ChangeNotifier {
   User? _user;
   bool _isLoading = false;
+  bool _isInitialized = false;
   String? _error;
 
   final AuthService _authService = AuthService();
@@ -15,6 +16,7 @@ class AuthProvider extends ChangeNotifier {
 
   User? get user => _user;
   bool get isLoading => _isLoading;
+  bool get isInitialized => _isInitialized;
   String? get error => _error;
   bool get isAuthenticated =>
       _user != null && _user!.accessToken.trim().isNotEmpty;
@@ -32,6 +34,7 @@ class AuthProvider extends ChangeNotifier {
       _error = '初始化登录状态失败';
       debugPrint('初始化登录状态失败: $e');
     } finally {
+      _isInitialized = true;
       _isLoading = false;
       notifyListeners();
     }

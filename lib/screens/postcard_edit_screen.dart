@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_cropper/image_cropper.dart';
 import 'package:image_picker/image_picker.dart';
@@ -80,6 +81,39 @@ class _PostcardEditScreenState extends State<PostcardEditScreen>
     _selectedCity = (cityName.isEmpty && cityCode.isEmpty)
         ? null
         : City(name: resolvedName, code: cityCode);
+  }
+
+  Future<void> _savePostcard() async {
+    if (_isSaving) return;
+    setState(() => _isSaving = true);
+
+    final cityCode = _normalizeCityCode(_selectedCity?.code);
+    final cityName = _selectedCity?.name.trim();
+    final provinceName = _resolveProvinceNameFromCityCode(cityCode);
+    final coordinate = cityCode == null ? null : kCityCodeCoordinates[cityCode];
+
+    try {
+      final savedId = await _editedPostcardService.saveEditedPostcard(
+        draftId: _editingDraftId,
+        imageUrl: _currentPreviewSource,
+        cityName: (cityName == null || cityName.isEmpty) ? null : cityName,
+        cityCode: cityCode,
+        provinceName: provinceName,
+        latitude: coordinate?.latitude,
+        longitude: coordinate?.longitude,
+        layers: _elementLayers,
+      );
+      if (!mounted) return;
+      setState(() {
+        _isSaving = false;
+        _editingDraftId = savedId;
+      });
+      Navigator.pop(context, true);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _isSaving = false);
+      _showHint('保存失败，请重试');
+    }
   }
 
   Future<bool> _saveAsDraft() async {
@@ -247,7 +281,7 @@ class _PostcardEditScreenState extends State<PostcardEditScreen>
       final picked = await _imagePicker.pickImage(source: ImageSource.gallery);
       if (!mounted || picked == null) return;
 
-      final nextPath = await _cropPostcardImage(picked.path);
+      final nextPath = await _pickAndCropPostcardImage(picked.path);
       if (!mounted || nextPath == null) return;
       if (nextPath.isEmpty ||
           _isSamePreviewSource(_customPreviewImagePath, nextPath)) {
@@ -257,19 +291,50 @@ class _PostcardEditScreenState extends State<PostcardEditScreen>
       _pushUndoState();
       setState(() => _customPreviewImagePath = nextPath);
       _showHint('图片已更新');
-    } catch (_) {
+    } catch (e, stackTrace) {
+      debugPrint('选择明信片图片失败: $e\n$stackTrace');
       if (!mounted) return;
       _showHint('图片选择失败');
     }
   }
 
+  Future<String?> _pickAndCropPostcardImage(String sourcePath) async {
+    final normalizedSource = sourcePath.trim();
+    if (normalizedSource.isEmpty) return null;
+    if (!_supportsNativeCropper()) {
+      return normalizedSource;
+    }
+
+    try {
+      final croppedPath = await _cropPostcardImage(normalizedSource);
+      return croppedPath ?? normalizedSource;
+    } catch (e, stackTrace) {
+      debugPrint('裁剪明信片失败，已回退原图: $e\n$stackTrace');
+      if (mounted) {
+        _showHint('裁剪失败，已使用原图');
+      }
+      return normalizedSource;
+    }
+  }
+
+  bool _supportsNativeCropper() {
+    if (kIsWeb) return true;
+    return defaultTargetPlatform == TargetPlatform.android ||
+        defaultTargetPlatform == TargetPlatform.iOS;
+  }
+
   Future<String?> _cropPostcardImage(String sourcePath) async {
-    final cropped = await ImageCropper().cropImage(
-      sourcePath: sourcePath,
-      aspectRatio: const CropAspectRatio(ratioX: 400, ratioY: 258),
-      compressFormat: ImageCompressFormat.jpg,
-      compressQuality: 92,
-      uiSettings: <PlatformUiSettings>[
+    final uiSettings = <PlatformUiSettings>[];
+    if (kIsWeb) {
+      uiSettings.add(
+        WebUiSettings(
+          context: context,
+          presentStyle: WebPresentStyle.dialog,
+          size: const CropperSize(width: 920, height: 620),
+        ),
+      );
+    } else if (defaultTargetPlatform == TargetPlatform.android) {
+      uiSettings.add(
         AndroidUiSettings(
           toolbarTitle: '裁剪明信片',
           toolbarColor: const Color(0xFF2F663A),
@@ -278,17 +343,23 @@ class _PostcardEditScreenState extends State<PostcardEditScreen>
           hideBottomControls: false,
           initAspectRatio: CropAspectRatioPreset.original,
         ),
+      );
+    } else if (defaultTargetPlatform == TargetPlatform.iOS) {
+      uiSettings.add(
         IOSUiSettings(
           title: '裁剪明信片',
           aspectRatioLockEnabled: true,
           resetAspectRatioEnabled: false,
         ),
-        WebUiSettings(
-          context: context,
-          presentStyle: WebPresentStyle.dialog,
-          size: const CropperSize(width: 920, height: 620),
-        ),
-      ],
+      );
+    }
+
+    final cropped = await ImageCropper().cropImage(
+      sourcePath: sourcePath,
+      aspectRatio: const CropAspectRatio(ratioX: 400, ratioY: 258),
+      compressFormat: ImageCompressFormat.jpg,
+      compressQuality: 92,
+      uiSettings: uiSettings,
     );
     final path = cropped?.path.trim();
     if (path == null || path.isEmpty) return null;
@@ -418,7 +489,7 @@ class _PostcardEditScreenState extends State<PostcardEditScreen>
                     const ColoredBox(color: Color(0xFFEAF7E7)),
                     ResolvedImage(
                       source: template.imageUrl,
-                      fit: BoxFit.contain,
+                      fit: BoxFit.cover,
                       filterQuality: FilterQuality.high,
                       fallbackBuilder: (_) =>
                           const ColoredBox(color: Color(0xFFEAF7E7)),
@@ -492,7 +563,7 @@ class _PostcardEditScreenState extends State<PostcardEditScreen>
   ) {
     final rawScale = layer.scale <= 0 ? 1.0 : layer.scale;
     final baseSize = (previewWidth * 0.22 * rawScale).clamp(
-      20.0,
+      26.0,
       previewWidth * 0.45,
     );
 
@@ -905,6 +976,8 @@ class _PostcardEditScreenState extends State<PostcardEditScreen>
                 final double templateCardWidth = actionWidth - 20 * scale;
                 final double templateCardHeight =
                     templateCardWidth / _postcardAspectRatio;
+                final double saveWidth = 353 * scale;
+                final double saveHeight = 87 * scale;
                 double actionGap = contentWidth - actionWidth * 2;
                 if (actionGap < 14 * scale) actionGap = 14 * scale;
                 if (actionGap > 28 * scale) actionGap = 28 * scale;
@@ -1139,6 +1212,24 @@ class _PostcardEditScreenState extends State<PostcardEditScreen>
                             ),
                           ),
                           SizedBox(height: 16 * scale),
+                          _AssetTapButton(
+                            assetPath: 'assets/images/edit/编辑-保存.png',
+                            width: saveWidth,
+                            height: saveHeight,
+                            onTap: _isSaving ? null : _savePostcard,
+                            child: _isSaving
+                                ? const Center(
+                                    child: SizedBox(
+                                      width: 26,
+                                      height: 26,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 3,
+                                      ),
+                                    ),
+                                  )
+                                : null,
+                          ),
+                          SizedBox(height: 10 * scale),
                           Text(
                             '点击返回可选择不保存返回或存为草稿',
                             textAlign: TextAlign.center,
@@ -1148,19 +1239,6 @@ class _PostcardEditScreenState extends State<PostcardEditScreen>
                               fontWeight: FontWeight.w500,
                             ),
                           ),
-                          if (_isSaving)
-                            const Padding(
-                              padding: EdgeInsets.only(top: 12),
-                              child: Center(
-                                child: SizedBox(
-                                  width: 24,
-                                  height: 24,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2.6,
-                                  ),
-                                ),
-                              ),
-                            ),
                         ],
                       ),
                     ),
@@ -1213,6 +1291,46 @@ const Map<String, String> _provinceNameByPrefix = {
   '81': '香港',
   '82': '澳门',
 };
+
+class _AssetTapButton extends StatelessWidget {
+  final String assetPath;
+  final double width;
+  final double height;
+  final VoidCallback? onTap;
+  final Widget? child;
+
+  const _AssetTapButton({
+    required this.assetPath,
+    required this.width,
+    required this.height,
+    this.onTap,
+    this.child,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: SizedBox(
+        width: width,
+        height: height,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            Image.asset(
+              assetPath,
+              fit: BoxFit.fill,
+              filterQuality: FilterQuality.high,
+              errorBuilder: (_, _, _) =>
+                  const ColoredBox(color: Color(0xFFE5E5E5)),
+            ),
+            if (child case final Widget overlay) overlay,
+          ],
+        ),
+      ),
+    );
+  }
+}
 
 class _TopControlButton extends StatelessWidget {
   final IconData icon;

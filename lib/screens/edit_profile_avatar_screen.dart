@@ -1,8 +1,9 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:image_cropper/image_cropper.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../services/avatar_upload_service.dart';
-import '../services/backend_api_client.dart';
 import '../services/storage_service.dart';
 import '../widgets/resolved_image.dart';
 
@@ -74,11 +75,13 @@ class _EditProfileAvatarScreenState extends State<EditProfileAvatarScreen> {
     try {
       final picked = await _imagePicker.pickImage(source: ImageSource.gallery);
       if (!mounted || picked == null) return;
-      final path = picked.path.trim();
-      if (path.isEmpty) return;
+      final path = await _pickAndCropAvatarImage(picked.path);
+      if (!mounted || path == null) return;
+      final normalizedPath = path.trim();
+      if (normalizedPath.isEmpty) return;
       setState(() {
-        _avatarStorageSource = path;
-        _avatarSource = path;
+        _avatarStorageSource = normalizedPath;
+        _avatarSource = normalizedPath;
       });
     } catch (_) {
       if (!mounted) return;
@@ -86,6 +89,79 @@ class _EditProfileAvatarScreenState extends State<EditProfileAvatarScreen> {
         context,
       ).showSnackBar(const SnackBar(content: Text('选择图片失败，请重试')));
     }
+  }
+
+  Future<String?> _pickAndCropAvatarImage(String sourcePath) async {
+    final normalizedSource = sourcePath.trim();
+    if (normalizedSource.isEmpty) return null;
+    if (!_supportsNativeCropper()) {
+      return normalizedSource;
+    }
+
+    try {
+      final croppedPath = await _cropAvatarImage(normalizedSource);
+      final normalizedCropped = croppedPath?.trim() ?? '';
+      if (normalizedCropped.isEmpty) return null;
+      return normalizedCropped;
+    } catch (error, stackTrace) {
+      debugPrint('crop avatar failed: $error\n$stackTrace');
+      if (!mounted) return null;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('头像裁剪失败，请重试')));
+      return null;
+    }
+  }
+
+  bool _supportsNativeCropper() {
+    if (kIsWeb) return true;
+    return defaultTargetPlatform == TargetPlatform.android ||
+        defaultTargetPlatform == TargetPlatform.iOS;
+  }
+
+  Future<String?> _cropAvatarImage(String sourcePath) async {
+    final uiSettings = <PlatformUiSettings>[];
+    if (kIsWeb) {
+      uiSettings.add(
+        WebUiSettings(
+          context: context,
+          presentStyle: WebPresentStyle.dialog,
+          size: const CropperSize(width: 520, height: 520),
+        ),
+      );
+    } else if (defaultTargetPlatform == TargetPlatform.android) {
+      uiSettings.add(
+        AndroidUiSettings(
+          toolbarTitle: '裁剪头像',
+          toolbarColor: const Color(0xFF2F663A),
+          toolbarWidgetColor: Colors.white,
+          lockAspectRatio: true,
+          hideBottomControls: false,
+          initAspectRatio: CropAspectRatioPreset.square,
+          cropStyle: CropStyle.circle,
+        ),
+      );
+    } else if (defaultTargetPlatform == TargetPlatform.iOS) {
+      uiSettings.add(
+        IOSUiSettings(
+          title: '裁剪头像',
+          aspectRatioLockEnabled: true,
+          resetAspectRatioEnabled: false,
+          cropStyle: CropStyle.circle,
+        ),
+      );
+    }
+
+    final cropped = await ImageCropper().cropImage(
+      sourcePath: sourcePath,
+      aspectRatio: const CropAspectRatio(ratioX: 1, ratioY: 1),
+      compressFormat: ImageCompressFormat.jpg,
+      compressQuality: 92,
+      uiSettings: uiSettings,
+    );
+    final path = cropped?.path.trim();
+    if (path == null || path.isEmpty) return null;
+    return path;
   }
 
   Future<void> _save() async {
@@ -98,9 +174,7 @@ class _EditProfileAvatarScreenState extends State<EditProfileAvatarScreen> {
     try {
       final source =
           _avatarStorageSource?.trim() ?? (_avatarSource?.trim() ?? '');
-      var syncedRemote = false;
       var nextStorageSource = source;
-      String? syncErrorMessage;
 
       final looksLikeLocalFile = _looksLikeLocalFilePath(source);
       if (looksLikeLocalFile) {
@@ -108,18 +182,26 @@ class _EditProfileAvatarScreenState extends State<EditProfileAvatarScreen> {
           nextStorageSource = await _avatarUploadService.uploadAvatarAndSync(
             _normalizeLocalUploadPath(source),
           );
-          syncedRemote = true;
         } catch (error) {
-          syncedRemote = false;
+          if (!mounted) return;
           final text = error.toString().trim();
-          if (text.isNotEmpty) {
-            syncErrorMessage = text;
-          }
+          final detail = text.isEmpty ? '头像上传失败，请重试' : '头像上传失败：$text';
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text(detail)));
+          return;
         }
       }
 
       final normalizedStorageSource =
           AvatarUploadService.normalizeAvatarStorageSource(nextStorageSource);
+      if (looksLikeLocalFile && normalizedStorageSource.isEmpty) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('头像上传失败，请重试')));
+        return;
+      }
       final resolvedDisplaySource = await _resolveDisplaySource(
         normalizedStorageSource,
       );
@@ -127,20 +209,6 @@ class _EditProfileAvatarScreenState extends State<EditProfileAvatarScreen> {
         normalizedStorageSource.isEmpty ? null : normalizedStorageSource,
       );
       if (!mounted) return;
-
-      if (!syncedRemote && looksLikeLocalFile) {
-        String detail;
-        if (syncErrorMessage == null) {
-          detail = '头像未同步到服务器，已仅本地保存';
-        } else if (syncErrorMessage.contains('Network request failed')) {
-          detail = '头像同步失败：网络不可用（${BackendApiClient.baseUrl}）';
-        } else {
-          detail = '头像同步失败：$syncErrorMessage';
-        }
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(detail)));
-      }
 
       setState(() {
         _avatarStorageSource = normalizedStorageSource.isEmpty
@@ -268,7 +336,7 @@ class _EditProfileAvatarScreenState extends State<EditProfileAvatarScreen> {
                           _AvatarPreview(imageSource: previewSource),
                           const SizedBox(height: 8),
                           const Text(
-                            '点击选择本地照片，保存后立即生效',
+                            '点击选择本地照片，裁剪后保存立即生效',
                             style: TextStyle(
                               color: Colors.black54,
                               fontSize: 12,
@@ -418,3 +486,4 @@ class _AvatarPreview extends StatelessWidget {
     );
   }
 }
+

@@ -107,6 +107,11 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _deleteSelectedPostcard() async {
     final deleteIndex = _selectedDeleteIndex;
     if (deleteIndex == null || _isDeleting) return;
+    if (deleteIndex < 0 || deleteIndex >= _editedPostcards.length) return;
+
+    final selectedPostcard = _editedPostcards[deleteIndex];
+    final targetDraftId = selectedPostcard.draftId.trim();
+    if (targetDraftId.isEmpty) return;
 
     final confirmed = await showDialog<bool>(
       context: context,
@@ -135,8 +140,8 @@ class _HomeScreenState extends State<HomeScreen> {
       _isDeleting = true;
     });
 
-    final deleted = await _editedPostcardService.deleteEditedPostcardAt(
-      deleteIndex,
+    final deleted = await _editedPostcardService.deleteEditedPostcardById(
+      targetDraftId,
     );
     if (!mounted) return;
 
