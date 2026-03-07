@@ -83,7 +83,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     String? remoteCityName;
     String? remoteCityCode;
     String? remoteAvatarSource;
-    String? remoteNickname;
 
     try {
       final cityBody = await _apiClient.get('/me/city', requireAuth: true);
@@ -104,19 +103,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
       }
     } catch (_) {}
 
-    try {
-      final profileBody = await _fetchProfileBodyWithFallback();
-      remoteNickname = _extractNickname(profileBody);
-      remoteAvatarSource ??= _extractAvatarSource(profileBody);
-    } on BackendApiException catch (e) {
-      if (e.isUnauthorized) {
-        return;
-      }
-    } catch (_) {}
-
     var normalizedCityName = remoteCityName?.trim();
     var resolvedCityCode = remoteCityCode?.trim();
-    final normalizedNickname = remoteNickname?.trim() ?? '';
     final normalizedAvatarStorage =
         AvatarUploadService.normalizeAvatarStorageSource(
           (remoteAvatarSource ?? '').trim(),
@@ -145,10 +133,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
       }
     }
 
-    if (normalizedNickname.isNotEmpty) {
-      await _storageService.saveProfileNickname(normalizedNickname);
-    }
-
     if (normalizedAvatarStorage.isNotEmpty) {
       await _storageService.saveProfileAvatar(normalizedAvatarStorage);
     }
@@ -161,9 +145,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
       if (normalizedCityName != null && normalizedCityName.isNotEmpty) {
         _cityName = normalizedCityName;
         _cityCode = resolvedCityCode;
-      }
-      if (normalizedNickname.isNotEmpty) {
-        _username = normalizedNickname;
       }
       if (displayAvatar.isNotEmpty) {
         _avatarSource = displayAvatar;
@@ -241,33 +222,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final digits = raw.trim().replaceAll(RegExp(r'[^0-9]'), '');
     if (digits.isEmpty) return null;
     return digits;
-  }
-
-  Future<Map<String, dynamic>> _fetchProfileBodyWithFallback() async {
-    BackendApiException? backendError;
-    for (final path in const <String>['/me/profile', '/me/user', '/me']) {
-      try {
-        return await _apiClient.get(path, requireAuth: true);
-      } on BackendApiException catch (e) {
-        backendError = e;
-      }
-    }
-    if (backendError != null) throw backendError;
-    throw const BackendApiException('无法加载用户信息');
-  }
-
-  String? _extractNickname(Map<String, dynamic> body) {
-    final data = BackendApiClient.extractData(body);
-    final map = BackendApiClient.asMap(data) ?? body;
-    final nickname = BackendApiClient.readString(map, const [
-      'nickname',
-      'username',
-      'displayName',
-      'name',
-    ]);
-    final text = nickname?.trim() ?? '';
-    if (text.isEmpty) return null;
-    return text;
   }
 
   String? _extractAvatarSource(Map<String, dynamic> body) {
