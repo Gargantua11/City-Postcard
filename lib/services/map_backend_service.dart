@@ -137,7 +137,7 @@ class MapBackendService {
       return MapLightedCitiesResult(
         cityCodes: codes,
         isOffline: false,
-        notice: codes.isEmpty ? 'No map markers yet.' : null,
+        notice: codes.isEmpty ? '暂无地图点亮城市。' : null,
       );
     } on BackendApiException catch (e) {
       if (e.isUnauthorized) {
@@ -149,13 +149,13 @@ class MapBackendService {
         return MapLightedCitiesResult(
           cityCodes: cached,
           isOffline: true,
-          notice: 'Network unavailable. Showing cached map data.',
+          notice: '网络不可用，已展示缓存地图数据。',
         );
       }
       return MapLightedCitiesResult(
         cityCodes: const <String>[],
         isOffline: true,
-        notice: 'Network unavailable. No map marker data.',
+        notice: '网络不可用，暂无地图标记数据。',
       );
     } catch (_) {
       final cached = await _readLightedCityCodesCache();
@@ -163,13 +163,13 @@ class MapBackendService {
         return MapLightedCitiesResult(
           cityCodes: cached,
           isOffline: true,
-          notice: 'Network unavailable. Showing cached map data.',
+          notice: '网络不可用，已展示缓存地图数据。',
         );
       }
       return MapLightedCitiesResult(
         cityCodes: const <String>[],
         isOffline: true,
-        notice: 'Network unavailable. No map marker data.',
+        notice: '网络不可用，暂无地图标记数据。',
       );
     }
   }
@@ -183,7 +183,7 @@ class MapBackendService {
       return ProvincePostcardsResult(
         postcards: cards,
         isOffline: false,
-        notice: cards.isEmpty ? 'No postcards in this province yet.' : null,
+        notice: cards.isEmpty ? '该省份暂无明信片。' : null,
       );
     } on BackendApiException catch (e) {
       if (e.isUnauthorized) {
@@ -195,13 +195,13 @@ class MapBackendService {
         return ProvincePostcardsResult(
           postcards: cached,
           isOffline: true,
-          notice: 'Network unavailable. Showing cached province data.',
+          notice: '网络不可用，已展示缓存省份数据。',
         );
       }
       return ProvincePostcardsResult(
         postcards: const <MapProvincePostcard>[],
         isOffline: true,
-        notice: 'Network unavailable. No province marker data.',
+        notice: '网络不可用，暂无省份标记数据。',
       );
     } catch (_) {
       final cached = await _readProvincePostcardsCache(provinceCodePrefix);
@@ -209,13 +209,13 @@ class MapBackendService {
         return ProvincePostcardsResult(
           postcards: cached,
           isOffline: true,
-          notice: 'Network unavailable. Showing cached province data.',
+          notice: '网络不可用，已展示缓存省份数据。',
         );
       }
       return ProvincePostcardsResult(
         postcards: const <MapProvincePostcard>[],
         isOffline: true,
-        notice: 'Network unavailable. No province marker data.',
+        notice: '网络不可用，暂无省份标记数据。',
       );
     }
   }
@@ -233,7 +233,7 @@ class MapBackendService {
     try {
       final fromMap = await _fetchLightedCityCodesFromMap();
       if (fromMap.isNotEmpty) {
-        return fromMap;
+        return _mergeCityCodes(fromMap, localCodes.toList(growable: false));
       }
     } on BackendApiException catch (e) {
       if (e.isUnauthorized) {
@@ -246,7 +246,10 @@ class MapBackendService {
 
     final fromDiscussion = await _fetchLightedCityCodesFromDiscussion();
     if (fromDiscussion.isNotEmpty) {
-      return fromDiscussion;
+      return _mergeCityCodes(
+        fromDiscussion,
+        localCodes.toList(growable: false),
+      );
     }
 
     return localCodes.toList(growable: false);
@@ -264,7 +267,7 @@ class MapBackendService {
     try {
       final fromMap = await _fetchProvincePostcardsFromMap(provinceCodePrefix);
       if (fromMap.isNotEmpty) {
-        return fromMap;
+        return _mergeProvincePostcards(fromMap, localCards);
       }
     } on BackendApiException catch (e) {
       if (e.isUnauthorized) {
@@ -279,7 +282,7 @@ class MapBackendService {
       provinceCodePrefix,
     );
     if (fromDiscussion.isNotEmpty) {
-      return fromDiscussion;
+      return _mergeProvincePostcards(fromDiscussion, localCards);
     }
 
     return localCards;
@@ -524,6 +527,72 @@ class MapBackendService {
     return digits.length >= 4 ? digits.substring(0, 4) : digits;
   }
 
+  List<String> _mergeCityCodes(List<String> primary, List<String> fallback) {
+    final merged = <String>{};
+
+    for (final raw in primary) {
+      final normalized = _normalizeCode(raw);
+      if (normalized == null || normalized.isEmpty) continue;
+      merged.add(normalized);
+    }
+
+    for (final raw in fallback) {
+      final normalized = _normalizeCode(raw);
+      if (normalized == null || normalized.isEmpty) continue;
+      merged.add(normalized);
+    }
+
+    return merged.toList(growable: false);
+  }
+
+  List<MapProvincePostcard> _mergeProvincePostcards(
+    List<MapProvincePostcard> primary,
+    List<MapProvincePostcard> fallback,
+  ) {
+    final merged = <String, MapProvincePostcard>{};
+
+    void upsert(MapProvincePostcard card) {
+      final cityCode = _normalizeCode(card.cityCode);
+      final cityNameKey = _normalizeLocationKey(card.cityName ?? '');
+      final dedupeKey = cityCode != null && cityCode.isNotEmpty
+          ? 'code:$cityCode'
+          : (cityNameKey.isNotEmpty
+                ? 'name:$cityNameKey'
+                : 'time:${card.createdAt.microsecondsSinceEpoch}');
+
+      final current = merged[dedupeKey];
+      if (current == null || card.createdAt.isAfter(current.createdAt)) {
+        merged[dedupeKey] = card;
+        return;
+      }
+
+      if (!card.createdAt.isAtSameMomentAs(current.createdAt)) {
+        return;
+      }
+
+      final currentHasCoord = current.latitude != null && current.longitude != null;
+      final nextHasCoord = card.latitude != null && card.longitude != null;
+      final currentHasName = (current.cityName?.trim().isNotEmpty ?? false);
+      final nextHasName = (card.cityName?.trim().isNotEmpty ?? false);
+
+      if ((!currentHasCoord && nextHasCoord) ||
+          (!currentHasName && nextHasName)) {
+        merged[dedupeKey] = card;
+      }
+    }
+
+    for (final card in primary) {
+      upsert(card);
+    }
+    for (final card in fallback) {
+      upsert(card);
+    }
+
+    final result = merged.values.toList(growable: false)
+      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    return result;
+  }
+
   bool _isNoPostcardBusiness(BackendApiException error) {
     if (error.apiCode == 6000) {
       return true;
@@ -718,36 +787,36 @@ class MapBackendService {
   }
 
   static const Map<String, String> _provinceNameByPrefix = <String, String>{
-    '11': 'Beijing',
-    '12': 'Tianjin',
-    '13': 'Hebei',
-    '14': 'Shanxi',
-    '15': 'Inner Mongolia',
-    '21': 'Liaoning',
-    '22': 'Jilin',
-    '23': 'Heilongjiang',
-    '31': 'Shanghai',
-    '32': 'Jiangsu',
-    '33': 'Zhejiang',
-    '34': 'Anhui',
-    '35': 'Fujian',
-    '36': 'Jiangxi',
-    '37': 'Shandong',
-    '41': 'Henan',
-    '42': 'Hubei',
-    '43': 'Hunan',
-    '44': 'Guangdong',
-    '45': 'Guangxi',
-    '46': 'Hainan',
-    '50': 'Chongqing',
-    '51': 'Sichuan',
-    '52': 'Guizhou',
-    '53': 'Yunnan',
-    '54': 'Tibet',
-    '61': 'Shaanxi',
-    '62': 'Gansu',
-    '63': 'Qinghai',
-    '64': 'Ningxia',
-    '65': 'Xinjiang',
+    '11': '北京',
+    '12': '天津',
+    '13': '河北',
+    '14': '山西',
+    '15': '内蒙古',
+    '21': '辽宁',
+    '22': '吉林',
+    '23': '黑龙江',
+    '31': '上海',
+    '32': '江苏',
+    '33': '浙江',
+    '34': '安徽',
+    '35': '福建',
+    '36': '江西',
+    '37': '山东',
+    '41': '河南',
+    '42': '湖北',
+    '43': '湖南',
+    '44': '广东',
+    '45': '广西',
+    '46': '海南',
+    '50': '重庆',
+    '51': '四川',
+    '52': '贵州',
+    '53': '云南',
+    '54': '西藏',
+    '61': '陕西',
+    '62': '甘肃',
+    '63': '青海',
+    '64': '宁夏',
+    '65': '新疆',
   };
 }

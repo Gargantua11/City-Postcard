@@ -253,7 +253,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       }
     }
     if (backendError != null) throw backendError;
-    throw const BackendApiException('cannot load user profile');
+    throw const BackendApiException('无法加载用户信息');
   }
 
   String? _extractNickname(Map<String, dynamic> body) {

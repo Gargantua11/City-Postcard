@@ -341,7 +341,7 @@ class EditedPostcardService {
   }) async {
     final normalizedSource = imageSource.trim();
     if (normalizedSource.isEmpty) {
-      throw const BackendApiException('Please select a postcard image first.');
+      throw const BackendApiException('请先选择明信片图片。');
     }
 
     final uploadedImage = await _resolveImageForBackend(
@@ -355,7 +355,7 @@ class EditedPostcardService {
       uploadedImage,
       imageKey: createImageKey,
     );
-    _debugPostcardSync('prepared', <String, dynamic>{
+    _debugPostcardSync('已准备', <String, dynamic>{
       'source': normalizedSource,
       'uploadedImageUrl': uploadedImage.imageUrl,
       'uploadedImageKey': uploadedImage.objectKey,
@@ -376,7 +376,7 @@ class EditedPostcardService {
     final remotePostcardId = _extractRemotePostcardId(response);
     final remoteImageUrl = _extractRemoteImageUrl(response);
     final remoteImageKey = _extractRemoteImageKey(response);
-    _debugPostcardSync('response', <String, dynamic>{
+    _debugPostcardSync('响应', <String, dynamic>{
       'remotePostcardId': remotePostcardId,
       'remoteImageUrl': remoteImageUrl,
       'remoteImageKey': remoteImageKey,
@@ -407,7 +407,7 @@ class EditedPostcardService {
     }
     if (_isAssetSource(source)) {
       throw const BackendApiException(
-        'Please upload a local image before saving postcard.',
+        '请先上传本地图片后再保存明信片。',
       );
     }
     if (_looksLikeLocalFilePath(source)) {
@@ -425,7 +425,7 @@ class EditedPostcardService {
 
     final normalizedKey = source.replaceFirst(RegExp(r'^/+'), '');
     if (normalizedKey.isEmpty) {
-      throw const BackendApiException('鏄庝俊鐗囧浘鐗囨棤鏁堬紝璇烽噸鏂伴€夋嫨');
+      throw const BackendApiException('明信片图片无效，请重新选择。');
     }
 
     try {
@@ -447,19 +447,19 @@ class EditedPostcardService {
   }) async {
     final normalizedPath = filePath.trim();
     if (normalizedPath.isEmpty) {
-      throw const BackendApiException('Postcard image path is empty.');
+      throw const BackendApiException('明信片图片路径不能为空。');
     }
 
     final file = File(normalizedPath);
     if (!file.existsSync()) {
-      throw const BackendApiException('鏄庝俊鐗囧浘鐗囦笉瀛樺湪锛岃閲嶆柊閫夋嫨');
+      throw const BackendApiException('明信片图片不存在，请重新选择。');
     }
 
     final objectKey = _normalizeObjectKey(
       await _requestPostcardObjectKey(file, cityCode: cityCode),
     );
     if (objectKey.isEmpty) {
-      throw const BackendApiException('鑾峰彇鏄庝俊鐗囧簳鐗?key 澶辫触');
+      throw const BackendApiException('获取明信片底图键值失败。');
     }
 
     final context = await _resolveOssUploadContext();
@@ -498,7 +498,7 @@ class EditedPostcardService {
     }
 
     throw const BackendApiException(
-      'Cannot resolve postcard image key. Please upload again.',
+      '无法解析明信片图片键值，请重新上传。',
     );
   }
 
@@ -567,7 +567,7 @@ class EditedPostcardService {
     }
 
     throw const BackendApiException(
-      'Cannot resolve postcard imageUrl. Please upload again.',
+      '无法解析明信片图片地址，请重新上传。',
     );
   }
 
@@ -642,7 +642,7 @@ class EditedPostcardService {
     }
 
     if (backendError != null) throw backendError;
-    throw const BackendApiException('鏃犳硶鑾峰彇鏄庝俊鐗囧簳鐗?key');
+    throw const BackendApiException('无法获取明信片底图键值。');
   }
 
   Map<String, dynamic> _buildCreatePayload({
@@ -720,8 +720,8 @@ class EditedPostcardService {
   }) {
     if (cityName.isNotEmpty) return cityName;
     if (provinceName.isNotEmpty) return provinceName;
-    if (cityCode != null && cityCode.isNotEmpty) return '鍩庡競浠ｇ爜$cityCode';
-    return '鏈煡鍦扮偣';
+    if (cityCode != null && cityCode.isNotEmpty) return '城市代码$cityCode';
+    return '未知地点';
   }
 
   Future<Map<String, dynamic>> _createPostcardRemote(
@@ -780,19 +780,19 @@ class EditedPostcardService {
     };
 
     final attempts = <_CreateAttempt>[
-      _CreateAttempt(name: "full", body: fullPayload),
-      _CreateAttempt(name: "no_elements", body: noElementsPayload),
+      _CreateAttempt(name: "完整参数", body: fullPayload),
+      _CreateAttempt(name: "去除元素", body: noElementsPayload),
       _CreateAttempt(
-        name: "key_core_with_http_url",
+        name: "核心字段+HTTP地址",
         body: keyCoreWithHttpUrlPayload,
       ),
       _CreateAttempt(
-        name: "key_core_with_key_url",
+        name: "核心字段+Key地址",
         body: keyCoreWithKeyUrlPayload,
       ),
-      _CreateAttempt(name: "key_core", body: keyCorePayload),
-      _CreateAttempt(name: "alias", body: aliasPayload),
-      _CreateAttempt(name: "minimal", body: minimalPayload),
+      _CreateAttempt(name: "核心字段", body: keyCorePayload),
+      _CreateAttempt(name: "别名字段", body: aliasPayload),
+      _CreateAttempt(name: "最小字段", body: minimalPayload),
     ];
     final endpoints = <String>["/postcard/create"];
 
@@ -821,14 +821,14 @@ class EditedPostcardService {
 
   void _debugPostcardSync(String stage, Map<String, dynamic> data) {
     if (!kDebugMode) return;
-    debugPrint('[postcard-sync][$stage] ${jsonEncode(data)}');
+    debugPrint('[明信片同步][$stage] ${jsonEncode(data)}');
   }
 
   void _debugCreateAttempt(String endpoint, _CreateAttempt attempt) {
     if (!kDebugMode) return;
     final body = attempt.body;
     debugPrint(
-      '[postcard-create][attempt] endpoint=$endpoint mode=${attempt.name} '
+      '[明信片创建][尝试] endpoint=$endpoint mode=${attempt.name} '
       'imageUrl=${body["imageUrl"] ?? ""} imageKey=${body["imageKey"] ?? ""} '
       'cityCode=${body["cityCode"] ?? ""} keys=${body.keys.toList()}',
     );
@@ -841,7 +841,7 @@ class EditedPostcardService {
   ) {
     if (!kDebugMode) return;
     debugPrint(
-      '[postcard-create][failed] endpoint=$endpoint mode=${attempt.name} '
+      '[明信片创建][失败] endpoint=$endpoint mode=${attempt.name} '
       'status=${error.statusCode ?? "-"} apiCode=${error.apiCode ?? "-"} '
       'msg=${error.message}',
     );
@@ -1040,7 +1040,7 @@ class EditedPostcardService {
     }
 
     if (endpoint.isEmpty || bucketName.isEmpty) {
-      throw const BackendApiException('OSS 閰嶇疆缂哄け锛歟ndpoint 鎴?bucketName 涓虹┖');
+      throw const BackendApiException('对象存储配置缺失：终端地址或存储桶名称为空。');
     }
 
     _cachedOssEndpoint = endpoint;
@@ -1078,7 +1078,7 @@ class EditedPostcardService {
     }
 
     if (backendError != null) throw backendError;
-    throw const BackendApiException('鏃犳硶鑾峰彇 OSS STS 鍑瘉');
+    throw const BackendApiException('无法获取对象存储临时凭证。');
   }
 
   Map<String, dynamic> _extractStsToken(Map<String, dynamic> body) {
@@ -1111,7 +1111,7 @@ class EditedPostcardService {
         accessKeySecret == null ||
         securityToken == null ||
         expiration == null) {
-      throw const BackendApiException('OSS STS 杩斿洖鏍煎紡鏃犳晥');
+      throw const BackendApiException('对象存储临时凭证返回格式无效。');
     }
 
     return <String, dynamic>{
@@ -1125,17 +1125,17 @@ class EditedPostcardService {
   String _buildOssUploadFailureMessage(Object error) {
     final text = error.toString().toLowerCase();
     if (text.contains('403')) {
-      return '鏄庝俊鐗囧浘鐗囦笂浼犺鎷掔粷锛?03锛夛紝璇锋鏌?OSS STS 绛栫暐';
+      return '明信片图片上传被拒绝（403），请检查对象存储临时凭证策略。';
     }
     if (text.contains('401')) {
-      return 'postcard image upload token expired or invalid (401).';
+      return '明信片图片上传凭证已过期或无效（401）。';
     }
     if (text.contains('socket') ||
         text.contains('timed out') ||
         text.contains('network')) {
-      return 'postcard image upload network error.';
+      return '明信片图片上传网络异常。';
     }
-    return 'postcard image upload failed.';
+    return '明信片图片上传失败。';
   }
 
   String _normalizeObjectKey(String raw) {
@@ -1542,7 +1542,7 @@ String _toDraftId({
   final text = raw?.toString().trim() ?? '';
   if (text.isNotEmpty) return text;
 
-  final safeUrl = imageUrl.trim().isEmpty ? 'empty' : imageUrl.trim();
+  final safeUrl = imageUrl.trim().isEmpty ? '空值' : imageUrl.trim();
   return 'legacy_${editedAt.microsecondsSinceEpoch}_$safeUrl';
 }
 

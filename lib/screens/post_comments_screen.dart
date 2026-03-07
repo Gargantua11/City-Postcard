@@ -93,7 +93,7 @@ class _PostCommentsScreenState extends State<PostCommentsScreen> {
 
       final messenger = ScaffoldMessenger.maybeOf(context);
       messenger?.hideCurrentSnackBar();
-      messenger?.showSnackBar(SnackBar(content: Text('收藏失败：${e.runtimeType}')));
+      messenger?.showSnackBar(const SnackBar(content: Text('收藏失败，请稍后重试')));
     } finally {
       if (mounted) {
         setState(() {

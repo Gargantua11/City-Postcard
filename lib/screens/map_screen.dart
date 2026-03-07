@@ -7,9 +7,7 @@ import 'package:intl/intl.dart';
 import '../data/city_code_center.dart';
 import '../data/city_code_name.dart';
 import '../models/postcard_element_layer.dart';
-import '../services/backend_api_client.dart';
 import '../services/edited_postcard_service.dart';
-import '../services/map_backend_service.dart';
 import '../services/postcard_data_refresh_bus.dart';
 import '../services/storage_service.dart';
 import '../widgets/app_bottom_nav_bar.dart';
@@ -25,17 +23,12 @@ class MapScreen extends StatefulWidget {
 class _MapScreenState extends State<MapScreen> {
   static const String _headerAsset = 'assets/images/map/地图.png';
 
-  final MapBackendService _mapService = MapBackendService();
   final EditedPostcardService _editedPostcardService = EditedPostcardService();
   final StorageService _storageService = StorageService();
 
   bool _isLoading = true;
   bool _isPostcardsLoading = true;
-  bool _isOfflineMode = false;
   bool _isHome3dPreviewEnabled = true;
-  String? _errorMessage;
-  String? _offlineNotice;
-  String? _loadingProvinceCode;
   Set<String> _litProvinceCodes = const {};
   Map<String, List<_CitySpot>> _citySpotsByProvince = const {};
   List<_CitySpot> _citySpots = const [];
@@ -75,182 +68,146 @@ class _MapScreenState extends State<MapScreen> {
   Future<void> _loadEditedPostcards() async {
     setState(() {
       _isPostcardsLoading = true;
+      _isLoading = true;
     });
 
     try {
       final postcards = await _editedPostcardService.getEditedPostcards();
       if (!mounted) return;
-      setState(() {
-        _editedPostcards = postcards;
-        _isPostcardsLoading = false;
-      });
-      await _loadMapData();
+      _rebuildMapFromPostcards(postcards);
     } catch (_) {
       if (!mounted) return;
-      setState(() {
-        _editedPostcards = const <EditedPostcard>[];
-        _isPostcardsLoading = false;
-      });
-      await _loadMapData();
+      _rebuildMapFromPostcards(const <EditedPostcard>[]);
     }
   }
 
-  Future<void> _loadMapData() async {
-    setState(() {
-      _isLoading = true;
-      _errorMessage = null;
-      _offlineNotice = null;
-    });
+  void _rebuildMapFromPostcards(List<EditedPostcard> postcards) {
+    final litProvinces = <String>{};
+    final latestByProvinceCity = <String, _CitySpot>{};
 
-    try {
-      final result = await _mapService
-          .fetchLightedCityCodesWithOfflineFallback();
-      final cityCodes = result.cityCodes;
+    for (final card in postcards) {
+      final cityCode = _normalizeCityCode(card.cityCode);
+      final provinceCode = _resolveProvinceCode(
+        cityCode: cityCode,
+        provinceName: card.provinceName,
+      );
+      if (provinceCode == null) continue;
 
-      final litProvinces = <String>{};
-      final latestByProvinceCity = <String, _CitySpot>{};
-
-      for (final rawCode in cityCodes) {
-        final cityCode = _normalizeCityCode(rawCode);
-        final provinceCode = _provinceCodeFromCityCode(cityCode);
-        if (cityCode == null || provinceCode == null) continue;
-
-        litProvinces.add(provinceCode);
-
-        final coordinate = kCityCodeCoordinates[cityCode];
-        final spot = _CitySpot(
-          provinceCode: provinceCode,
-          cityLabel: _resolveCityLabel(cityCode: cityCode),
-          cityCode: cityCode,
-          latitude: coordinate?.latitude,
-          longitude: coordinate?.longitude,
-          editedAt: DateTime.now(),
-        );
-
-        final dedupeKey =
-            '${spot.provinceCode}_${spot.cityCode ?? spot.cityLabel}';
-        final current = latestByProvinceCity[dedupeKey];
-        if (current == null || spot.editedAt.isAfter(current.editedAt)) {
-          latestByProvinceCity[dedupeKey] = spot;
-        }
-      }
-
-      final citySpotsByProvince = <String, List<_CitySpot>>{};
-      for (final spot in latestByProvinceCity.values) {
-        citySpotsByProvince.putIfAbsent(spot.provinceCode, () => []).add(spot);
-      }
-      for (final list in citySpotsByProvince.values) {
-        list.sort((a, b) => b.editedAt.compareTo(a.editedAt));
-      }
-
-      final allSpots = latestByProvinceCity.values.toList()
-        ..sort((a, b) => b.editedAt.compareTo(a.editedAt));
-
-      if (!mounted) return;
-      setState(() {
-        _litProvinceCodes = litProvinces;
-        _citySpotsByProvince = citySpotsByProvince;
-        _citySpots = allSpots;
-        _isOfflineMode = result.isOffline;
-        _offlineNotice = result.notice;
-        _selectedProvinceCode = litProvinces.contains(_selectedProvinceCode)
-            ? _selectedProvinceCode
-            : null;
-        _isLoading = false;
-      });
-    } on BackendApiException catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _isLoading = false;
-        _isOfflineMode = false;
-        _errorMessage = e.message;
-      });
-    } catch (_) {
-      if (!mounted) return;
-      setState(() {
-        _isLoading = false;
-        _isOfflineMode = false;
-        _errorMessage = '加载地图数据失败，请稍后重试';
-      });
-    }
-  }
-
-  Future<void> _loadProvinceDetails(String provinceCode) async {
-    if (_loadingProvinceCode == provinceCode) return;
-    if (_isOfflineMode) return;
-
-    final provincePrefix = _provincePrefixFromCode(provinceCode);
-    if (provincePrefix == null) return;
-
-    setState(() {
-      _loadingProvinceCode = provinceCode;
-    });
-
-    try {
-      final result = await _mapService
-          .fetchProvincePostcardsWithOfflineFallback(provincePrefix);
-      final cards = result.postcards;
-      final latestByProvinceCity = <String, _CitySpot>{};
-
-      for (final card in cards) {
-        final cityCode = _normalizeCityCode(card.cityCode);
-        final cityLabel = _resolveCityLabel(
+      final coordinate = _resolveCityCoordinate(
+        cityCode: cityCode,
+        latitude: card.latitude,
+        longitude: card.longitude,
+      );
+      final spot = _CitySpot(
+        provinceCode: provinceCode,
+        cityLabel: _resolveCityLabel(
           cityName: card.cityName,
           cityCode: cityCode,
-        );
-        final coordinate = _resolveCityCoordinate(
-          cityCode: cityCode,
-          latitude: card.latitude,
-          longitude: card.longitude,
-        );
+        ),
+        cityCode: cityCode,
+        latitude: coordinate?.latitude,
+        longitude: coordinate?.longitude,
+        editedAt: card.editedAt,
+      );
 
-        final spot = _CitySpot(
-          provinceCode: provinceCode,
-          cityLabel: cityLabel,
-          cityCode: cityCode,
-          latitude: coordinate?.latitude,
-          longitude: coordinate?.longitude,
-          editedAt: card.createdAt,
-        );
-
-        final dedupeKey =
-            '${spot.provinceCode}_${spot.cityCode ?? spot.cityLabel}';
-        final current = latestByProvinceCity[dedupeKey];
-        if (current == null || spot.editedAt.isAfter(current.editedAt)) {
-          latestByProvinceCity[dedupeKey] = spot;
-        }
-      }
-
-      if (!mounted) return;
-
-      if (latestByProvinceCity.isNotEmpty) {
-        final nextByProvince = <String, List<_CitySpot>>{
-          ..._citySpotsByProvince,
-          provinceCode: latestByProvinceCity.values.toList()
-            ..sort((a, b) => b.editedAt.compareTo(a.editedAt)),
-        };
-
-        final nextAllSpots = _buildAllSpots(nextByProvince);
-        final nextLitProvinces = <String>{..._litProvinceCodes, provinceCode};
-
-        setState(() {
-          _citySpotsByProvince = nextByProvince;
-          _citySpots = nextAllSpots;
-          _litProvinceCodes = nextLitProvinces;
-          if (result.isOffline) {
-            _offlineNotice = result.notice;
-          }
-        });
-      }
-    } catch (_) {
-      // Keep existing data when province details request fails.
-    } finally {
-      if (mounted) {
-        setState(() {
-          _loadingProvinceCode = null;
-        });
+      final normalizedCityLabel = _normalizeCityName(spot.cityLabel);
+      final dedupeKey =
+          '${spot.provinceCode}_${spot.cityCode ?? normalizedCityLabel ?? spot.cityLabel}';
+      final current = latestByProvinceCity[dedupeKey];
+      if (current == null || spot.editedAt.isAfter(current.editedAt)) {
+        latestByProvinceCity[dedupeKey] = spot;
       }
     }
+
+    final citySpotsByProvince = <String, List<_CitySpot>>{};
+    for (final spot in latestByProvinceCity.values) {
+      litProvinces.add(spot.provinceCode);
+      citySpotsByProvince.putIfAbsent(spot.provinceCode, () => []).add(spot);
+    }
+    for (final list in citySpotsByProvince.values) {
+      list.sort((a, b) => b.editedAt.compareTo(a.editedAt));
+    }
+
+    final allSpots = _buildAllSpots(citySpotsByProvince);
+    final retainedProvince = litProvinces.contains(_selectedProvinceCode)
+        ? _selectedProvinceCode
+        : null;
+    final retainedCity = _findRetainedSelectedCity(
+      provinceCode: retainedProvince,
+      citySpotsByProvince: citySpotsByProvince,
+    );
+
+    setState(() {
+      _editedPostcards = postcards;
+      _litProvinceCodes = litProvinces;
+      _citySpotsByProvince = citySpotsByProvince;
+      _citySpots = allSpots;
+      _selectedProvinceCode = retainedProvince;
+      _selectedCityCode = retainedCity?.cityCode;
+      _selectedCityLabel = retainedCity?.cityLabel;
+      _selectedCityProvinceCode = retainedCity?.provinceCode;
+      _isPostcardsLoading = false;
+      _isLoading = false;
+    });
+  }
+
+  _CitySpot? _findRetainedSelectedCity({
+    required String? provinceCode,
+    required Map<String, List<_CitySpot>> citySpotsByProvince,
+  }) {
+    if (provinceCode == null) return null;
+    final selectedCityProvinceCode = _selectedCityProvinceCode;
+    if (selectedCityProvinceCode == null || selectedCityProvinceCode.isEmpty) {
+      return null;
+    }
+    if (selectedCityProvinceCode != provinceCode) return null;
+
+    final spots = citySpotsByProvince[provinceCode];
+    if (spots == null || spots.isEmpty) return null;
+
+    final selectedCityCode = _normalizeCityCode(_selectedCityCode);
+    final selectedCityLabel = _normalizeCityName(_selectedCityLabel);
+    for (final spot in spots) {
+      final spotCode = _normalizeCityCode(spot.cityCode);
+      final spotLabel = _normalizeCityName(spot.cityLabel);
+      final matchByCode =
+          selectedCityCode != null &&
+          spotCode != null &&
+          selectedCityCode == spotCode;
+      final matchByLabel =
+          selectedCityCode == null &&
+          selectedCityLabel != null &&
+          spotLabel != null &&
+          selectedCityLabel == spotLabel;
+      if (matchByCode || matchByLabel) {
+        return spot;
+      }
+    }
+
+    return null;
+  }
+
+  String? _resolveProvinceCode({
+    required String? cityCode,
+    required String? provinceName,
+  }) {
+    final fromCityCode = _provinceCodeFromCityCode(cityCode);
+    if (fromCityCode != null) return fromCityCode;
+
+    final normalizedProvinceName = _normalizeCityName(provinceName);
+    if (normalizedProvinceName == null || normalizedProvinceName.isEmpty) {
+      return null;
+    }
+
+    for (final entry in _provinceNameByCode.entries) {
+      final normalizedName = _normalizeCityName(entry.value);
+      if (normalizedName == null || normalizedName.isEmpty) continue;
+      if (normalizedName == normalizedProvinceName) {
+        return entry.key;
+      }
+    }
+
+    return null;
   }
 
   List<_CitySpot> _buildAllSpots(Map<String, List<_CitySpot>> byProvince) {
@@ -425,8 +382,6 @@ class _MapScreenState extends State<MapScreen> {
       _selectedCityLabel = spot.cityLabel;
       _selectedCityProvinceCode = spot.provinceCode;
     });
-
-    _loadProvinceDetails(spot.provinceCode);
   }
 
   void _onProvinceTap(String code) {
@@ -437,10 +392,6 @@ class _MapScreenState extends State<MapScreen> {
       _selectedCityLabel = null;
       _selectedCityProvinceCode = null;
     });
-
-    if (nextCode != null) {
-      _loadProvinceDetails(nextCode);
-    }
   }
 
   Map<String, Color> _buildProvinceColorMap() {
@@ -504,10 +455,6 @@ class _MapScreenState extends State<MapScreen> {
                 provinceCount: sortedProvinceCodes.length,
                 cityCount: _citySpots.length,
               ),
-              if (_isOfflineMode && _offlineNotice != null) ...[
-                const SizedBox(height: 8),
-                _buildOfflineNotice(_offlineNotice!),
-              ],
               const SizedBox(height: 8),
               _buildProvinceChips(sortedProvinceCodes),
               const SizedBox(height: 8),
@@ -560,7 +507,7 @@ class _MapScreenState extends State<MapScreen> {
             top: 0,
             bottom: 0,
             child: IconButton(
-              onPressed: _isLoading ? null : _loadMapData,
+              onPressed: _isLoading ? null : _loadEditedPostcards,
               icon: const Icon(Icons.refresh_rounded),
               tooltip: '刷新地图',
             ),
@@ -632,14 +579,8 @@ class _MapScreenState extends State<MapScreen> {
         ? 0
         : (_citySpotsByProvince[selectedProvinceCode]?.length ?? 0);
 
-    final loadingSelectedProvince =
-        selectedProvinceCode != null &&
-        _loadingProvinceCode == selectedProvinceCode;
-
     final text = _isLoading
         ? '正在读取地图数据...'
-        : _errorMessage != null
-        ? _errorMessage!
         : selectedProvinceName != null
         ? '当前选中：$selectedProvinceName，已标注 $selectedProvinceCityCount 个城市'
         : '已点亮 $provinceCount 个省份，标注 $cityCount 个城市';
@@ -654,11 +595,7 @@ class _MapScreenState extends State<MapScreen> {
       ),
       child: Row(
         children: [
-          Icon(
-            _isOfflineMode ? Icons.cloud_off_outlined : Icons.map_outlined,
-            size: 18,
-            color: const Color(0xFF4A5667),
-          ),
+          const Icon(Icons.map_outlined, size: 18, color: Color(0xFF4A5667)),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
@@ -667,40 +604,6 @@ class _MapScreenState extends State<MapScreen> {
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
                 color: Color(0xFF2B3140),
-              ),
-            ),
-          ),
-          if (loadingSelectedProvince)
-            const SizedBox(
-              width: 16,
-              height: 16,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildOfflineNotice(String message) {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: const Color(0xFFFFF8E1),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFFFE082)),
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.info_outline, size: 16, color: Color(0xFF8D6E63)),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              message,
-              style: const TextStyle(
-                fontSize: 12,
-                color: Color(0xFF6D4C41),
-                fontWeight: FontWeight.w500,
               ),
             ),
           ),

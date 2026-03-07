@@ -40,12 +40,12 @@ class AvatarUploadService {
   Future<String> uploadAvatarAndSync(String filePath) async {
     final normalizedPath = filePath.trim();
     if (normalizedPath.isEmpty) {
-      throw const BackendApiException('avatar file path cannot be empty');
+      throw const BackendApiException('头像文件路径不能为空');
     }
 
     final file = File(normalizedPath);
     if (!file.existsSync()) {
-      throw const BackendApiException('avatar file does not exist');
+      throw const BackendApiException('头像文件不存在');
     }
 
     return _uploadAvatarViaOssDirect(file);
@@ -88,18 +88,18 @@ class AvatarUploadService {
     final text = error.toString();
     if (text.contains('Http status error [403]') ||
         text.toLowerCase().contains('status error [403]')) {
-      return 'oss upload forbidden (403): check sts policy for PutObject.';
+      return '对象存储上传被拒绝（403），请检查临时凭证策略是否允许 PutObject。';
     }
     if (text.contains('Http status error [401]') ||
         text.toLowerCase().contains('status error [401]')) {
-      return 'oss sts token expired or invalid (401).';
+      return '对象存储临时凭证已过期或无效（401）。';
     }
     if (text.toLowerCase().contains('socket') ||
         text.toLowerCase().contains('timed out') ||
         text.toLowerCase().contains('network')) {
-      return 'oss upload network error.';
+      return '对象存储上传网络异常。';
     }
-    return 'oss upload failed.';
+    return '对象存储上传失败。';
   }
 
   Future<Map<String, dynamic>> _syncAvatarKeyToBackend(String objectKey) async {
@@ -128,7 +128,7 @@ class AvatarUploadService {
     }
 
     if (backendError != null) throw backendError;
-    throw const BackendApiException('cannot sync avatar key to backend');
+    throw const BackendApiException('无法将头像键值同步到后端');
   }
 
   Future<String> resolveAvatarDisplaySource(
@@ -346,7 +346,7 @@ class AvatarUploadService {
     }
 
     if (backendError != null) throw backendError;
-    throw const BackendApiException('cannot get avatar object key');
+    throw const BackendApiException('无法获取头像对象键值');
   }
 
   Future<_OssUploadContext> _resolveOssUploadContext() async {
@@ -396,9 +396,7 @@ class AvatarUploadService {
     }
 
     if (endpoint.isEmpty || bucketName.isEmpty) {
-      throw const BackendApiException(
-        'missing oss endpoint or bucketName from /oss/sts response',
-      );
+      throw const BackendApiException('对象存储配置缺失：终端地址或存储桶名称为空');
     }
 
     _cachedOssEndpoint = endpoint;
@@ -498,7 +496,7 @@ class AvatarUploadService {
     if (accessKeyId.isEmpty ||
         accessKeySecret.isEmpty ||
         securityToken.isEmpty) {
-      throw const BackendApiException('invalid /oss/sts response');
+      throw const BackendApiException('对象存储临时凭证返回格式无效');
     }
     return _OssStsCredential(
       accessKeyId: accessKeyId,
@@ -580,7 +578,7 @@ class AvatarUploadService {
     }
 
     if (backendError != null) throw backendError;
-    throw const BackendApiException('cannot get sts credentials');
+    throw const BackendApiException('无法获取对象存储临时凭证');
   }
 
   Map<String, dynamic> _extractStsToken(Map<String, dynamic> body) {
@@ -613,7 +611,7 @@ class AvatarUploadService {
         accessKeySecret == null ||
         securityToken == null ||
         expiration == null) {
-      throw const BackendApiException('invalid /oss/sts response');
+      throw const BackendApiException('对象存储临时凭证返回格式无效');
     }
 
     return <String, dynamic>{

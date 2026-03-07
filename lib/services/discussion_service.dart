@@ -222,7 +222,7 @@ class DiscussionService {
   }) async {
     final source = imageUrl.trim();
     if (source.isEmpty) {
-      throw ArgumentError('imageUrl cannot be empty');
+      throw ArgumentError('图片地址不能为空');
     }
 
     final normalizedAddress = address.trim();
@@ -284,7 +284,7 @@ class DiscussionService {
   }) async {
     final source = imageUrl.trim();
     if (source.isEmpty) {
-      throw ArgumentError('imageUrl cannot be empty');
+      throw ArgumentError('图片地址不能为空');
     }
 
     final avatarText = avatar?.trim();

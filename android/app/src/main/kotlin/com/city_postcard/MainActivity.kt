@@ -1,4 +1,4 @@
-package com.example.city_postcard
+package com.city_postcard
 
 import io.flutter.embedding.android.FlutterActivity
 
