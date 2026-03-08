@@ -3,6 +3,9 @@ import 'package:flutter/material.dart';
 enum AppTab { home, map, comment, profile }
 
 class AppBottomNavBar extends StatelessWidget {
+  static const double _scale = 0.75;
+  static const double _barHeight = 76 * _scale;
+
   final AppTab currentTab;
   final VoidCallback? onHomeTap;
   final VoidCallback? onMapTap;
@@ -25,7 +28,7 @@ class AppBottomNavBar extends StatelessWidget {
     return SafeArea(
       top: false,
       child: Container(
-        height: 76,
+        height: _barHeight,
         color: backgroundColor,
         padding: EdgeInsets.zero,
         child: Row(
@@ -66,6 +69,10 @@ class AppBottomNavBar extends StatelessWidget {
 }
 
 class _NavItem extends StatelessWidget {
+  static const double _scale = 0.75;
+  static const double _iconWidth = 76 * _scale;
+  static const double _iconHeight = 72 * _scale;
+
   final String iconAsset;
   final bool active;
   final VoidCallback? onTap;
@@ -86,8 +93,8 @@ class _NavItem extends StatelessWidget {
         ),
         child: Center(
           child: Container(
-            width: 76,
-            height: 72,
+            width: _iconWidth,
+            height: _iconHeight,
             decoration: BoxDecoration(
               image: DecorationImage(
                 image: AssetImage(iconAsset),
