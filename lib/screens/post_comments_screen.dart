@@ -5,6 +5,7 @@ import '../services/discussion_service.dart';
 import '../services/backend_api_client.dart';
 import '../services/favorite_postcard_service.dart';
 import '../services/postcard_comment_service.dart';
+import '../services/storage_service.dart';
 import '../widgets/resolved_image.dart';
 
 class PostCommentsScreen extends StatefulWidget {
@@ -21,14 +22,16 @@ class _PostCommentsScreenState extends State<PostCommentsScreen> {
 
   final FavoritePostcardService _favoriteService = FavoritePostcardService();
   final PostcardCommentService _commentService = PostcardCommentService();
+  final StorageService _storageService = StorageService();
   final TextEditingController _inputController = TextEditingController();
   final FocusNode _inputFocusNode = FocusNode();
 
   List<_CommentItem> _comments = <_CommentItem>[];
+  final Set<String> _currentUsernames = <String>{};
+  String? _currentUserId;
+  String? _currentUserAvatar;
 
-  int? _replyingCommentId;
-  String? _replyToUsername;
-  final Set<int> _expandedReplyCommentIds = <int>{};
+  final Set<int> _deletingCommentIds = <int>{};
   bool _isCommentsLoading = true;
   bool _isCommentSubmitting = false;
   String? _commentsErrorMessage;
@@ -40,8 +43,86 @@ class _PostCommentsScreenState extends State<PostCommentsScreen> {
   @override
   void initState() {
     super.initState();
+    _loadCurrentUserIdentity();
     _loadCommentsFromApi();
     _loadFavoriteState();
+  }
+
+  Future<void> _loadCurrentUserIdentity() async {
+    try {
+      final user = await _storageService.getUser();
+      final profileNickname = await _storageService.getProfileNickname();
+      final profileAvatar = await _storageService.getProfileAvatar();
+      if (!mounted) return;
+
+      final next = <String>{};
+      final username = user?.username.trim() ?? '';
+      if (username.isNotEmpty) {
+        next.add(_normalizeName(username));
+      }
+      final nickname = profileNickname?.trim() ?? '';
+      if (nickname.isNotEmpty) {
+        next.add(_normalizeName(nickname));
+      }
+      next.add(_normalizeName('我'));
+      final userId = user?.id.trim();
+      final avatar = (user?.avatar?.trim().isNotEmpty == true
+              ? user!.avatar!.trim()
+              : (profileAvatar?.trim() ?? ''))
+          .trim();
+      final normalizedAvatar = _normalizeAvatar(avatar);
+
+      setState(() {
+        _currentUserId = (userId != null && userId.isNotEmpty) ? userId : null;
+        _currentUserAvatar = normalizedAvatar.isEmpty ? null : normalizedAvatar;
+        _currentUsernames
+          ..clear()
+          ..addAll(next);
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _currentUserId = null;
+        _currentUserAvatar = null;
+        _currentUsernames
+          ..clear()
+          ..add(_normalizeName('我'));
+      });
+    }
+  }
+
+  String _normalizeName(String raw) {
+    return raw.trim().toLowerCase();
+  }
+
+  String _normalizeAvatar(String raw) {
+    final text = raw.trim();
+    if (text.isEmpty) return '';
+    final noQuery = text.split('?').first.trim();
+    return noQuery.toLowerCase();
+  }
+
+  bool _isOwnComment(_CommentItem item) {
+    final currentUserId = _currentUserId;
+    final commentUserId = item.userId?.trim() ?? '';
+    if (currentUserId != null &&
+        currentUserId.isNotEmpty &&
+        commentUserId.isNotEmpty &&
+        commentUserId == currentUserId) {
+      return true;
+    }
+
+    final currentAvatar = _currentUserAvatar;
+    final commentAvatar = _normalizeAvatar(item.avatar ?? '');
+    if (currentAvatar != null &&
+        currentAvatar.isNotEmpty &&
+        commentAvatar.isNotEmpty &&
+        currentAvatar == commentAvatar) {
+      return true;
+    }
+
+    final normalized = _normalizeName(item.username);
+    return normalized.isNotEmpty && _currentUsernames.contains(normalized);
   }
 
   @override
@@ -192,115 +273,105 @@ class _PostCommentsScreenState extends State<PostCommentsScreen> {
   }
 
   List<_CommentItem> _buildCommentItemsFromNetwork(List<PostcardComment> raw) {
-    final roots = <_CommentItem>[];
-    final rootById = <int, _CommentItem>{};
-    final replies = <PostcardComment>[];
-
+    final comments = <_CommentItem>[];
     for (final item in raw) {
       if (item.isReply) {
-        replies.add(item);
         continue;
       }
 
-      final root = _CommentItem(
-        id: item.id,
-        username: item.username,
-        avatar: item.avatar,
-        location: item.location,
-        content: item.content,
-        createdAt: item.createdAt,
-        liked: item.liked,
-        replies: <_ReplyItem>[],
-      );
-      roots.add(root);
-      if (item.id > 0) {
-        rootById[item.id] = root;
-      }
-    }
-
-    for (final item in replies) {
-      final parentId = item.parentCommentId;
-      final parent = parentId == null ? null : rootById[parentId];
-      if (parent != null) {
-        parent.replies.add(
-          _ReplyItem(
-            id: item.id,
-            username: item.username,
-            avatar: item.avatar,
-            content: item.content,
-            createdAt: item.createdAt,
-            replyToUsername: item.replyToUsername,
-          ),
-        );
-        continue;
-      }
-
-      roots.add(
+      comments.add(
         _CommentItem(
           id: item.id,
+          userId: item.userId,
           username: item.username,
           avatar: item.avatar,
           location: item.location,
           content: item.content,
           createdAt: item.createdAt,
           liked: item.liked,
-          replies: <_ReplyItem>[],
         ),
       );
     }
 
-    roots.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-    for (final root in roots) {
-      root.replies.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-    }
-    return roots;
+    comments.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    return comments;
   }
 
   Future<void> _toggleLike(_CommentItem item) async {
-    final next = !item.liked;
+    final previous = item.liked;
+    final next = !previous;
     setState(() {
       item.liked = next;
     });
 
-    if (!next || item.id <= 0) {
+    if (item.id <= 0) {
       return;
     }
 
     try {
-      await _commentService.likeComment(item.id);
+      await _commentService.setCommentLiked(item.id, next);
     } catch (e, stackTrace) {
-      debugPrint('点赞评论失败: $e\n$stackTrace');
+      debugPrint('评论点赞操作失败: $e\n$stackTrace');
+      if (!mounted) return;
+      setState(() {
+        item.liked = previous;
+      });
     }
   }
 
-  void _startReply({
-    required _CommentItem comment,
-    required String targetUsername,
-  }) {
+  Future<void> _deleteComment(_CommentItem item) async {
+    if (item.id <= 0 || _deletingCommentIds.contains(item.id)) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('删除评论'),
+          content: const Text('确认删除这条评论吗？'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('取消'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('删除'),
+            ),
+          ],
+        );
+      },
+    );
+    if (confirmed != true || !mounted) return;
+
     setState(() {
-      _replyingCommentId = comment.id;
-      _replyToUsername = targetUsername;
+      _deletingCommentIds.add(item.id);
     });
-    _inputFocusNode.requestFocus();
-  }
 
-  void _cancelReply() {
-    setState(() {
-      _replyingCommentId = null;
-      _replyToUsername = null;
-    });
-  }
-
-  void _toggleReplySection(_CommentItem comment) {
-    if (comment.replies.length <= 2) return;
-
-    setState(() {
-      if (_expandedReplyCommentIds.contains(comment.id)) {
-        _expandedReplyCommentIds.remove(comment.id);
-      } else {
-        _expandedReplyCommentIds.add(comment.id);
+    try {
+      await _commentService.deleteComment(item.id);
+      if (!mounted) return;
+      setState(() {
+        _comments.removeWhere((comment) => comment.id == item.id);
+      });
+      await _loadCommentsFromApi(showLoading: false);
+      _showHint('评论已删除');
+    } on BackendApiException catch (e, stackTrace) {
+      debugPrint('删除评论失败: $e\n$stackTrace');
+      if (!mounted) return;
+      _showHint(
+        e.isUnauthorized ? '登录状态失效，请重新登录' : '删除评论失败，请稍后重试',
+      );
+    } catch (e, stackTrace) {
+      debugPrint('删除评论失败: $e\n$stackTrace');
+      if (!mounted) return;
+      _showHint('删除评论失败，请稍后重试');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _deletingCommentIds.remove(item.id);
+        });
       }
-    });
+    }
   }
 
   Future<void> _submitInput() async {
@@ -312,9 +383,6 @@ class _PostCommentsScreenState extends State<PostCommentsScreen> {
       return;
     }
 
-    final parentCommentId = _replyingCommentId;
-    final replyToUsername = _replyToUsername;
-
     setState(() {
       _isCommentSubmitting = true;
     });
@@ -323,16 +391,10 @@ class _PostCommentsScreenState extends State<PostCommentsScreen> {
       await _commentService.addComment(
         postcardId: widget.post.id,
         content: content,
-        parentCommentId: parentCommentId,
-        replyToUsername: replyToUsername,
       );
       if (!mounted) return;
 
       _inputController.clear();
-      setState(() {
-        _replyingCommentId = null;
-        _replyToUsername = null;
-      });
       await _loadCommentsFromApi(showLoading: false);
     } on BackendApiException catch (e, stackTrace) {
       debugPrint('发布评论失败: $e\n$stackTrace');
@@ -426,45 +488,6 @@ class _PostCommentsScreenState extends State<PostCommentsScreen> {
                             ? null
                             : _togglePostFavorite,
                       ),
-                      if (_replyToUsername != null)
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(14, 2, 14, 4),
-                          child: Container(
-                            height: 30,
-                            padding: const EdgeInsets.symmetric(horizontal: 12),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFD7DFC9),
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                            child: Row(
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    '正在回复：$_replyToUsername',
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(
-                                      fontSize: 12,
-                                      color: Color(0xFF55604D),
-                                    ),
-                                  ),
-                                ),
-                                InkWell(
-                                  onTap: _cancelReply,
-                                  borderRadius: BorderRadius.circular(12),
-                                  child: const Padding(
-                                    padding: EdgeInsets.all(4),
-                                    child: Icon(
-                                      Icons.close,
-                                      size: 16,
-                                      color: Color(0xFF66735E),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
                       Expanded(
                         child: _isCommentsLoading
                             ? const Center(child: CircularProgressIndicator())
@@ -513,23 +536,17 @@ class _PostCommentsScreenState extends State<PostCommentsScreen> {
                                     const SizedBox(height: 10),
                                 itemBuilder: (context, index) {
                                   final item = _comments[index];
+                                  final canDelete = _isOwnComment(item);
                                   return _CommentCard(
                                     item: item,
-                                    repliesExpanded: _expandedReplyCommentIds
-                                        .contains(item.id),
-                                    onReplyAreaTap: () =>
-                                        _toggleReplySection(item),
                                     onLikeTap: () {
                                       _toggleLike(item);
                                     },
-                                    onReplyCommentTap: () => _startReply(
-                                      comment: item,
-                                      targetUsername: item.username,
+                                    canDelete: canDelete,
+                                    deleting: _deletingCommentIds.contains(
+                                      item.id,
                                     ),
-                                    onReplyToUserTap: (username) => _startReply(
-                                      comment: item,
-                                      targetUsername: username,
-                                    ),
+                                    onDeleteTap: () => _deleteComment(item),
                                   );
                                 },
                               ),
@@ -549,9 +566,7 @@ class _PostCommentsScreenState extends State<PostCommentsScreen> {
                             focusNode: _inputFocusNode,
                             enabled: !_isCommentSubmitting,
                             decoration: InputDecoration(
-                              hintText: _replyToUsername == null
-                                  ? '输入您的评论吧'
-                                  : '回复 $_replyToUsername',
+                              hintText: '输入您的评论吧',
                               hintStyle: const TextStyle(
                                 color: Color(0xFF97A190),
                                 fontSize: 17,
@@ -755,28 +770,21 @@ class _PostOwnerInfo extends StatelessWidget {
 
 class _CommentCard extends StatelessWidget {
   final _CommentItem item;
-  final bool repliesExpanded;
-  final VoidCallback onReplyAreaTap;
   final VoidCallback onLikeTap;
-  final VoidCallback onReplyCommentTap;
-  final ValueChanged<String> onReplyToUserTap;
+  final bool canDelete;
+  final bool deleting;
+  final VoidCallback onDeleteTap;
 
   const _CommentCard({
     required this.item,
-    required this.repliesExpanded,
-    required this.onReplyAreaTap,
     required this.onLikeTap,
-    required this.onReplyCommentTap,
-    required this.onReplyToUserTap,
+    required this.canDelete,
+    required this.deleting,
+    required this.onDeleteTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    final canExpandReplies = item.replies.length > 2;
-    final displayedReplies = canExpandReplies && !repliesExpanded
-        ? item.replies.take(2).toList(growable: false)
-        : item.replies;
-
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 4),
       child: Column(
@@ -816,18 +824,24 @@ class _CommentCard extends StatelessWidget {
                   color: Colors.black87,
                 ),
               ),
-              const SizedBox(width: 20),
-              InkWell(
-                onTap: onReplyCommentTap,
-                borderRadius: BorderRadius.circular(8),
-                child: const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+              if (canDelete) ...[
+                const SizedBox(width: 10),
+                TextButton(
+                  onPressed: deleting ? null : onDeleteTap,
+                  style: TextButton.styleFrom(
+                    minimumSize: const Size(0, 30),
+                    padding: const EdgeInsets.symmetric(horizontal: 6),
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
                   child: Text(
-                    '回复',
-                    style: TextStyle(fontSize: 16 / 1.8, color: Colors.black87),
+                    deleting ? '删除中' : '删除',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: Color(0xFF6F6F6F),
+                    ),
                   ),
                 ),
-              ),
+              ],
               const Spacer(),
               IconButton(
                 onPressed: onLikeTap,
@@ -842,123 +856,8 @@ class _CommentCard extends StatelessWidget {
               ),
             ],
           ),
-          if (item.replies.isNotEmpty)
-            GestureDetector(
-              onTap: canExpandReplies ? onReplyAreaTap : null,
-              child: Container(
-                margin: const EdgeInsets.only(left: 20, top: 2),
-                padding: const EdgeInsets.fromLTRB(10, 8, 10, 6),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFDDE1D5),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Column(
-                  children: [
-                    for (int i = 0; i < displayedReplies.length; i++) ...[
-                      _ReplyCard(
-                        reply: displayedReplies[i],
-                        onReplyTap: () =>
-                            onReplyToUserTap(displayedReplies[i].username),
-                      ),
-                      if (i != displayedReplies.length - 1)
-                        const SizedBox(height: 8),
-                    ],
-                    if (canExpandReplies && !repliesExpanded) ...[
-                      const SizedBox(height: 4),
-                      const Text(
-                        '...',
-                        style: TextStyle(
-                          fontSize: 18,
-                          color: Color(0xFF5E605A),
-                          height: 1.0,
-                        ),
-                      ),
-                    ],
-                    if (canExpandReplies) ...[
-                      const SizedBox(height: 4),
-                      Text(
-                        repliesExpanded ? '收回' : '展开全部回复',
-                        style: const TextStyle(
-                          fontSize: 11.5,
-                          color: Color(0xFF4C5A45),
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            ),
         ],
       ),
-    );
-  }
-}
-
-class _ReplyCard extends StatelessWidget {
-  final _ReplyItem reply;
-  final VoidCallback onReplyTap;
-
-  const _ReplyCard({required this.reply, required this.onReplyTap});
-
-  @override
-  Widget build(BuildContext context) {
-    final prefix = reply.replyToUsername == null
-        ? ''
-        : '回复 ${reply.replyToUsername}：';
-
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: EdgeInsets.only(top: 2),
-          child: _AvatarBubble(imageUrl: reply.avatar, radius: 11),
-        ),
-        const SizedBox(width: 7),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                reply.username,
-                style: const TextStyle(fontSize: 12, color: Colors.black87),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                '$prefix${reply.content}',
-                style: const TextStyle(fontSize: 12.5, color: Colors.black87),
-              ),
-              const SizedBox(height: 2),
-              Row(
-                children: [
-                  Text(
-                    _formatRelativeTime(reply.createdAt),
-                    style: const TextStyle(
-                      fontSize: 11,
-                      color: Color(0xFF5E605A),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  InkWell(
-                    onTap: onReplyTap,
-                    borderRadius: BorderRadius.circular(8),
-                    child: const Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 3, vertical: 1),
-                      child: Text(
-                        '回复',
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: Color(0xFF30322E),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ],
     );
   }
 }
@@ -978,40 +877,22 @@ String _formatRelativeTime(DateTime time) {
 
 class _CommentItem {
   final int id;
+  final String? userId;
   final String username;
   final String? avatar;
   final String location;
   final String content;
   final DateTime createdAt;
   bool liked;
-  final List<_ReplyItem> replies;
 
   _CommentItem({
     required this.id,
+    this.userId,
     required this.username,
     this.avatar,
     required this.location,
     required this.content,
     required this.createdAt,
     required this.liked,
-    required this.replies,
-  });
-}
-
-class _ReplyItem {
-  final int id;
-  final String username;
-  final String? avatar;
-  final String content;
-  final DateTime createdAt;
-  final String? replyToUsername;
-
-  _ReplyItem({
-    required this.id,
-    required this.username,
-    this.avatar,
-    required this.content,
-    required this.createdAt,
-    this.replyToUsername,
   });
 }

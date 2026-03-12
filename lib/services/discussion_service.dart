@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../models/postcard_element_layer.dart';
 import 'backend_api_client.dart';
 
 class DiscussionFetchResult {
@@ -110,20 +111,126 @@ class DiscussionPost {
   }
 
   static String _extractHotComment(Map<String, dynamic> json) {
+    final rawHotComment = json['hotComment'];
+    if (rawHotComment is String) {
+      final text = _normalizeHotCommentText(rawHotComment);
+      if (text.isNotEmpty) {
+        return text;
+      }
+    }
+
+    final nested = BackendApiClient.asMap(rawHotComment);
+    if (nested != null) {
+      final nestedContent = BackendApiClient.readString(nested, const [
+        'content',
+        'commentContent',
+        'text',
+      ]);
+      if (nestedContent != null && nestedContent.isNotEmpty) {
+        return _normalizeHotCommentText(nestedContent);
+      }
+    }
+
+    if (rawHotComment is List) {
+      for (final entry in rawHotComment) {
+        final entryMap = BackendApiClient.asMap(entry);
+        if (entryMap == null) continue;
+        final entryContent = BackendApiClient.readString(entryMap, const [
+          'content',
+          'commentContent',
+          'text',
+        ]);
+        if (entryContent != null && entryContent.isNotEmpty) {
+          return _normalizeHotCommentText(entryContent);
+        }
+      }
+    }
+
     final direct = BackendApiClient.readString(json, const [
-      'hotComment',
       'hotCommentContent',
     ]);
     if (direct != null && direct.isNotEmpty) {
-      return direct;
+      return _normalizeHotCommentText(direct);
     }
 
-    final nested = BackendApiClient.asMap(json['hotComment']);
-    final nestedContent = BackendApiClient.readString(nested, const [
-      'content',
-      'commentContent',
-    ]);
-    return nestedContent ?? '';
+    return '';
+  }
+
+  static String _normalizeHotCommentText(String raw) {
+    final text = raw.trim();
+    if (text.isEmpty) return '';
+
+    final jsonLikeMap = _tryParseMapFromJsonText(text);
+    if (jsonLikeMap != null) {
+      final nested = BackendApiClient.readString(jsonLikeMap, const [
+        'content',
+        'commentContent',
+        'text',
+      ]);
+      if (nested != null && nested.trim().isNotEmpty) {
+        return nested.trim();
+      }
+    }
+
+    final mapLikeField = _extractFieldFromMapLikeText(
+      text,
+      const ['content', 'commentContent', 'text'],
+    );
+    if (mapLikeField != null && mapLikeField.isNotEmpty) {
+      return mapLikeField;
+    }
+
+    return text;
+  }
+
+  static Map<String, dynamic>? _tryParseMapFromJsonText(String text) {
+    if (!(text.startsWith('{') && text.endsWith('}'))) {
+      return null;
+    }
+
+    try {
+      final decoded = jsonDecode(text);
+      return BackendApiClient.asMap(decoded);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static String? _extractFieldFromMapLikeText(
+    String raw,
+    List<String> fieldNames,
+  ) {
+    if (!(raw.startsWith('{') && raw.endsWith('}'))) {
+      return null;
+    }
+
+    for (final field in fieldNames) {
+      final pattern = RegExp(
+        '${RegExp.escape(field)}\\s*:\\s*(.+?)(?=,\\s*[A-Za-z_][A-Za-z0-9_]*\\s*:|\\s*\\}\$)',
+        dotAll: true,
+      );
+      final match = pattern.firstMatch(raw);
+      if (match == null) continue;
+
+      final value = _stripWrappingQuotes((match.group(1) ?? '').trim());
+      if (value.isNotEmpty) {
+        return value;
+      }
+    }
+    return null;
+  }
+
+  static String _stripWrappingQuotes(String text) {
+    if (text.length >= 2) {
+      final first = text[0];
+      final last = text[text.length - 1];
+      final wrappedByDoubleQuote = first == '"' && last == '"';
+      final wrappedBySingleQuote = first == '\'' && last == '\'';
+      if (wrappedByDoubleQuote || wrappedBySingleQuote) {
+        return text.substring(1, text.length - 1).trim();
+      }
+    }
+    return text;
   }
 
   static String? _extractUsername(Map<String, dynamic> json) {
@@ -197,11 +304,7 @@ class DiscussionService {
   static const String _postsCacheKey = 'discussion_posts_cache_v1';
   static const String _localPostsKey = 'discussion_local_posts_v1';
   static const String _defaultHotComment = '分享一张明信片';
-  static const List<String> _publishEndpoints = <String>[
-    '/discussion/postcards',
-    '/discussion/postcard',
-    '/postcard/publish',
-  ];
+  static const String _postcardCreateEndpoint = '/postcard/create';
 
   DiscussionService({BackendApiClient? apiClient})
     : _apiClient = apiClient ?? BackendApiClient();
@@ -219,62 +322,190 @@ class DiscussionService {
     String? provinceName,
     double? latitude,
     double? longitude,
+    List<PostcardElementLayer> layers = const <PostcardElementLayer>[],
   }) async {
     final source = imageUrl.trim();
     if (source.isEmpty) {
       throw ArgumentError('图片地址不能为空');
     }
 
+    final normalizedUsername = username.trim().isEmpty ? '我' : username.trim();
     final normalizedAddress = address.trim();
+    final resolvedAddress = normalizedAddress.isEmpty ? '未知地点' : normalizedAddress;
     final normalizedCityName = cityName?.trim();
     final normalizedCityCode = cityCode?.trim();
     final normalizedProvinceName = provinceName?.trim();
+    final normalizedCityCodeValue = _normalizeCityCodeValue(normalizedCityCode);
     final trimmedHotComment = hotComment.trim();
     final normalizedHotComment = trimmedHotComment.isEmpty
         ? _defaultHotComment
         : trimmedHotComment;
+    final imageKey = _normalizeImageKeyCandidate(source);
+    final elements = _buildElementPayload(layers);
+    final title = normalizedCityName != null && normalizedCityName.isNotEmpty
+        ? '$normalizedCityName 明信片'
+        : (normalizedProvinceName != null && normalizedProvinceName.isNotEmpty
+              ? '$normalizedProvinceName 明信片'
+              : '我的明信片');
 
-    final payload = <String, dynamic>{
-      'imageUrl': source,
-      'image': source,
-      'url': source,
-      'address': normalizedAddress.isEmpty ? '未知地点' : normalizedAddress,
-      'location': normalizedAddress.isEmpty ? '未知地点' : normalizedAddress,
-      'hotComment': normalizedHotComment,
-      'hotCommentContent': normalizedHotComment,
+    final fullPayload = _compactPayload(<String, dynamic>{
+      'title': title,
       'content': normalizedHotComment,
-      'username': username.trim().isEmpty ? '我' : username.trim(),
+      'imageUrl': source,
+      if (imageKey != null) 'imageKey': imageKey,
+      'address': resolvedAddress,
       'cityName': normalizedCityName,
-      'cityCode': normalizedCityCode,
+      'cityCode': normalizedCityCodeValue,
       'provinceName': normalizedProvinceName,
       'latitude': latitude,
       'longitude': longitude,
-    };
-    payload.removeWhere(
-      (key, value) => value == null || (value is String && value.isEmpty),
-    );
+      if (elements.isNotEmpty) 'elements': elements,
+    });
 
-    for (final path in _publishEndpoints) {
+    final fullPayloadWithAliases = _compactPayload(<String, dynamic>{
+      ...fullPayload,
+      if (imageKey != null) 'key': imageKey,
+      if (imageKey != null) 'objectKey': imageKey,
+    });
+
+    final corePayload = _compactPayload(<String, dynamic>{
+      'title': title,
+      'content': normalizedHotComment,
+      'imageUrl': source,
+      if (imageKey != null) 'imageKey': imageKey,
+      'address': resolvedAddress,
+      'cityCode': normalizedCityCodeValue,
+      'cityName': normalizedCityName,
+      'provinceName': normalizedProvinceName,
+      if (elements.isNotEmpty) 'elements': elements,
+    });
+
+    final minimalPayload = _compactPayload(<String, dynamic>{
+      if (imageKey != null) 'imageKey': imageKey,
+      'imageUrl': source,
+      'address': resolvedAddress,
+      'cityCode': normalizedCityCodeValue,
+      'content': normalizedHotComment,
+      if (elements.isNotEmpty) 'elements': elements,
+    });
+
+    final attempts = <Map<String, dynamic>>[
+      fullPayload,
+      fullPayloadWithAliases,
+      corePayload,
+      minimalPayload,
+    ];
+
+    final triedPayloads = <String>{};
+    BackendApiException? lastBackendError;
+    for (final payload in attempts) {
+      if (payload.isEmpty) continue;
+      final fingerprint = jsonEncode(payload);
+      if (!triedPayloads.add(fingerprint)) continue;
+
       try {
-        await _apiClient.post(path, body: payload, requireAuth: true);
+        await _apiClient.post(
+          _postcardCreateEndpoint,
+          body: payload,
+          requireAuth: true,
+        );
         return;
-      } on BackendApiException {
+      } on BackendApiException catch (e) {
+        lastBackendError = e;
         continue;
       } catch (_) {
         continue;
       }
     }
 
+    if (elements.isNotEmpty) {
+      throw lastBackendError ?? const BackendApiException('发布失败，请重试');
+    }
+
     // Keep posting usable when backend publish API is unavailable.
     await publishLocalPost(
-      username: username,
+      username: normalizedUsername,
       avatar: avatar,
       imageUrl: source,
-      address: normalizedAddress,
+      address: resolvedAddress,
       hotComment: normalizedHotComment,
     );
   }
 
+  List<Map<String, dynamic>> _buildElementPayload(
+    List<PostcardElementLayer> layers,
+  ) {
+    if (layers.isEmpty) return const <Map<String, dynamic>>[];
+    return layers
+        .map(
+          (item) => <String, dynamic>{
+            'id': item.id,
+            'type': 'asset',
+            ...item.toJson(),
+          },
+        )
+        .toList(growable: false);
+  }
+
+  Map<String, dynamic> _compactPayload(Map<String, dynamic> payload) {
+    payload.removeWhere((key, value) {
+      if (value == null) return true;
+      if (value is String && value.trim().isEmpty) return true;
+      if (value is List && value.isEmpty) return true;
+      return false;
+    });
+    return payload;
+  }
+
+  dynamic _normalizeCityCodeValue(String? cityCode) {
+    final text = cityCode?.trim() ?? '';
+    if (text.isEmpty) return null;
+    final digits = text.replaceAll(RegExp(r'[^0-9]'), '');
+    if (digits.isEmpty) return null;
+    return int.tryParse(digits) ?? digits;
+  }
+
+  String? _normalizeImageKeyCandidate(String imageUrl) {
+    final text = imageUrl.trim();
+    if (text.isEmpty) return null;
+    if (_looksLikeLocalPath(text) || text.startsWith('assets/')) {
+      return null;
+    }
+
+    if (text.startsWith('http://') || text.startsWith('https://')) {
+      final uri = Uri.tryParse(text);
+      if (uri == null || uri.pathSegments.isEmpty) return null;
+      final segments = uri.pathSegments
+          .map((item) => item.trim())
+          .where((item) => item.isNotEmpty)
+          .toList(growable: false);
+      if (segments.isEmpty) return null;
+      return segments.join('/');
+    }
+
+    return text.replaceFirst(RegExp(r'^/+'), '');
+  }
+
+  bool _looksLikeLocalPath(String value) {
+    if (value.startsWith('file://')) return true;
+    if (RegExp(r'^[a-zA-Z]:[\\/]').hasMatch(value)) return true;
+    for (final prefix in const <String>[
+      '/storage/',
+      '/sdcard/',
+      '/data/',
+      '/var/',
+      '/private/var/',
+      '/tmp/',
+      '/home/',
+      '/Users/',
+      '/mnt/',
+      '/proc/',
+      '/system/',
+    ]) {
+      if (value.startsWith(prefix)) return true;
+    }
+    return false;
+  }
   Future<void> publishLocalPost({
     required String username,
     required String imageUrl,

@@ -8,6 +8,7 @@ class PostcardComment {
   const PostcardComment({
     required this.id,
     required this.postcardId,
+    this.userId,
     required this.username,
     this.avatar,
     required this.location,
@@ -20,6 +21,7 @@ class PostcardComment {
 
   final int id;
   final int postcardId;
+  final String? userId;
   final String username;
   final String? avatar;
   final String location;
@@ -42,6 +44,7 @@ class PostcardComment {
     final parsedPostcardId =
         BackendApiClient.readInt(json, const ['postcardId', 'cardId']) ??
         (cardId ?? 0);
+    final parsedUserId = _extractUserId(json);
     final parsedContent =
         BackendApiClient.readString(json, const [
           'content',
@@ -94,6 +97,7 @@ class PostcardComment {
     return PostcardComment(
       id: parsedId,
       postcardId: parsedPostcardId,
+      userId: parsedUserId,
       username: parsedUsername,
       avatar: parsedAvatar,
       location: parsedLocation,
@@ -109,6 +113,7 @@ class PostcardComment {
     return <String, dynamic>{
       'id': id,
       'postcardId': postcardId,
+      'userId': userId,
       'username': username,
       'avatar': avatar,
       'location': location,
@@ -122,10 +127,12 @@ class PostcardComment {
 
   PostcardComment copyWith({
     bool? liked,
+    String? userId,
   }) {
     return PostcardComment(
       id: id,
       postcardId: postcardId,
+      userId: userId ?? this.userId,
       username: username,
       avatar: avatar,
       location: location,
@@ -135,6 +142,55 @@ class PostcardComment {
       parentCommentId: parentCommentId,
       replyToUsername: replyToUsername,
     );
+  }
+
+  static String? _extractUserId(Map<String, dynamic> json) {
+    final directString = BackendApiClient.readString(json, const [
+      'userId',
+      'user_id',
+      'uid',
+      'authorId',
+      'publisherId',
+    ]);
+    if (directString != null && directString.isNotEmpty) {
+      return directString.trim();
+    }
+
+    final directInt = BackendApiClient.readInt(json, const [
+      'userId',
+      'user_id',
+      'uid',
+      'authorId',
+      'publisherId',
+    ]);
+    if (directInt != null) {
+      return '$directInt';
+    }
+
+    final nestedUser = BackendApiClient.asMap(
+      json['user'] ?? json['author'] ?? json['publisher'],
+    );
+    if (nestedUser != null) {
+      final nestedString = BackendApiClient.readString(nestedUser, const [
+        'id',
+        'userId',
+        'uid',
+      ]);
+      if (nestedString != null && nestedString.isNotEmpty) {
+        return nestedString.trim();
+      }
+
+      final nestedInt = BackendApiClient.readInt(nestedUser, const [
+        'id',
+        'userId',
+        'uid',
+      ]);
+      if (nestedInt != null) {
+        return '$nestedInt';
+      }
+    }
+
+    return null;
   }
 
   static DateTime _parseDateTime(String raw) {
@@ -226,6 +282,11 @@ class PostcardCommentService {
     : _apiClient = apiClient ?? BackendApiClient();
 
   static const String _localCommentsKeyPrefix = 'postcard_local_comments_v1_';
+  static const Set<String> _offlineSeedUsernames = <String>{
+    'offline user a',
+    'offline user b',
+    'offline user c',
+  };
 
   final BackendApiClient _apiClient;
 
@@ -234,7 +295,11 @@ class PostcardCommentService {
     int page = 1,
     int size = 20,
   }) async {
-    final localComments = await _readLocalComments(postcardId);
+    final localCommentsRaw = await _readLocalComments(postcardId);
+    final localComments = _removeOfflineSeedComments(localCommentsRaw);
+    if (localComments.length != localCommentsRaw.length) {
+      await _saveLocalComments(postcardId, localComments);
+    }
 
     try {
       final onlineComments = await _fetchCommentsOnline(
@@ -249,16 +314,12 @@ class PostcardCommentService {
       if (localComments.isNotEmpty) {
         return localComments;
       }
-      final seeded = _buildOfflineSeedComments(postcardId);
-      await _saveLocalComments(postcardId, seeded);
-      return seeded;
+      return <PostcardComment>[];
     } catch (_) {
       if (localComments.isNotEmpty) {
         return localComments;
       }
-      final seeded = _buildOfflineSeedComments(postcardId);
-      await _saveLocalComments(postcardId, seeded);
-      return seeded;
+      return <PostcardComment>[];
     }
   }
 
@@ -270,12 +331,13 @@ class PostcardCommentService {
   }) async {
     final normalized = content.trim();
     if (normalized.isEmpty) return;
+    final isReply = parentCommentId != null && parentCommentId > 0;
 
-    final payload = <String, dynamic>{
+    final fullPayload = <String, dynamic>{
       'content': normalized,
       'commentContent': normalized,
       'text': normalized,
-      if (parentCommentId != null && parentCommentId > 0) ...{
+      if (isReply) ...{
         'parentId': parentCommentId,
         'parentCommentId': parentCommentId,
         'replyToCommentId': parentCommentId,
@@ -284,29 +346,47 @@ class PostcardCommentService {
       if (replyToUsername != null && replyToUsername.trim().isNotEmpty)
         'replyToUsername': replyToUsername.trim(),
     };
+    final minimalPayload = <String, dynamic>{
+      'content': normalized,
+      if (isReply) 'parentId': parentCommentId,
+    };
+    final payloads = isReply
+        ? <Map<String, dynamic>>[
+            fullPayload,
+            minimalPayload,
+          ]
+        : <Map<String, dynamic>>[
+            minimalPayload,
+            fullPayload,
+          ];
 
-    final endpoints = <String>[
-      if (parentCommentId != null && parentCommentId > 0)
-        '/postcard/comment/$parentCommentId/reply',
-      if (parentCommentId != null && parentCommentId > 0)
-        '/postcard/$postcardId/comment/reply',
-      '/postcard/$postcardId/comment',
-    ];
+    final endpoints = isReply
+        ? <String>[
+            '/postcard/comment/$parentCommentId/reply',
+            '/postcard/$postcardId/comment/reply',
+            '/postcard/$postcardId/comment',
+          ]
+        : <String>[
+            '/postcard/$postcardId/comment',
+          ];
 
     BackendApiException? lastError;
     for (final path in endpoints) {
-      try {
-        await _apiClient.post(path, body: payload, requireAuth: true);
-        return;
-      } on BackendApiException catch (e) {
-        lastError = e;
-      } catch (_) {}
+      for (final payload in payloads) {
+        try {
+          await _apiClient.post(path, body: payload, requireAuth: true);
+          return;
+        } on BackendApiException catch (e) {
+          lastError = e;
+        } catch (_) {}
+      }
     }
 
     final now = DateTime.now();
     final localComment = PostcardComment(
       id: now.microsecondsSinceEpoch,
       postcardId: postcardId,
+      userId: null,
       username: '我',
       avatar: null,
       location: '离线',
@@ -328,22 +408,113 @@ class PostcardCommentService {
     }
   }
 
-  Future<void> likeComment(int commentId) async {
-    final endpoints = <String>[
+  Future<void> setCommentLiked(int commentId, bool liked) async {
+    if (commentId <= 0) return;
+
+    final likeEndpoints = <String>[
       '/postcard/comment/$commentId/like',
       '/comment/$commentId/like',
     ];
 
-    for (final path in endpoints) {
-      try {
-        await _apiClient.post(path, requireAuth: true);
-        return;
-      } catch (_) {
-        continue;
+    final unlikeEndpoints = <String>[
+      '/postcard/comment/$commentId/unlike',
+      '/comment/$commentId/unlike',
+      '/postcard/comment/$commentId/cancel-like',
+      '/comment/$commentId/cancel-like',
+    ];
+
+    Future<bool> tryByMethod(String method, List<String> endpoints) async {
+      for (final path in endpoints) {
+        try {
+          if (method == 'delete') {
+            await _apiClient.delete(path, requireAuth: true);
+          } else {
+            await _apiClient.post(path, requireAuth: true);
+          }
+          return true;
+        } catch (_) {
+          continue;
+        }
       }
+      return false;
     }
 
-    await _markCommentLikedLocally(commentId);
+    if (liked) {
+      if (await tryByMethod('post', likeEndpoints)) {
+        return;
+      }
+      await _markCommentLikeStatusLocally(commentId, true);
+      return;
+    }
+
+    if (await tryByMethod('delete', likeEndpoints)) {
+      return;
+    }
+    if (await tryByMethod('post', unlikeEndpoints)) {
+      return;
+    }
+    if (await tryByMethod('delete', unlikeEndpoints)) {
+      return;
+    }
+    // Some backends expose only one toggle endpoint.
+    if (await tryByMethod('post', likeEndpoints)) {
+      return;
+    }
+
+    await _markCommentLikeStatusLocally(commentId, false);
+  }
+
+  Future<void> deleteComment(int commentId) async {
+    if (commentId <= 0) return;
+
+    final deleteEndpoints = <String>[
+      '/postcard/comment/$commentId',
+      '/comment/$commentId',
+    ];
+    final postDeleteEndpoints = <String>[
+      '/postcard/comment/$commentId/delete',
+      '/comment/$commentId/delete',
+    ];
+
+    BackendApiException? lastBackendError;
+
+    for (final path in deleteEndpoints) {
+      try {
+        await _apiClient.delete(path, requireAuth: true);
+        await _removeCommentLocally(commentId);
+        return;
+      } on BackendApiException catch (e) {
+        if (e.statusCode == 404) {
+          await _removeCommentLocally(commentId);
+          return;
+        }
+        lastBackendError = e;
+      } catch (_) {}
+    }
+
+    for (final path in postDeleteEndpoints) {
+      try {
+        await _apiClient.post(path, requireAuth: true);
+        await _removeCommentLocally(commentId);
+        return;
+      } on BackendApiException catch (e) {
+        if (e.statusCode == 404) {
+          await _removeCommentLocally(commentId);
+          return;
+        }
+        lastBackendError = e;
+      } catch (_) {}
+    }
+
+    final removedLocally = await _removeCommentLocally(commentId);
+    if (removedLocally) {
+      return;
+    }
+
+    if (lastBackendError != null) {
+      throw lastBackendError;
+    }
+    throw const BackendApiException('评论删除失败');
   }
 
   Future<List<PostcardComment>> _fetchCommentsOnline({
@@ -351,23 +522,36 @@ class PostcardCommentService {
     required int page,
     required int size,
   }) async {
-    final body = await _apiClient.get(
-      '/postcard/$postcardId/comments',
-      queryParameters: <String, String>{'page': '$page', 'size': '$size'},
-      requireAuth: true,
-    );
+    BackendApiException? lastBackendError;
+    for (final query in <Map<String, String>?>[
+      <String, String>{'page': '$page', 'size': '$size'},
+      null,
+    ]) {
+      try {
+        final body = await _apiClient.get(
+          '/postcard/$postcardId/comments',
+          queryParameters: query,
+          requireAuth: true,
+        );
 
-    final data = BackendApiClient.extractData(body);
-    final rawList = BackendApiClient.extractList(data);
-    final comments = <PostcardComment>[];
-    for (final item in rawList) {
-      final map = BackendApiClient.asMap(item);
-      if (map == null) continue;
-      comments.addAll(_flattenCommentRecord(map, postcardId: postcardId));
+        final data = BackendApiClient.extractData(body);
+        final rawList = BackendApiClient.extractList(data);
+        final comments = <PostcardComment>[];
+        for (final item in rawList) {
+          final map = BackendApiClient.asMap(item);
+          if (map == null) continue;
+          comments.addAll(_flattenCommentRecord(map, postcardId: postcardId));
+        }
+
+        comments.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+        return comments;
+      } on BackendApiException catch (e) {
+        lastBackendError = e;
+      }
     }
 
-    comments.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-    return comments;
+    if (lastBackendError != null) throw lastBackendError;
+    throw const BackendApiException('评论加载失败');
   }
 
   Future<void> _upsertLocalComment(PostcardComment comment) async {
@@ -376,7 +560,7 @@ class PostcardCommentService {
     await _saveLocalComments(comment.postcardId, merged);
   }
 
-  Future<void> _markCommentLikedLocally(int commentId) async {
+  Future<void> _markCommentLikeStatusLocally(int commentId, bool liked) async {
     final prefs = await SharedPreferences.getInstance();
     final keys = prefs
         .getKeys()
@@ -400,7 +584,7 @@ class PostcardCommentService {
 
           final id = BackendApiClient.readInt(map, const ['id', 'commentId']);
           if (id == commentId) {
-            map['liked'] = true;
+            map['liked'] = liked;
             changed = true;
           }
           next.add(map);
@@ -413,6 +597,49 @@ class PostcardCommentService {
         continue;
       }
     }
+  }
+
+  Future<bool> _removeCommentLocally(int commentId) async {
+    final prefs = await SharedPreferences.getInstance();
+    final keys = prefs
+        .getKeys()
+        .where((key) => key.startsWith(_localCommentsKeyPrefix));
+
+    var removed = false;
+    for (final key in keys) {
+      final raw = prefs.getString(key);
+      if (raw == null || raw.trim().isEmpty) {
+        continue;
+      }
+
+      try {
+        final decoded = jsonDecode(raw);
+        if (decoded is! List) continue;
+
+        var changed = false;
+        final next = <Map<String, dynamic>>[];
+        for (final item in decoded) {
+          final map = BackendApiClient.asMap(item);
+          if (map == null) continue;
+
+          final id = BackendApiClient.readInt(map, const ['id', 'commentId']);
+          if (id == commentId) {
+            changed = true;
+            removed = true;
+            continue;
+          }
+          next.add(map);
+        }
+
+        if (changed) {
+          await prefs.setString(key, jsonEncode(next));
+        }
+      } catch (_) {
+        continue;
+      }
+    }
+
+    return removed;
   }
 
   Future<List<PostcardComment>> _readLocalComments(int postcardId) async {
@@ -491,53 +718,20 @@ class PostcardCommentService {
     return 'sig:${comment.postcardId}:${comment.parentCommentId ?? 0}:${comment.username}:${comment.content}:${comment.createdAt.toIso8601String()}';
   }
 
-  List<PostcardComment> _buildOfflineSeedComments(int postcardId) {
-    final now = DateTime.now();
-    final baseId = postcardId > 0
-        ? postcardId * 100000
-        : now.millisecondsSinceEpoch * 10;
+  List<PostcardComment> _removeOfflineSeedComments(
+    List<PostcardComment> comments,
+  ) {
+    if (comments.isEmpty) {
+      return const <PostcardComment>[];
+    }
+    return comments
+        .where((item) => !_isOfflineSeedComment(item))
+        .toList(growable: false);
+  }
 
-    final rootId = baseId + 1;
-    final secondRootId = baseId + 2;
-
-    return <PostcardComment>[
-      PostcardComment(
-        id: rootId,
-        postcardId: postcardId,
-        username: 'Offline User A',
-        avatar: null,
-        location: 'Beijing',
-        content: '离线模式下也可以浏览评论。',
-        createdAt: now.subtract(const Duration(minutes: 8)),
-        liked: false,
-        parentCommentId: null,
-        replyToUsername: null,
-      ),
-      PostcardComment(
-        id: baseId + 3,
-        postcardId: postcardId,
-        username: 'Offline User B',
-        avatar: null,
-        location: 'Shanghai',
-        content: '支持发评论和点赞的本地回退。',
-        createdAt: now.subtract(const Duration(minutes: 5)),
-        liked: false,
-        parentCommentId: rootId,
-        replyToUsername: 'Offline User A',
-      ),
-      PostcardComment(
-        id: secondRootId,
-        postcardId: postcardId,
-        username: 'Offline User C',
-        avatar: null,
-        location: 'Chengdu',
-        content: '联网后会优先展示线上评论。',
-        createdAt: now.subtract(const Duration(minutes: 2)),
-        liked: false,
-        parentCommentId: null,
-        replyToUsername: null,
-      ),
-    ]..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+  bool _isOfflineSeedComment(PostcardComment comment) {
+    final normalizedUsername = comment.username.trim().toLowerCase();
+    return _offlineSeedUsernames.contains(normalizedUsername);
   }
 
   List<PostcardComment> _flattenCommentRecord(

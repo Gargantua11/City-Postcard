@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import '../models/postcard_element_layer.dart';
 import '../models/user.dart';
 import '../services/backend_api_client.dart';
 import '../services/discussion_service.dart';
@@ -44,18 +45,16 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
 
     try {
       final results = await Future.wait<dynamic>([
-        _editedPostcardService.getDraftPostcards(),
         _editedPostcardService.getEditedPostcards(),
         _storageService.getUser(),
       ]);
 
       if (!mounted) return;
-      final draftPostcards = results[0] as List<EditedPostcard>;
-      final allPostcards = results[1] as List<EditedPostcard>;
-      final user = results[2] as User?;
-      final postcards = draftPostcards.isNotEmpty
-          ? draftPostcards
-          : allPostcards;
+      final allPostcards = results[0] as List<EditedPostcard>;
+      final user = results[1] as User?;
+      final postcards = allPostcards
+          .where((item) => !item.isPublished && !item.isDraft)
+          .toList(growable: false);
 
       setState(() {
         _postcards = postcards;
@@ -111,6 +110,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
         provinceName: postcard.provinceName,
         latitude: postcard.latitude,
         longitude: postcard.longitude,
+        layers: postcard.layers,
       );
       try {
         await _editedPostcardService.markPostcardPublished(postcard.draftId);
@@ -383,7 +383,10 @@ class _SelectablePostcardTile extends StatelessWidget {
               ),
               child: AspectRatio(
                 aspectRatio: _postcardAspectRatio,
-                child: _PostcardImage(imageSource: item.imageUrl),
+                child: _PostcardImage(
+                  imageSource: item.imageUrl,
+                  layers: item.layers,
+                ),
               ),
             ),
             Padding(
@@ -443,17 +446,27 @@ class _SelectablePostcardTile extends StatelessWidget {
 
 class _PostcardImage extends StatelessWidget {
   final String imageSource;
+  final List<PostcardElementLayer> layers;
 
-  const _PostcardImage({required this.imageSource});
+  const _PostcardImage({
+    required this.imageSource,
+    this.layers = const [],
+  });
 
   @override
   Widget build(BuildContext context) {
-    return ResolvedImage(
-      source: imageSource,
-      fit: BoxFit.cover,
-      filterQuality: FilterQuality.high,
-      fallbackBuilder: (_) => _buildFallback(),
-      loadingBuilder: (_) => _buildFallback(showLoading: true),
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        ResolvedImage(
+          source: imageSource,
+          fit: BoxFit.cover,
+          filterQuality: FilterQuality.high,
+          fallbackBuilder: (_) => _buildFallback(),
+          loadingBuilder: (_) => _buildFallback(showLoading: true),
+        ),
+        if (layers.isNotEmpty) _PostcardLayerOverlay(layers: layers),
+      ],
     );
   }
 
@@ -474,5 +487,100 @@ class _PostcardImage extends StatelessWidget {
               ),
       ),
     );
+  }
+}
+
+class _PostcardLayerOverlay extends StatelessWidget {
+  final List<PostcardElementLayer> layers;
+
+  const _PostcardLayerOverlay({required this.layers});
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final width = constraints.maxWidth;
+          final height = constraints.maxHeight;
+          final sortedLayers = List<PostcardElementLayer>.from(layers)
+            ..sort((a, b) => a.zIndex.compareTo(b.zIndex));
+
+          return Stack(
+            fit: StackFit.expand,
+            children: [
+              for (final layer in sortedLayers)
+                _buildLayer(layer, width: width, height: height),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildLayer(
+    PostcardElementLayer layer, {
+    required double width,
+    required double height,
+  }) {
+    final path = layer.assetPath.trim();
+    if (path.isEmpty) return const SizedBox.shrink();
+
+    final rawScale = layer.scale <= 0 ? 1.0 : layer.scale;
+    final itemSize = (width * 0.22 * rawScale).clamp(20.0, width * 0.45);
+    final offset = _resolveLayerOffset(layer, width, height);
+    final left = width / 2 + offset.dx - itemSize / 2;
+    final top = height / 2 + offset.dy - itemSize / 2;
+
+    final image = Image.asset(
+      path,
+      fit: BoxFit.contain,
+      filterQuality: FilterQuality.high,
+      errorBuilder: (_, _, _) => const SizedBox.shrink(),
+    );
+
+    Widget transformed = image;
+    if (layer.is3dEnabled) {
+      final matrix = Matrix4.identity()..setEntry(3, 2, layer.perspective);
+      if (layer.rotationAxis == 'horizontal') {
+        matrix
+          ..rotateX(layer.rotateX)
+          ..rotateY(layer.rotateY);
+      } else {
+        matrix
+          ..rotateY(layer.rotateY)
+          ..rotateX(layer.rotateX);
+      }
+      transformed = Transform(
+        alignment: Alignment.center,
+        transform: matrix,
+        child: image,
+      );
+    } else if (layer.rotation2d != 0) {
+      transformed = Transform.rotate(angle: layer.rotation2d, child: image);
+    }
+
+    return Positioned(
+      left: left,
+      top: top,
+      width: itemSize,
+      height: itemSize,
+      child: transformed,
+    );
+  }
+
+  Offset _resolveLayerOffset(
+    PostcardElementLayer layer,
+    double previewWidth,
+    double previewHeight,
+  ) {
+    final useFallbackOffset = layer.x == 0 && layer.y == 0;
+    if (!useFallbackOffset) {
+      return Offset(layer.x, layer.y);
+    }
+
+    final fallbackX = ((layer.zIndex % 4) - 1.5) * (previewWidth * 0.16);
+    final fallbackY =
+        (((layer.zIndex ~/ 4) % 3) - 1.0) * (previewHeight * 0.14);
+    return Offset(fallbackX, fallbackY);
   }
 }

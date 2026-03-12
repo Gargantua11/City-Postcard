@@ -263,11 +263,7 @@ class _CommentSectionScreenState extends State<CommentSectionScreen> {
         currentTab: AppTab.comment,
         backgroundColor: const Color(0xFFE7E7E7),
         onHomeTap: () {
-          if (Navigator.of(context).canPop()) {
-            Navigator.of(context).pop();
-          } else {
-            Navigator.pushNamed(context, '/home');
-          }
+          Navigator.pushNamed(context, '/home');
         },
         onMapTap: () {
           Navigator.pushNamed(context, '/map');
