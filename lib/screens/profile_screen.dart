@@ -463,6 +463,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       _ProfileMenuItem(
                         width: rowWidth,
                         height: rowHeight,
+                        icon: Icons.thumb_up_alt_outlined,
+                        text: '点赞帖子',
+                        onTap: () => Navigator.pushNamed(context, '/liked_posts'),
+                      ),
+                      const SizedBox(height: 16),
+                      _ProfileMenuItem(
+                        width: rowWidth,
+                        height: rowHeight,
                         icon: Icons.logout_outlined,
                         text: _isLoggingOut ? '退出登录中...' : '退出登录',
                         onTap: _logout,

@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../services/discussion_service.dart';
 import '../services/backend_api_client.dart';
 import '../services/favorite_postcard_service.dart';
+import '../services/liked_postcard_service.dart';
 import '../services/postcard_comment_service.dart';
 import '../services/storage_service.dart';
 import '../widgets/resolved_image.dart';
@@ -21,6 +22,7 @@ class _PostCommentsScreenState extends State<PostCommentsScreen> {
   static const double _postcardAspectRatio = 400 / 258;
 
   final FavoritePostcardService _favoriteService = FavoritePostcardService();
+  final LikedPostcardService _likedService = LikedPostcardService();
   final PostcardCommentService _commentService = PostcardCommentService();
   final StorageService _storageService = StorageService();
   final TextEditingController _inputController = TextEditingController();
@@ -36,9 +38,13 @@ class _PostCommentsScreenState extends State<PostCommentsScreen> {
   bool _isCommentSubmitting = false;
   String? _commentsErrorMessage;
   bool _isPostFavorited = false;
+  bool _isPostLiked = false;
   bool _isFavoriteBusy = false;
+  bool _isPostLikeBusy = false;
   bool _favoriteStateLoaded = false;
+  bool _likeStateLoaded = false;
   bool _favoriteTouchedByUser = false;
+  bool _likeTouchedByUser = false;
 
   @override
   void initState() {
@@ -46,6 +52,7 @@ class _PostCommentsScreenState extends State<PostCommentsScreen> {
     _loadCurrentUserIdentity();
     _loadCommentsFromApi();
     _loadFavoriteState();
+    _loadLikeState();
   }
 
   Future<void> _loadCurrentUserIdentity() async {
@@ -297,6 +304,58 @@ class _PostCommentsScreenState extends State<PostCommentsScreen> {
     return comments;
   }
 
+  Future<void> _loadLikeState() async {
+    try {
+      final liked = await _likedService.isLiked(widget.post);
+      if (!mounted || _likeTouchedByUser) return;
+      setState(() {
+        _isPostLiked = liked;
+        _likeStateLoaded = true;
+      });
+    } catch (e, stackTrace) {
+      debugPrint('加载点赞状态失败: $e\n$stackTrace');
+      if (!mounted) return;
+      setState(() {
+        _likeStateLoaded = true;
+      });
+    }
+  }
+
+  Future<void> _togglePostLike() async {
+    if (_isPostLikeBusy || !_likeStateLoaded) return;
+
+    setState(() {
+      _isPostLikeBusy = true;
+      _likeTouchedByUser = true;
+    });
+
+    try {
+      final liked = await _likedService.toggleLike(widget.post);
+      if (!mounted) return;
+      setState(() {
+        _isPostLiked = liked;
+      });
+
+      final message = liked ? '已点赞' : '已取消点赞';
+      final messenger = ScaffoldMessenger.maybeOf(context);
+      messenger?.hideCurrentSnackBar();
+      messenger?.showSnackBar(SnackBar(content: Text(message)));
+    } catch (e, stackTrace) {
+      debugPrint('切换点赞失败: $e\n$stackTrace');
+      if (!mounted) return;
+
+      final messenger = ScaffoldMessenger.maybeOf(context);
+      messenger?.hideCurrentSnackBar();
+      messenger?.showSnackBar(const SnackBar(content: Text('点赞失败，请稍后重试')));
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isPostLikeBusy = false;
+        });
+      }
+    }
+  }
+
   Future<void> _toggleLike(_CommentItem item) async {
     final previous = item.liked;
     final next = !previous;
@@ -388,9 +447,14 @@ class _PostCommentsScreenState extends State<PostCommentsScreen> {
     });
 
     try {
+      final profileCityName = await _storageService.getProfileCityName();
+      final profileCityCode = await _storageService.getProfileCityCode();
       await _commentService.addComment(
         postcardId: widget.post.id,
         content: content,
+        commenterCityName: profileCityName,
+        commenterCityCode: profileCityCode,
+        commenterLocation: profileCityName,
       );
       if (!mounted) return;
 
@@ -484,9 +548,13 @@ class _PostCommentsScreenState extends State<PostCommentsScreen> {
                       _PostOwnerInfo(
                         post: widget.post,
                         isFavorited: _isPostFavorited,
+                        isLiked: _isPostLiked,
                         onFavoriteTap: _isFavoriteBusy || !_favoriteStateLoaded
                             ? null
                             : _togglePostFavorite,
+                        onLikeTap: _isPostLikeBusy || !_likeStateLoaded
+                            ? null
+                            : _togglePostLike,
                       ),
                       Expanded(
                         child: _isCommentsLoading
@@ -677,12 +745,16 @@ class _AvatarBubble extends StatelessWidget {
 class _PostOwnerInfo extends StatelessWidget {
   final DiscussionPost post;
   final bool isFavorited;
+  final bool isLiked;
   final VoidCallback? onFavoriteTap;
+  final VoidCallback? onLikeTap;
 
   const _PostOwnerInfo({
     required this.post,
     required this.isFavorited,
+    required this.isLiked,
     required this.onFavoriteTap,
+    required this.onLikeTap,
   });
 
   @override
@@ -711,46 +783,22 @@ class _PostOwnerInfo extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(width: 8),
-                    InkWell(
-                      borderRadius: BorderRadius.circular(14),
+                    _PostActionPill(
+                      active: isFavorited,
                       onTap: onFavoriteTap,
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 160),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: isFavorited
-                              ? const Color(0xFFFAD89C)
-                              : const Color(0xFFD5E5C7),
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(
-                            color: isFavorited
-                                ? const Color(0xFFD6A74F)
-                                : const Color(0xFFB7C7AA),
-                          ),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              isFavorited ? Icons.star : Icons.star_border,
-                              size: 13,
-                              color: const Color(0xFF5A5233),
-                            ),
-                            const SizedBox(width: 3),
-                            Text(
-                              isFavorited ? '已收藏' : '收藏',
-                              style: const TextStyle(
-                                fontSize: 11,
-                                color: Color(0xFF5A5233),
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
+                      activeBackgroundColor: const Color(0xFFFAD89C),
+                      activeBorderColor: const Color(0xFFD6A74F),
+                      icon: isFavorited ? Icons.star : Icons.star_border,
+                      text: isFavorited ? '已收藏' : '收藏',
+                    ),
+                    const SizedBox(width: 6),
+                    _PostActionPill(
+                      active: isLiked,
+                      onTap: onLikeTap,
+                      activeBackgroundColor: const Color(0xFFF9C7C7),
+                      activeBorderColor: const Color(0xFFE98E8E),
+                      icon: isLiked ? Icons.favorite : Icons.favorite_border,
+                      text: isLiked ? '已点赞' : '点赞',
                     ),
                   ],
                 ),
@@ -763,6 +811,58 @@ class _PostOwnerInfo extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _PostActionPill extends StatelessWidget {
+  final bool active;
+  final VoidCallback? onTap;
+  final Color activeBackgroundColor;
+  final Color activeBorderColor;
+  final IconData icon;
+  final String text;
+
+  const _PostActionPill({
+    required this.active,
+    required this.onTap,
+    required this.activeBackgroundColor,
+    required this.activeBorderColor,
+    required this.icon,
+    required this.text,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(14),
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: active ? activeBackgroundColor : const Color(0xFFD5E5C7),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: active ? activeBorderColor : const Color(0xFFB7C7AA),
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 13, color: const Color(0xFF5A5233)),
+            const SizedBox(width: 3),
+            Text(
+              text,
+              style: const TextStyle(
+                fontSize: 11,
+                color: Color(0xFF5A5233),
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -800,10 +900,6 @@ class _CommentCard extends StatelessWidget {
                   Text(
                     item.username,
                     style: const TextStyle(fontSize: 13, color: Colors.black87),
-                  ),
-                  Text(
-                    item.location,
-                    style: const TextStyle(fontSize: 11, color: Colors.black87),
                   ),
                 ],
               ),

@@ -59,13 +59,7 @@ class PostcardComment {
           BackendApiClient.asMap(json['user']),
           const ['avatar', 'avatarUrl'],
         );
-    final parsedLocation =
-        BackendApiClient.readString(json, const [
-          'location',
-          'cityName',
-          'address',
-        ]) ??
-        '未知地点';
+    final parsedLocation = _extractCommenterLocation(json) ?? '未知地点';
     final parsedTimeText =
         BackendApiClient.readString(json, const [
           'createdAt',
@@ -275,6 +269,212 @@ class PostcardComment {
     final digits = value.trim().replaceAll(RegExp(r'[^0-9]'), '');
     return digits.length == 11;
   }
+
+  static String? _extractCommenterLocation(Map<String, dynamic> json) {
+    for (final userMap in <Map<String, dynamic>?>[
+      BackendApiClient.asMap(json['user']),
+      BackendApiClient.asMap(json['author']),
+      BackendApiClient.asMap(json['publisher']),
+      BackendApiClient.asMap(json['commenter']),
+      BackendApiClient.asMap(json['commentUser']),
+      BackendApiClient.asMap(json['userInfo']),
+      BackendApiClient.asMap(json['profile']),
+    ]) {
+      final fromUser = _readLocationFromMap(
+        userMap,
+        preferUserKeys: true,
+        onlyUserScopedKeys: false,
+      );
+      if (fromUser != null) {
+        return fromUser;
+      }
+    }
+
+    final fromRootUserFields = _readLocationFromMap(
+      json,
+      preferUserKeys: true,
+      onlyUserScopedKeys: true,
+    );
+    if (fromRootUserFields != null) {
+      return fromRootUserFields;
+    }
+
+    return _readLocationFromMap(
+      json,
+      preferUserKeys: false,
+      onlyUserScopedKeys: false,
+    );
+  }
+
+  static String? _readLocationFromMap(
+    Map<String, dynamic>? map, {
+    required bool preferUserKeys,
+    required bool onlyUserScopedKeys,
+  }) {
+    if (map == null) return null;
+
+    final province = _normalizeLocationCandidate(
+      _readFirstString(
+        map,
+        onlyUserScopedKeys
+            ? const <String>[
+                'userProvinceName',
+                'commenterProvinceName',
+              ]
+            : (preferUserKeys
+                  ? const <String>[
+                      'userProvinceName',
+                      'commenterProvinceName',
+                      'provinceName',
+                      'province',
+                      'state',
+                    ]
+                  : const <String>[
+                      'provinceName',
+                      'province',
+                      'state',
+                    ]),
+      ),
+    );
+    final city = _normalizeLocationCandidate(
+      _readFirstString(
+        map,
+        onlyUserScopedKeys
+            ? const <String>[
+                'userCityName',
+                'commenterCityName',
+                'userCity',
+                'commenterCity',
+              ]
+            : (preferUserKeys
+                  ? const <String>[
+                      'userCityName',
+                      'commenterCityName',
+                      'userCity',
+                      'commenterCity',
+                      'cityName',
+                      'city',
+                    ]
+                  : const <String>[
+                      'cityName',
+                      'city',
+                    ]),
+      ),
+    );
+    final district = _normalizeLocationCandidate(
+      _readFirstString(
+        map,
+        onlyUserScopedKeys
+            ? const <String>[
+                'userDistrictName',
+                'commenterDistrictName',
+                'userDistrict',
+                'commenterDistrict',
+              ]
+            : (preferUserKeys
+                  ? const <String>[
+                      'userDistrictName',
+                      'commenterDistrictName',
+                      'userDistrict',
+                      'commenterDistrict',
+                      'districtName',
+                      'district',
+                      'area',
+                    ]
+                  : const <String>[
+                      'districtName',
+                      'district',
+                      'area',
+                    ]),
+      ),
+    );
+
+    final mergedRegion = _mergeLocationParts(province, city, district);
+    if (mergedRegion != null) {
+      return mergedRegion;
+    }
+
+    final direct = _normalizeLocationCandidate(
+      _readFirstString(
+        map,
+        onlyUserScopedKeys
+            ? const <String>[
+                'userLocation',
+                'commenterLocation',
+                'userAddress',
+                'commenterAddress',
+              ]
+            : (preferUserKeys
+                  ? const <String>[
+                      'userLocation',
+                      'commenterLocation',
+                      'userAddress',
+                      'commenterAddress',
+                      'location',
+                      'address',
+                      'region',
+                      'ipLocation',
+                    ]
+                  : const <String>[
+                      'location',
+                      'address',
+                      'region',
+                      'ipLocation',
+                    ]),
+      ),
+    );
+    if (direct != null) {
+      return direct;
+    }
+
+    return null;
+  }
+
+  static String? _mergeLocationParts(
+    String? province,
+    String? city,
+    String? district,
+  ) {
+    final parts = <String>[];
+    for (final item in <String?>[province, city, district]) {
+      final text = item?.trim() ?? '';
+      if (text.isEmpty) continue;
+      if (parts.contains(text)) continue;
+      parts.add(text);
+    }
+
+    if (parts.isEmpty) return null;
+    return parts.join(' ');
+  }
+
+  static String? _normalizeLocationCandidate(String? raw) {
+    final text = raw?.trim() ?? '';
+    if (text.isEmpty) return null;
+
+    final normalized = text.toLowerCase();
+    if (normalized == '未知地点' ||
+        normalized == 'unknown' ||
+        normalized == 'null' ||
+        normalized == '-') {
+      return null;
+    }
+    return text;
+  }
+
+  static String? _readFirstString(
+    Map<String, dynamic>? map,
+    List<String> keys,
+  ) {
+    if (map == null) return null;
+    for (final key in keys) {
+      final value = map[key];
+      if (value == null) continue;
+      final text = value.toString().trim();
+      if (text.isEmpty) continue;
+      return text;
+    }
+    return null;
+  }
 }
 
 class PostcardCommentService {
@@ -328,15 +528,37 @@ class PostcardCommentService {
     required String content,
     int? parentCommentId,
     String? replyToUsername,
+    String? commenterCityName,
+    String? commenterCityCode,
+    String? commenterLocation,
   }) async {
     final normalized = content.trim();
     if (normalized.isEmpty) return;
     final isReply = parentCommentId != null && parentCommentId > 0;
+    final normalizedCommenterCityName = commenterCityName?.trim() ?? '';
+    final normalizedCommenterCityCode = commenterCityCode?.trim() ?? '';
+    final normalizedCommenterLocation =
+        (commenterLocation?.trim().isNotEmpty == true
+            ? commenterLocation!.trim()
+            : normalizedCommenterCityName);
 
     final fullPayload = <String, dynamic>{
       'content': normalized,
       'commentContent': normalized,
       'text': normalized,
+      if (normalizedCommenterLocation.isNotEmpty) ...{
+        'location': normalizedCommenterLocation,
+        'address': normalizedCommenterLocation,
+        'userLocation': normalizedCommenterLocation,
+      },
+      if (normalizedCommenterCityName.isNotEmpty) ...{
+        'cityName': normalizedCommenterCityName,
+        'userCityName': normalizedCommenterCityName,
+      },
+      if (normalizedCommenterCityCode.isNotEmpty) ...{
+        'cityCode': normalizedCommenterCityCode,
+        'userCityCode': normalizedCommenterCityCode,
+      },
       if (isReply) ...{
         'parentId': parentCommentId,
         'parentCommentId': parentCommentId,
@@ -350,15 +572,10 @@ class PostcardCommentService {
       'content': normalized,
       if (isReply) 'parentId': parentCommentId,
     };
-    final payloads = isReply
-        ? <Map<String, dynamic>>[
-            fullPayload,
-            minimalPayload,
-          ]
-        : <Map<String, dynamic>>[
-            minimalPayload,
-            fullPayload,
-          ];
+    final payloads = <Map<String, dynamic>>[
+      fullPayload,
+      minimalPayload,
+    ];
 
     final endpoints = isReply
         ? <String>[
@@ -389,7 +606,9 @@ class PostcardCommentService {
       userId: null,
       username: '我',
       avatar: null,
-      location: '离线',
+      location: normalizedCommenterLocation.isEmpty
+          ? '离线'
+          : normalizedCommenterLocation,
       content: normalized,
       createdAt: now,
       liked: false,

@@ -16,6 +16,7 @@ import './screens/postcard_edit_screen.dart';
 import './screens/map_screen.dart';
 import './screens/profile_screen.dart';
 import './screens/favorites_screen.dart';
+import './screens/liked_posts_screen.dart';
 import './screens/draft_box_screen.dart';
 import './screens/postcard_overview_screen.dart';
 import './screens/edit_profile_screen.dart';
@@ -23,6 +24,7 @@ import './screens/dynamic_effect_screen.dart';
 import './screens/add_screen.dart';
 import './screens/search_index.dart';
 import './screens/search_screen.dart';
+import './services/app_route_observer.dart';
 import './services/auth_provider.dart';
 import './services/storage_service.dart';
 
@@ -42,6 +44,7 @@ class MyApp extends StatelessWidget {
       create: (context) => AuthProvider()..init(),
       child: MaterialApp(
         title: '城市明信片',
+        navigatorObservers: [appRouteObserver],
         theme: ThemeData(
           colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
           useMaterial3: true,
@@ -61,6 +64,7 @@ class MyApp extends StatelessWidget {
           '/map': (context) => const MapScreen(),
           '/profile': (context) => const ProfileScreen(),
           '/favorites': (context) => const FavoritesScreen(),
+          '/liked_posts': (context) => const LikedPostsScreen(),
           '/draft_box': (context) => const DraftBoxScreen(),
           '/postcard_overview': (context) => const PostcardOverviewScreen(),
           '/edit_profile': (context) => const EditProfileScreen(),

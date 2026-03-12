@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import '../services/app_route_observer.dart';
 import '../services/backend_api_client.dart';
 import 'post_comments_screen.dart';
 import '../services/discussion_service.dart';
@@ -14,7 +15,8 @@ class CommentSectionScreen extends StatefulWidget {
   State<CommentSectionScreen> createState() => _CommentSectionScreenState();
 }
 
-class _CommentSectionScreenState extends State<CommentSectionScreen> {
+class _CommentSectionScreenState extends State<CommentSectionScreen>
+    with RouteAware {
   final TextEditingController _searchController = TextEditingController();
   final DiscussionService _discussionService = DiscussionService();
 
@@ -24,6 +26,7 @@ class _CommentSectionScreenState extends State<CommentSectionScreen> {
   String? _errorMessage;
   String? _offlineNotice;
   List<DiscussionPost> _posts = const [];
+  PageRoute<dynamic>? _route;
 
   @override
   void initState() {
@@ -33,7 +36,26 @@ class _CommentSectionScreenState extends State<CommentSectionScreen> {
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final route = ModalRoute.of(context);
+    if (route is PageRoute<dynamic> && route != _route) {
+      if (_route != null) {
+        appRouteObserver.unsubscribe(this);
+      }
+      _route = route;
+      appRouteObserver.subscribe(this, route);
+    }
+  }
+
+  @override
+  void didPopNext() {
+    _loadPosts();
+  }
+
+  @override
   void dispose() {
+    appRouteObserver.unsubscribe(this);
     _searchController.removeListener(_onSearchChanged);
     _searchController.dispose();
     super.dispose();
