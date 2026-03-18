@@ -240,16 +240,35 @@ class _DraftPostcardTile extends StatelessWidget {
   }
 
   String _resolveLocation(EditedPostcard postcard) {
+    final detail = postcard.locationDetail?.trim();
     final city = postcard.cityName?.trim();
-    if (city != null && city.isNotEmpty) return city;
+    if (city != null && city.isNotEmpty) {
+      return _mergeLocationText(city, detail);
+    }
 
     final province = postcard.provinceName?.trim();
-    if (province != null && province.isNotEmpty) return province;
+    if (province != null && province.isNotEmpty) {
+      return _mergeLocationText(province, detail);
+    }
 
     final code = postcard.cityCode?.trim();
-    if (code != null && code.isNotEmpty) return '城市代码$code';
+    if (code != null && code.isNotEmpty) {
+      return _mergeLocationText('城市代码$code', detail);
+    }
+
+    if (detail != null && detail.isNotEmpty) return detail;
 
     return '未知地点';
+  }
+
+  String _mergeLocationText(String base, String? detail) {
+    final normalizedBase = base.trim();
+    final normalizedDetail = detail?.trim() ?? '';
+    if (normalizedBase.isEmpty) return normalizedDetail;
+    if (normalizedDetail.isEmpty) return normalizedBase;
+    if (normalizedDetail.contains(normalizedBase)) return normalizedDetail;
+    if (normalizedBase.contains(normalizedDetail)) return normalizedBase;
+    return '$normalizedBase$normalizedDetail';
   }
 }
 

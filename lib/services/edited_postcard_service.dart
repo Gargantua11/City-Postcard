@@ -19,6 +19,7 @@ class EditedPostcard {
   final String? cityName;
   final String? cityCode;
   final String? provinceName;
+  final String? locationDetail;
   final List<PostcardElementLayer> layers;
 
   const EditedPostcard({
@@ -32,6 +33,7 @@ class EditedPostcard {
     this.cityName,
     this.cityCode,
     this.provinceName,
+    this.locationDetail,
     this.layers = const [],
   });
 
@@ -50,6 +52,8 @@ class EditedPostcard {
         'cityCode': cityCode!.trim(),
       if (provinceName != null && provinceName!.trim().isNotEmpty)
         'provinceName': provinceName!.trim(),
+      if (locationDetail != null && locationDetail!.trim().isNotEmpty)
+        'locationDetail': locationDetail!.trim(),
       if (layers.isNotEmpty)
         'layers': layers.map((item) => item.toJson()).toList(growable: false),
     };
@@ -76,6 +80,11 @@ class EditedPostcard {
       cityName: _toNullableTrimmedString(json['cityName']),
       cityCode: _toNullableCodeString(json['cityCode']),
       provinceName: _toNullableTrimmedString(json['provinceName']),
+      locationDetail: _toNullableTrimmedString(
+        json['locationDetail'] ??
+            json['detailAddress'] ??
+            json['addressDetail'],
+      ),
       layers: _toElementLayers(json['layers']),
     );
   }
@@ -138,6 +147,7 @@ class EditedPostcardService {
     String? cityName,
     String? cityCode,
     String? provinceName,
+    String? locationDetail,
     List<PostcardElementLayer>? layers,
   }) async {
     await saveEditedPostcard(
@@ -147,6 +157,7 @@ class EditedPostcardService {
       cityName: cityName,
       cityCode: cityCode,
       provinceName: provinceName,
+      locationDetail: locationDetail,
       layers: layers,
     );
   }
@@ -159,6 +170,7 @@ class EditedPostcardService {
     String? cityName,
     String? cityCode,
     String? provinceName,
+    String? locationDetail,
     List<PostcardElementLayer>? layers,
   }) async {
     final syncResult = await _syncPostcardToBackend(
@@ -166,6 +178,7 @@ class EditedPostcardService {
       cityName: cityName,
       cityCode: cityCode,
       provinceName: provinceName,
+      locationDetail: locationDetail,
       latitude: latitude,
       longitude: longitude,
       layers: layers ?? const <PostcardElementLayer>[],
@@ -181,6 +194,7 @@ class EditedPostcardService {
       cityName: cityName,
       cityCode: cityCode,
       provinceName: provinceName,
+      locationDetail: locationDetail,
       layers: layers,
     );
   }
@@ -193,6 +207,7 @@ class EditedPostcardService {
     String? cityName,
     String? cityCode,
     String? provinceName,
+    String? locationDetail,
     List<PostcardElementLayer>? layers,
   }) {
     return _savePostcard(
@@ -204,6 +219,7 @@ class EditedPostcardService {
       cityName: cityName,
       cityCode: cityCode,
       provinceName: provinceName,
+      locationDetail: locationDetail,
       layers: layers,
     );
   }
@@ -218,6 +234,7 @@ class EditedPostcardService {
     String? cityName,
     String? cityCode,
     String? provinceName,
+    String? locationDetail,
     List<PostcardElementLayer>? layers,
   }) async {
     final postcards = await getEditedPostcards();
@@ -244,6 +261,7 @@ class EditedPostcardService {
         cityName: cityName?.trim(),
         cityCode: _toNullableCodeString(cityCode),
         provinceName: provinceName?.trim(),
+        locationDetail: locationDetail?.trim(),
         layers: List<PostcardElementLayer>.from(layers ?? const []),
       ),
     );
@@ -291,6 +309,7 @@ class EditedPostcardService {
       cityName: card.cityName,
       cityCode: card.cityCode,
       provinceName: card.provinceName,
+      locationDetail: card.locationDetail,
       layers: card.layers,
     );
   }
@@ -335,6 +354,7 @@ class EditedPostcardService {
     required String? cityName,
     required String? cityCode,
     required String? provinceName,
+    required String? locationDetail,
     required double? latitude,
     required double? longitude,
     required List<PostcardElementLayer> layers,
@@ -368,6 +388,7 @@ class EditedPostcardService {
       cityName: cityName,
       cityCode: cityCode,
       provinceName: provinceName,
+      locationDetail: locationDetail,
       latitude: latitude,
       longitude: longitude,
       layers: layers,
@@ -406,9 +427,7 @@ class EditedPostcardService {
       );
     }
     if (_isAssetSource(source)) {
-      throw const BackendApiException(
-        '请先上传本地图片后再保存明信片。',
-      );
+      throw const BackendApiException('请先上传本地图片后再保存明信片。');
     }
     if (_looksLikeLocalFilePath(source)) {
       final localPath = _normalizeLocalUploadPath(source);
@@ -497,9 +516,7 @@ class EditedPostcardService {
       return keyFromUrl;
     }
 
-    throw const BackendApiException(
-      '无法解析明信片图片键值，请重新上传。',
-    );
+    throw const BackendApiException('无法解析明信片图片键值，请重新上传。');
   }
 
   String? _tryResolveImageKeyForCreate(_UploadedPostcardImage uploadedImage) {
@@ -566,9 +583,7 @@ class EditedPostcardService {
       }
     }
 
-    throw const BackendApiException(
-      '无法解析明信片图片地址，请重新上传。',
-    );
+    throw const BackendApiException('无法解析明信片图片地址，请重新上传。');
   }
 
   Future<String> _requestPostcardObjectKey(
@@ -651,12 +666,14 @@ class EditedPostcardService {
     required String? cityName,
     required String? cityCode,
     required String? provinceName,
+    required String? locationDetail,
     required double? latitude,
     required double? longitude,
     required List<PostcardElementLayer> layers,
   }) {
     final normalizedCityName = cityName?.trim() ?? '';
     final normalizedProvinceName = provinceName?.trim() ?? '';
+    final normalizedLocationDetail = locationDetail?.trim() ?? '';
     final normalizedCityCode = _normalizeCityCode(cityCode);
     final cityCodeAsNumber = normalizedCityCode == null
         ? null
@@ -665,6 +682,7 @@ class EditedPostcardService {
       cityName: normalizedCityName,
       provinceName: normalizedProvinceName,
       cityCode: normalizedCityCode,
+      locationDetail: normalizedLocationDetail,
     );
     final title = normalizedCityName.isNotEmpty
         ? '$normalizedCityName 明信片'
@@ -717,11 +735,29 @@ class EditedPostcardService {
     required String cityName,
     required String provinceName,
     required String? cityCode,
+    required String locationDetail,
   }) {
-    if (cityName.isNotEmpty) return cityName;
-    if (provinceName.isNotEmpty) return provinceName;
-    if (cityCode != null && cityCode.isNotEmpty) return '城市代码$cityCode';
+    if (cityName.isNotEmpty) {
+      return _mergeAddressText(cityName, locationDetail);
+    }
+    if (provinceName.isNotEmpty) {
+      return _mergeAddressText(provinceName, locationDetail);
+    }
+    if (cityCode != null && cityCode.isNotEmpty) {
+      return _mergeAddressText('城市代码$cityCode', locationDetail);
+    }
+    if (locationDetail.isNotEmpty) return locationDetail;
     return '未知地点';
+  }
+
+  String _mergeAddressText(String mainPart, String detailPart) {
+    final normalizedMain = mainPart.trim();
+    final normalizedDetail = detailPart.trim();
+    if (normalizedMain.isEmpty) return normalizedDetail;
+    if (normalizedDetail.isEmpty) return normalizedMain;
+    if (normalizedDetail.contains(normalizedMain)) return normalizedDetail;
+    if (normalizedMain.contains(normalizedDetail)) return normalizedMain;
+    return '$normalizedMain$normalizedDetail';
   }
 
   Future<Map<String, dynamic>> _createPostcardRemote(
@@ -782,14 +818,8 @@ class EditedPostcardService {
     final attempts = <_CreateAttempt>[
       _CreateAttempt(name: "完整参数", body: fullPayload),
       _CreateAttempt(name: "去除元素", body: noElementsPayload),
-      _CreateAttempt(
-        name: "核心字段+HTTP地址",
-        body: keyCoreWithHttpUrlPayload,
-      ),
-      _CreateAttempt(
-        name: "核心字段+Key地址",
-        body: keyCoreWithKeyUrlPayload,
-      ),
+      _CreateAttempt(name: "核心字段+HTTP地址", body: keyCoreWithHttpUrlPayload),
+      _CreateAttempt(name: "核心字段+Key地址", body: keyCoreWithKeyUrlPayload),
       _CreateAttempt(name: "核心字段", body: keyCorePayload),
       _CreateAttempt(name: "别名字段", body: aliasPayload),
       _CreateAttempt(name: "最小字段", body: minimalPayload),
@@ -1466,6 +1496,7 @@ class EditedPostcardService {
       cityName: target.cityName,
       cityCode: target.cityCode,
       provinceName: target.provinceName,
+      locationDetail: target.locationDetail,
       layers: target.layers,
     );
 

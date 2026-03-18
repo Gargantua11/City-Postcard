@@ -14,6 +14,7 @@ import '../services/postcard_data_refresh_bus.dart';
 import '../widgets/resolved_image.dart';
 import 'city_search_screen.dart';
 import 'dynamic_effect_screen.dart';
+import 'location_annotation_screen.dart';
 
 class PostcardEditScreen extends StatefulWidget {
   final EditedPostcard? initialDraft;
@@ -37,6 +38,7 @@ class _PostcardEditScreenState extends State<PostcardEditScreen>
   List<PostcardElementLayer> _elementLayers = const [];
   List<EditedPostcard> _hotTemplates = const [];
   City? _selectedCity;
+  String _locationDetail = '';
   String? _customPreviewImagePath;
   String? _editingDraftId;
   Timer? _templateAutoPlayTimer;
@@ -83,6 +85,7 @@ class _PostcardEditScreenState extends State<PostcardEditScreen>
     _selectedCity = (cityName.isEmpty && cityCode.isEmpty)
         ? null
         : City(name: resolvedName, code: cityCode);
+    _locationDetail = draft.locationDetail?.trim() ?? '';
   }
 
   Future<void> _savePostcard() async {
@@ -101,6 +104,7 @@ class _PostcardEditScreenState extends State<PostcardEditScreen>
         cityName: (cityName == null || cityName.isEmpty) ? null : cityName,
         cityCode: cityCode,
         provinceName: provinceName,
+        locationDetail: _locationDetail,
         latitude: coordinate?.latitude,
         longitude: coordinate?.longitude,
         layers: _elementLayers,
@@ -139,6 +143,7 @@ class _PostcardEditScreenState extends State<PostcardEditScreen>
         cityName: (cityName == null || cityName.isEmpty) ? null : cityName,
         cityCode: cityCode,
         provinceName: provinceName,
+        locationDetail: _locationDetail,
         latitude: coordinate?.latitude,
         longitude: coordinate?.longitude,
         layers: _elementLayers,
@@ -195,22 +200,34 @@ class _PostcardEditScreenState extends State<PostcardEditScreen>
     await _saveDraftAndExit();
   }
 
-  Future<void> _selectLocationTag() async {
+  Future<void> _openLocationAnnotation() async {
     if (_isSaving) return;
 
-    final selectedCity = await Navigator.push<City>(
+    final result = await Navigator.push<LocationAnnotationResult>(
       context,
       MaterialPageRoute(
-        builder: (context) =>
-            CitySearchScreen(selectedCity: _selectedCity?.name),
+        builder: (context) => LocationAnnotationScreen(
+          initialCity: _cloneCity(_selectedCity),
+          initialDetailAddress: _locationDetail,
+        ),
       ),
     );
 
-    if (!mounted || selectedCity == null) return;
-    if (_isSameCity(_selectedCity, selectedCity)) return;
+    if (!mounted || result == null) return;
+    final nextCity = result.city;
+    final nextLocationDetail = result.detailAddress.trim();
+    if (_isSameCity(_selectedCity, nextCity) &&
+        _isSameLocationDetail(_locationDetail, nextLocationDetail)) {
+      return;
+    }
+
     _pushUndoState();
-    setState(() => _selectedCity = selectedCity);
-    _showHint('已标注地点：${selectedCity.name}');
+    setState(() {
+      _selectedCity = _cloneCity(nextCity);
+      _locationDetail = nextLocationDetail;
+    });
+    final fullLocationText = _buildFullLocationText();
+    _showHint(fullLocationText.isEmpty ? '已清除地点标注' : '已标注地点：$fullLocationText');
   }
 
   String? _normalizeCityCode(String? raw) {
@@ -227,14 +244,36 @@ class _PostcardEditScreenState extends State<PostcardEditScreen>
     return _provinceNameByPrefix[cityCode.substring(0, 2)];
   }
 
-  String _buildLocationTagText() {
+  bool _isSameLocationDetail(String? a, String? b) {
+    return (a?.trim() ?? '') == (b?.trim() ?? '');
+  }
+
+  String _buildLocationCoreText() {
     final city = _selectedCity;
-    if (city == null) return '未标注地点';
+    if (city == null) return '';
 
     final name = city.name.trim();
+    if (name.isNotEmpty) return name;
+
     final code = city.code.trim();
-    if (code.isEmpty) return '已标注地点：$name';
-    return '已标注地点：$name ($code)';
+    if (code.isNotEmpty) return '城市代码$code';
+    return '';
+  }
+
+  String _buildFullLocationText() {
+    final core = _buildLocationCoreText();
+    final detail = _locationDetail.trim();
+    if (core.isEmpty) return detail;
+    if (detail.isEmpty) return core;
+    if (detail.contains(core)) return detail;
+    if (core.contains(detail)) return core;
+    return '$core$detail';
+  }
+
+  String _buildLocationTagText() {
+    final text = _buildFullLocationText();
+    if (text.isEmpty) return '未标注地点';
+    return text;
   }
 
   void _showHint(String message) {
@@ -674,12 +713,14 @@ class _PostcardEditScreenState extends State<PostcardEditScreen>
     final snapshot = _EditorSnapshot(
       layers: List<PostcardElementLayer>.from(_elementLayers),
       selectedCity: _cloneCity(_selectedCity),
+      locationDetail: _locationDetail,
       previewImagePath: _customPreviewImagePath,
     );
     if (_undoStack.isNotEmpty) {
       final last = _undoStack.last;
       if (_isSameLayerList(last.layers, snapshot.layers) &&
           _isSameCity(last.selectedCity, snapshot.selectedCity) &&
+          _isSameLocationDetail(last.locationDetail, snapshot.locationDetail) &&
           _isSamePreviewSource(
             last.previewImagePath,
             snapshot.previewImagePath,
@@ -713,6 +754,7 @@ class _PostcardEditScreenState extends State<PostcardEditScreen>
     setState(() {
       _elementLayers = List<PostcardElementLayer>.from(snapshot.layers);
       _selectedCity = _cloneCity(snapshot.selectedCity);
+      _locationDetail = snapshot.locationDetail;
       _customPreviewImagePath = snapshot.previewImagePath;
     });
     _showHint('已撤回到上一步');
@@ -843,20 +885,37 @@ class _PostcardEditScreenState extends State<PostcardEditScreen>
   }
 
   Widget _buildLayerOverlay(double previewWidth, double previewHeight) {
-    if (_elementLayers.isEmpty) return const SizedBox.shrink();
-    final layers = _sortedLayers();
+    final layers = _elementLayers.isEmpty
+        ? const <PostcardElementLayer>[]
+        : _sortedLayers();
+    final locationText = _buildFullLocationText();
+    if (layers.isEmpty && locationText.isEmpty) {
+      return const SizedBox.shrink();
+    }
 
+    Widget buildOverlayStack() {
+      return Stack(
+        fit: StackFit.expand,
+        children: [
+          for (final layer in layers)
+            _buildSingleLayer(layer, previewWidth, previewHeight),
+          if (locationText.isNotEmpty)
+            Positioned(
+              left: 10,
+              right: 10,
+              bottom: 10,
+              child: _PreviewLocationBadge(text: locationText),
+            ),
+        ],
+      );
+    }
+
+    if (layers.isEmpty) {
+      return buildOverlayStack();
+    }
     return AnimatedBuilder(
       animation: _effectController,
-      builder: (context, child) {
-        return Stack(
-          fit: StackFit.expand,
-          children: [
-            for (final layer in layers)
-              _buildSingleLayer(layer, previewWidth, previewHeight),
-          ],
-        );
-      },
+      builder: (context, child) => buildOverlayStack(),
     );
   }
 
@@ -1137,7 +1196,7 @@ class _PostcardEditScreenState extends State<PostcardEditScreen>
                                       label: '地点标注',
                                       width: actionWidth,
                                       height: actionHeight,
-                                      onTap: _selectLocationTag,
+                                      onTap: _openLocationAnnotation,
                                     ),
                                   ],
                                 ),
@@ -1529,14 +1588,52 @@ class _EditorActionButton extends StatelessWidget {
   }
 }
 
+class _PreviewLocationBadge extends StatelessWidget {
+  final String text;
+
+  const _PreviewLocationBadge({required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(
+        color: const Color(0xB32A4D31),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.place_rounded, size: 14, color: Colors.white),
+          const SizedBox(width: 4),
+          Flexible(
+            child: Text(
+              text,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _EditorSnapshot {
   final List<PostcardElementLayer> layers;
   final City? selectedCity;
+  final String locationDetail;
   final String? previewImagePath;
 
   const _EditorSnapshot({
     required this.layers,
     required this.selectedCity,
+    required this.locationDetail,
     required this.previewImagePath,
   });
 }

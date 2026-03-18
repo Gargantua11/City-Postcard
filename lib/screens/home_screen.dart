@@ -569,18 +569,29 @@ class _EditedPostcardCard extends StatelessWidget {
     final city = postcard.cityName?.trim();
     final province = postcard.provinceName?.trim();
     final cityCode = postcard.cityCode?.trim();
+    final detail = postcard.locationDetail?.trim();
 
+    String? base;
     if (city != null &&
         city.isNotEmpty &&
         province != null &&
         province.isNotEmpty) {
-      if (city == province) return city;
-      return '$province $city';
+      base = city == province ? city : '$province $city';
+    } else if (city != null && city.isNotEmpty) {
+      base = city;
+    } else if (province != null && province.isNotEmpty) {
+      base = province;
+    } else if (cityCode != null && cityCode.isNotEmpty) {
+      base = cityCode;
     }
-    if (city != null && city.isNotEmpty) return city;
-    if (province != null && province.isNotEmpty) return province;
-    if (cityCode != null && cityCode.isNotEmpty) return cityCode;
-    return null;
+
+    if (detail != null && detail.isNotEmpty) {
+      if (base == null || base.isEmpty) return detail;
+      if (detail.contains(base)) return detail;
+      if (base.contains(detail)) return base;
+      return '$base$detail';
+    }
+    return base;
   }
 }
 

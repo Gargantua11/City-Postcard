@@ -257,20 +257,40 @@ class _PostcardOverviewTile extends StatelessWidget {
   String _resolveLocation(EditedPostcard postcard) {
     final province = postcard.provinceName?.trim();
     final city = postcard.cityName?.trim();
+    final detail = postcard.locationDetail?.trim();
 
+    String base = '';
     if (province != null &&
         province.isNotEmpty &&
         city != null &&
         city.isNotEmpty) {
-      if (province == city) return city;
-      return '$province $city';
+      base = province == city ? city : '$province $city';
+    } else if (city != null && city.isNotEmpty) {
+      base = city;
+    } else if (province != null && province.isNotEmpty) {
+      base = province;
+    } else {
+      final code = postcard.cityCode?.trim();
+      if (code != null && code.isNotEmpty) {
+        base = '城市代码$code';
+      }
     }
-    if (city != null && city.isNotEmpty) return city;
-    if (province != null && province.isNotEmpty) return province;
 
-    final code = postcard.cityCode?.trim();
-    if (code != null && code.isNotEmpty) return '城市代码$code';
+    if (detail != null && detail.isNotEmpty) {
+      return _mergeLocationText(base, detail);
+    }
+    if (base.isNotEmpty) return base;
     return '未知地点';
+  }
+
+  String _mergeLocationText(String base, String detail) {
+    final normalizedBase = base.trim();
+    final normalizedDetail = detail.trim();
+    if (normalizedBase.isEmpty) return normalizedDetail;
+    if (normalizedDetail.isEmpty) return normalizedBase;
+    if (normalizedDetail.contains(normalizedBase)) return normalizedDetail;
+    if (normalizedBase.contains(normalizedDetail)) return normalizedBase;
+    return '$normalizedBase$normalizedDetail';
   }
 }
 
