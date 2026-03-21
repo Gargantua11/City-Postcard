@@ -696,13 +696,14 @@ class EditedPostcardService {
               : '我的明信片');
 
     final elements = layers
-        .map(
-          (item) => <String, dynamic>{
-            'id': item.id,
-            'type': 'asset',
-            ...item.toJson(),
-          },
-        )
+        .map((item) {
+          final json = Map<String, dynamic>.from(item.toJson());
+          // Keep the API field aligned with the current contract.
+          if (item.isAsset) {
+            json["type"] = "asset";
+          }
+          return json;
+        })
         .toList(growable: false);
 
     final payload = <String, dynamic>{

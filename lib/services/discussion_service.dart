@@ -19,10 +19,70 @@ class DiscussionFetchResult {
 }
 
 class DiscussionPost {
+  static const List<String> _layerPayloadKeys = <String>[
+    'elements',
+    'layers',
+    'elementList',
+    'layerList',
+    'elementVOList',
+    'layerVOList',
+    'postcardElementVOList',
+    'postcardElements',
+    'postcardElementList',
+    'elementsJson',
+    'layersJson',
+    'postcardElementsJson',
+    'postcardElementJson',
+    'elementJson',
+    'layerJson',
+    'elementsData',
+    'layersData',
+  ];
+
+  static const List<String> _layerContainerKeys = <String>[
+    'data',
+    'postcard',
+    'postcardInfo',
+    'postcardDetail',
+    'postcardDto',
+    'postcardVO',
+    'postcardVo',
+    'detail',
+    'card',
+    'record',
+    'item',
+  ];
+
+  static const List<String> _imageUrlKeys = <String>[
+    'imageUrl',
+    'image',
+    'url',
+    'coverUrl',
+    'postcardUrl',
+    'postcardImageUrl',
+    'postcardImage',
+    'coverImage',
+    'thumbnail',
+    'thumbUrl',
+    'imagePath',
+    'coverPath',
+  ];
+
+  static const List<String> _imageKeyKeys = <String>[
+    'imageKey',
+    'key',
+    'objectKey',
+    'fileKey',
+    'coverKey',
+    'imageObjectKey',
+    'path',
+  ];
+
   final int id;
   final String username;
   final String? avatar;
   final String imageUrl;
+  final List<PostcardElementLayer> layers;
   final DateTime createdAt;
   final String address;
   final int likeCount;
@@ -34,6 +94,7 @@ class DiscussionPost {
     required this.username,
     this.avatar,
     required this.imageUrl,
+    this.layers = const <PostcardElementLayer>[],
     required this.createdAt,
     required this.address,
     required this.likeCount,
@@ -55,13 +116,8 @@ class DiscussionPost {
           0,
       username: _extractUsername(json) ?? '匿名用户',
       avatar: BackendApiClient.readString(json, const ['avatar', 'avatarUrl']),
-      imageUrl:
-          BackendApiClient.readString(json, const [
-            'imageUrl',
-            'image',
-            'url',
-          ]) ??
-          '',
+      imageUrl: _extractImageSource(json),
+      layers: _extractLayers(json),
       createdAt: _parseDateTime(
         BackendApiClient.readString(json, const [
               'createdAt',
@@ -102,6 +158,8 @@ class DiscussionPost {
       'username': username,
       'avatar': avatar,
       'imageUrl': imageUrl,
+      if (layers.isNotEmpty)
+        'layers': layers.map((item) => item.toJson()).toList(growable: false),
       'createdAt': createdAt.toIso8601String(),
       'address': address,
       'likeCount': likeCount,
@@ -156,6 +214,366 @@ class DiscussionPost {
     return '';
   }
 
+  static List<PostcardElementLayer> _extractLayers(Map<String, dynamic> json) {
+    final layers = <PostcardElementLayer>[];
+    final fingerprints = <String>{};
+
+    void append(List<PostcardElementLayer> incoming) {
+      _appendUniqueLayers(layers, fingerprints, incoming);
+    }
+
+    append(_parseLayerList(json));
+
+    for (final key in _layerContainerKeys) {
+      append(_parseLayerList(json[key]));
+      append(_parseLayerList(_decodeDynamicJson(json[key])));
+    }
+
+    for (final entry in json.entries) {
+      final key = entry.key.trim().toLowerCase();
+      if (!(key.contains('element') || key.contains('layer'))) {
+        continue;
+      }
+      append(_parseLayerList(entry.value));
+    }
+
+    return layers;
+  }
+
+  static String _extractImageSource(Map<String, dynamic> json) {
+    final directUrl = _normalizeImageSource(_readImageUrlCandidate(json));
+    if (directUrl.isNotEmpty) {
+      return directUrl;
+    }
+
+    final directKey = _normalizeImageSource(_readImageKeyCandidate(json));
+    if (directKey.isNotEmpty) {
+      return directKey;
+    }
+
+    for (final key in _layerContainerKeys) {
+      final nestedMap = BackendApiClient.asMap(json[key]);
+      if (nestedMap != null) {
+        final nestedImage = _extractImageSource(nestedMap);
+        if (nestedImage.isNotEmpty) {
+          return nestedImage;
+        }
+      }
+
+      final decoded = _decodeDynamicJson(json[key]);
+      final decodedMap = BackendApiClient.asMap(decoded);
+      if (decodedMap != null) {
+        final decodedImage = _extractImageSource(decodedMap);
+        if (decodedImage.isNotEmpty) {
+          return decodedImage;
+        }
+      }
+    }
+
+    return '';
+  }
+
+  static List<PostcardElementLayer> _parseLayerList(dynamic raw) {
+    if (raw == null) return const <PostcardElementLayer>[];
+
+    final source = _decodeDynamicJsonDeep(raw);
+    if (source == null) return const <PostcardElementLayer>[];
+    if (source is String && source.trim().isEmpty) {
+      return const <PostcardElementLayer>[];
+    }
+
+    if (source is Map<String, dynamic>) {
+      final layers = <PostcardElementLayer>[];
+      final fingerprints = <String>{};
+
+      for (final key in _layerPayloadKeys) {
+        _appendUniqueLayers(layers, fingerprints, _parseLayerList(source[key]));
+      }
+
+      for (final entry in source.entries) {
+        final key = entry.key.trim().toLowerCase();
+        if (!(key.contains('element') || key.contains('layer'))) {
+          continue;
+        }
+        _appendUniqueLayers(layers, fingerprints, _parseLayerList(entry.value));
+      }
+      if (layers.isNotEmpty) {
+        return layers;
+      }
+
+      if (_looksLikeLayerMap(source)) {
+        final layer = PostcardElementLayer.fromJson(
+          source,
+          fallbackId: 'discussion_layer_single',
+        );
+        if (_isRenderableLayer(layer)) {
+          _appendUniqueLayers(layers, fingerprints, <PostcardElementLayer>[
+            layer,
+          ]);
+        }
+      }
+
+      return layers;
+    }
+    if (source is Map) {
+      final casted = <String, dynamic>{};
+      for (final entry in source.entries) {
+        final key = entry.key?.toString().trim() ?? '';
+        if (key.isEmpty) continue;
+        casted[key] = entry.value;
+      }
+      return _parseLayerList(casted);
+    }
+    if (source is! List) return const <PostcardElementLayer>[];
+
+    final layers = <PostcardElementLayer>[];
+    final fingerprints = <String>{};
+    for (var i = 0; i < source.length; i++) {
+      final item = _decodeDynamicJsonDeep(source[i]);
+      final itemMap = BackendApiClient.asMap(item);
+      if (itemMap == null) {
+        continue;
+      }
+
+      if (!_looksLikeLayerMap(itemMap)) {
+        _appendUniqueLayers(layers, fingerprints, _parseLayerList(itemMap));
+        continue;
+      }
+
+      final layer = PostcardElementLayer.fromJson(
+        itemMap,
+        fallbackId: 'discussion_layer_$i',
+      );
+      if (_isRenderableLayer(layer)) {
+        _appendUniqueLayers(layers, fingerprints, <PostcardElementLayer>[
+          layer,
+        ]);
+      }
+    }
+    return layers;
+  }
+
+  static void _appendUniqueLayers(
+    List<PostcardElementLayer> target,
+    Set<String> fingerprints,
+    Iterable<PostcardElementLayer> incoming,
+  ) {
+    for (final layer in incoming) {
+      final fingerprint = _layerFingerprint(layer);
+      if (!fingerprints.add(fingerprint)) {
+        continue;
+      }
+      target.add(layer);
+    }
+  }
+
+  static String _layerFingerprint(PostcardElementLayer layer) {
+    return [
+      layer.id,
+      layer.normalizedType,
+      layer.elementKey.trim(),
+      layer.assetPath.trim(),
+      layer.text?.trim() ?? '',
+      layer.x.toString(),
+      layer.y.toString(),
+      layer.zIndex.toString(),
+    ].join('|');
+  }
+
+  static dynamic _decodeDynamicJson(dynamic raw) {
+    if (raw is! String) return raw;
+    final text = raw.trim();
+    if (text.isEmpty) return raw;
+
+    try {
+      return jsonDecode(text);
+    } catch (_) {
+      if (text.contains(r'\"')) {
+        final unescaped = text.replaceAll(r'\"', '"').replaceAll(r'\\/', '/');
+        try {
+          return jsonDecode(unescaped);
+        } catch (_) {}
+      }
+      return raw;
+    }
+  }
+
+  static dynamic _decodeDynamicJsonDeep(dynamic raw) {
+    dynamic current = raw;
+    for (var i = 0; i < 3; i++) {
+      final decoded = _decodeDynamicJson(current);
+      if (decoded == current) {
+        break;
+      }
+      current = decoded;
+    }
+    return current;
+  }
+
+  static bool _isRenderableLayer(PostcardElementLayer layer) {
+    if (layer.isText) {
+      return layer.normalizedText.trim().isNotEmpty;
+    }
+
+    if (layer.assetPath.trim().isNotEmpty) {
+      return true;
+    }
+
+    if (layer.elementKey.trim().isNotEmpty) {
+      return true;
+    }
+
+    return false;
+  }
+
+  static bool _looksLikeLayerMap(Map<String, dynamic> map) {
+    bool hasAny(Iterable<String> keys) {
+      for (final key in keys) {
+        if (map.containsKey(key)) {
+          return true;
+        }
+      }
+      return false;
+    }
+
+    final hasAssetIdentity = hasAny(const <String>[
+      'assetPath',
+      'asset_path',
+      'assetUrl',
+      'asset_url',
+      'elementPath',
+      'element_path',
+      'resourcePath',
+      'resource_path',
+      'materialPath',
+      'material_path',
+      'elementKey',
+      'element_key',
+      'elementCode',
+      'element_code',
+      'elementName',
+      'materialKey',
+      'material_key',
+      'materialCode',
+      'material_code',
+    ]);
+    if (hasAssetIdentity) {
+      return true;
+    }
+
+    final hasLayerType = hasAny(const <String>[
+      'type',
+      'layerType',
+      'layer_type',
+      'elementType',
+      'element_type',
+    ]);
+
+    final hasTransform = hasAny(const <String>[
+      'x',
+      'y',
+      'left',
+      'top',
+      'positionX',
+      'position_x',
+      'positionY',
+      'position_y',
+      'scale',
+      'rotation2d',
+      'rotation_2d',
+      'rotation',
+      'angle',
+      'zIndex',
+      'z_index',
+      'z',
+      'is3dEnabled',
+      'is_3d_enabled',
+      'rotateX',
+      'rotate_x',
+      'rotateY',
+      'rotate_y',
+    ]);
+
+    final hasTextIdentity = hasAny(const <String>[
+      'text',
+      'textContent',
+      'text_content',
+      'style',
+      'box',
+    ]);
+    if (hasTextIdentity && (hasTransform || hasLayerType)) {
+      return true;
+    }
+
+    if (hasLayerType && hasTransform) {
+      return true;
+    }
+
+    return false;
+  }
+
+  static String? _readImageUrlCandidate(Map<String, dynamic> json) {
+    return BackendApiClient.readString(json, _imageUrlKeys);
+  }
+
+  static String? _readImageKeyCandidate(Map<String, dynamic> json) {
+    return BackendApiClient.readString(json, _imageKeyKeys);
+  }
+
+  static String _normalizeImageSource(String? raw) {
+    final text = raw?.trim() ?? '';
+    if (text.isEmpty) return '';
+    if (_looksLikeApiEndpointValue(text)) return '';
+    return text;
+  }
+
+  static bool _looksLikeApiEndpointValue(String source) {
+    final text = source.trim();
+    if (text.isEmpty) return false;
+
+    String path;
+    if (text.startsWith('/')) {
+      path = text;
+    } else {
+      final uri = Uri.tryParse(text);
+      if (uri == null || !(uri.isScheme('http') || uri.isScheme('https'))) {
+        return false;
+      }
+      path = uri.path;
+    }
+
+    final normalizedPath = path.trim().toLowerCase().replaceFirst(
+      RegExp(r'/+$'),
+      '',
+    );
+    if (normalizedPath.isEmpty) return false;
+    if (_looksLikeImagePath(normalizedPath)) return false;
+    if (normalizedPath.endsWith('/me/avatar')) return true;
+
+    for (final prefix in const <String>[
+      '/postcard/',
+      '/discussion/',
+      '/map/',
+      '/oss/',
+      '/me/',
+      '/auth/',
+      '/comment/',
+      '/favorite/',
+    ]) {
+      if (normalizedPath.startsWith(prefix)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  static bool _looksLikeImagePath(String path) {
+    return RegExp(
+      r'\.(jpg|jpeg|png|webp|gif|bmp|svg|avif)(\?.*)?$',
+      caseSensitive: false,
+    ).hasMatch(path);
+  }
+
   static String _normalizeHotCommentText(String raw) {
     final text = raw.trim();
     if (text.isEmpty) return '';
@@ -172,10 +590,11 @@ class DiscussionPost {
       }
     }
 
-    final mapLikeField = _extractFieldFromMapLikeText(
-      text,
-      const ['content', 'commentContent', 'text'],
-    );
+    final mapLikeField = _extractFieldFromMapLikeText(text, const [
+      'content',
+      'commentContent',
+      'text',
+    ]);
     if (mapLikeField != null && mapLikeField.isNotEmpty) {
       return mapLikeField;
     }
@@ -331,7 +750,9 @@ class DiscussionService {
 
     final normalizedUsername = username.trim().isEmpty ? '我' : username.trim();
     final normalizedAddress = address.trim();
-    final resolvedAddress = normalizedAddress.isEmpty ? '未知地点' : normalizedAddress;
+    final resolvedAddress = normalizedAddress.isEmpty
+        ? '未知地点'
+        : normalizedAddress;
     final normalizedCityName = cityName?.trim();
     final normalizedCityCode = cityCode?.trim();
     final normalizedProvinceName = provinceName?.trim();
@@ -437,13 +858,14 @@ class DiscussionService {
   ) {
     if (layers.isEmpty) return const <Map<String, dynamic>>[];
     return layers
-        .map(
-          (item) => <String, dynamic>{
-            'id': item.id,
-            'type': 'asset',
-            ...item.toJson(),
-          },
-        )
+        .map((item) {
+          final json = Map<String, dynamic>.from(item.toJson());
+          // Keep the API field aligned with the current contract.
+          if (item.isAsset) {
+            json['type'] = 'asset';
+          }
+          return json;
+        })
         .toList(growable: false);
   }
 
@@ -506,6 +928,7 @@ class DiscussionService {
     }
     return false;
   }
+
   Future<void> publishLocalPost({
     required String username,
     required String imageUrl,
@@ -589,6 +1012,236 @@ class DiscussionService {
   Future<List<DiscussionPost>> fetchPosts({DateTime? lastTime}) async {
     final result = await fetchPostsWithOfflineFallback(lastTime: lastTime);
     return result.posts;
+  }
+
+  Future<DiscussionPost> fetchPostDetail(int postId) async {
+    if (postId <= 0) {
+      throw ArgumentError('postId must be greater than 0');
+    }
+
+    final body = await _apiClient.get('/postcard/$postId', requireAuth: true);
+    final candidates = _collectDetailCandidates(body);
+
+    DiscussionPost? bestPost;
+    var bestScore = -1;
+    var bestLayerCount = -1;
+    var bestHasImage = false;
+    for (final candidate in candidates) {
+      final parsed = DiscussionPost.fromJson(candidate);
+      final score = _scoreDetailCandidate(parsed, candidate, postId: postId);
+      final hasImage = parsed.imageUrl.trim().isNotEmpty;
+      final shouldReplace =
+          score > bestScore ||
+          (score == bestScore &&
+              (parsed.layers.length > bestLayerCount ||
+                  (parsed.layers.length == bestLayerCount &&
+                      hasImage &&
+                      !bestHasImage)));
+      if (shouldReplace) {
+        bestScore = score;
+        bestLayerCount = parsed.layers.length;
+        bestHasImage = hasImage;
+        bestPost = parsed;
+      }
+    }
+
+    if (bestPost == null) {
+      throw const BackendApiException('明信片详情解析失败');
+    }
+
+    return _withPostId(bestPost, postId);
+  }
+
+  DiscussionPost _withPostId(DiscussionPost post, int fallbackId) {
+    if (post.id > 0) {
+      return post;
+    }
+
+    return DiscussionPost(
+      id: fallbackId,
+      username: post.username,
+      avatar: post.avatar,
+      imageUrl: post.imageUrl,
+      layers: post.layers,
+      createdAt: post.createdAt,
+      address: post.address,
+      likeCount: post.likeCount,
+      commentCount: post.commentCount,
+      hotComment: post.hotComment,
+    );
+  }
+
+  List<Map<String, dynamic>> _collectDetailCandidates(
+    Map<String, dynamic> body,
+  ) {
+    final candidates = <Map<String, dynamic>>[];
+    final fingerprints = <String>{};
+
+    void addMapCandidate(Map<String, dynamic> map) {
+      final fingerprint = _candidateFingerprint(map);
+      if (!fingerprints.add(fingerprint)) {
+        return;
+      }
+      candidates.add(map);
+    }
+
+    void collect(dynamic raw, {int depth = 0}) {
+      if (raw == null || depth > 4) {
+        return;
+      }
+
+      final decoded = _decodeJsonIfNeeded(raw);
+      final map = BackendApiClient.asMap(decoded);
+      if (map != null) {
+        addMapCandidate(map);
+        for (final key in const <String>[
+          'data',
+          'result',
+          'record',
+          'item',
+          'postcard',
+          'postcardInfo',
+          'postcardDetail',
+          'postcardDto',
+          'card',
+          'records',
+          'list',
+          'content',
+        ]) {
+          if (map.containsKey(key)) {
+            collect(map[key], depth: depth + 1);
+          }
+        }
+        return;
+      }
+
+      if (decoded is List) {
+        final limit = decoded.length > 3 ? 3 : decoded.length;
+        for (var i = 0; i < limit; i++) {
+          collect(decoded[i], depth: depth + 1);
+        }
+      }
+    }
+
+    final roots = <dynamic>[
+      body,
+      BackendApiClient.extractData(body),
+      body['data'],
+      body['result'],
+      body['record'],
+      body['item'],
+      body['postcard'],
+      body['postcardInfo'],
+      body['postcardDetail'],
+      body['postcardDto'],
+      body['card'],
+      body['records'],
+      body['list'],
+      body['content'],
+    ];
+    for (final root in roots) {
+      collect(root);
+    }
+
+    return candidates;
+  }
+
+  String _candidateFingerprint(Map<String, dynamic> map) {
+    try {
+      return jsonEncode(map);
+    } catch (_) {
+      return map.toString();
+    }
+  }
+
+  dynamic _decodeJsonIfNeeded(dynamic raw) {
+    if (raw is! String) {
+      return raw;
+    }
+
+    dynamic current = raw.trim();
+    if (current is! String || current.isEmpty) {
+      return raw;
+    }
+
+    for (var i = 0; i < 3; i++) {
+      if (current is! String) {
+        break;
+      }
+
+      final text = current.trim();
+      if (text.isEmpty) {
+        return raw;
+      }
+
+      dynamic decoded;
+      try {
+        decoded = jsonDecode(text);
+      } catch (_) {
+        if (text.contains(r'\"')) {
+          final unescaped = text.replaceAll(r'\"', '"').replaceAll(r'\\/', '/');
+          try {
+            decoded = jsonDecode(unescaped);
+          } catch (_) {
+            break;
+          }
+        } else {
+          break;
+        }
+      }
+
+      if (decoded == current) {
+        break;
+      }
+      current = decoded;
+    }
+
+    return current;
+  }
+
+  int _scoreDetailCandidate(
+    DiscussionPost post,
+    Map<String, dynamic> raw, {
+    required int postId,
+  }) {
+    var score = 0;
+    if (post.id > 0) {
+      score += 2;
+    }
+    if (post.id == postId) {
+      score += 2;
+    }
+    if (post.imageUrl.trim().isNotEmpty) {
+      score += 6;
+    }
+    if (post.layers.isNotEmpty) {
+      score += 24;
+    }
+    if (post.username.trim().isNotEmpty) {
+      score += 1;
+    }
+    if (post.address.trim().isNotEmpty) {
+      score += 1;
+    }
+
+    final hasLayerHint =
+        const <String>[
+          'elements',
+          'layers',
+          'elementList',
+          'layerList',
+          'postcardElements',
+          'postcardElementList',
+        ].any(raw.containsKey) ||
+        raw.keys.any((key) {
+          final normalized = key.trim().toLowerCase();
+          return normalized.contains('element') || normalized.contains('layer');
+        });
+    if (hasLayerHint) {
+      score += 8;
+    }
+
+    return score;
   }
 
   Future<List<DiscussionPost>> _fetchPostsOnline({DateTime? lastTime}) async {

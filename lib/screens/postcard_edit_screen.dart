@@ -11,7 +11,9 @@ import '../models/postcard_element_layer.dart';
 import '../services/backend_api_client.dart';
 import '../services/edited_postcard_service.dart';
 import '../services/postcard_data_refresh_bus.dart';
+import '../widgets/postcard_layer_render_helper.dart';
 import '../widgets/resolved_image.dart';
+import 'add_text_screen.dart';
 import 'city_search_screen.dart';
 import 'dynamic_effect_screen.dart';
 import 'location_annotation_screen.dart';
@@ -607,32 +609,30 @@ class _PostcardEditScreenState extends State<PostcardEditScreen>
     double previewWidth,
     double previewHeight,
   ) {
-    final rawScale = layer.scale <= 0 ? 1.0 : layer.scale;
-    final baseSize = (previewWidth * 0.22 * rawScale).clamp(
-      26.0,
-      previewWidth * 0.45,
+    final layerSize = measurePostcardLayerSize(
+      layer,
+      previewWidth: previewWidth,
+      previewHeight: previewHeight,
     );
-
     final offset = _resolveLayerOffset(layer, previewWidth, previewHeight);
-    final left = previewWidth / 2 + offset.dx - baseSize / 2;
-    final top = previewHeight / 2 + offset.dy - baseSize / 2;
+    final left = previewWidth / 2 + offset.dx - layerSize.width / 2;
+    final top = previewHeight / 2 + offset.dy - layerSize.height / 2;
 
-    final image = Image.asset(
-      layer.assetPath,
-      fit: BoxFit.contain,
-      filterQuality: FilterQuality.high,
-      errorBuilder: (_, _, _) => const SizedBox.shrink(),
+    final visual = buildPostcardLayerVisual(
+      layer,
+      previewWidth: previewWidth,
+      previewHeight: previewHeight,
+      silentAssetError: true,
     );
 
-    final speed = layer.rotationSpeed <= 0 ? 1.0 : layer.rotationSpeed;
-    final directionSign = layer.rotationDirection == 'counterclockwise'
-        ? -1.0
-        : 1.0;
-    final cycleAngle =
-        _effectController.value * math.pi * 2 * speed * directionSign;
-
-    Widget transformed = image;
-    if (layer.is3dEnabled) {
+    Widget transformed = visual;
+    if (layer.isAsset && layer.is3dEnabled) {
+      final speed = layer.rotationSpeed <= 0 ? 1.0 : layer.rotationSpeed;
+      final directionSign = layer.rotationDirection == 'counterclockwise'
+          ? -1.0
+          : 1.0;
+      final cycleAngle =
+          _effectController.value * math.pi * 2 * speed * directionSign;
       final matrix = Matrix4.identity()..setEntry(3, 2, layer.perspective);
       if (layer.rotationAxis == 'horizontal') {
         matrix
@@ -646,17 +646,17 @@ class _PostcardEditScreenState extends State<PostcardEditScreen>
       transformed = Transform(
         alignment: Alignment.center,
         transform: matrix,
-        child: image,
+        child: visual,
       );
-    } else if (layer.rotation2d != 0) {
-      transformed = Transform.rotate(angle: layer.rotation2d, child: image);
+    } else if (layer.rotation2d != 0.0) {
+      transformed = Transform.rotate(angle: layer.rotation2d, child: visual);
     }
 
     return Positioned(
       left: left,
       top: top,
-      width: baseSize,
-      height: baseSize,
+      width: layerSize.width,
+      height: layerSize.height,
       child: transformed,
     );
   }
@@ -680,8 +680,12 @@ class _PostcardEditScreenState extends State<PostcardEditScreen>
 
   bool _isSameLayer(PostcardElementLayer a, PostcardElementLayer b) {
     return a.id == b.id &&
+        a.type == b.type &&
         a.elementKey == b.elementKey &&
         a.assetPath == b.assetPath &&
+        a.text == b.text &&
+        mapEquals(a.style?.toJson(), b.style?.toJson()) &&
+        mapEquals(a.box?.toJson(), b.box?.toJson()) &&
         a.x == b.x &&
         a.y == b.y &&
         a.scale == b.scale &&
@@ -766,15 +770,17 @@ class _PostcardEditScreenState extends State<PostcardEditScreen>
 
   Future<void> _openDynamicEffects() async {
     if (_isSaving) return;
+    final assetLayers = _elementLayers
+        .where((layer) => layer.isAsset)
+        .toList(growable: false);
     final result = await Navigator.push<List<PostcardElementLayer>>(
       context,
       MaterialPageRoute(
-        builder: (context) =>
-            DynamicEffectScreen(initialLayers: _elementLayers),
+        builder: (context) => DynamicEffectScreen(initialLayers: assetLayers),
       ),
     );
     if (!mounted || result == null) return;
-    _applyLayerChanges(result);
+    _applyLayerChanges(_mergeAssetsWithExistingText(result));
   }
 
   Future<void> _openAddElements() async {
@@ -784,7 +790,7 @@ class _PostcardEditScreenState extends State<PostcardEditScreen>
     if (!mounted || result == null) return;
 
     if (result is List<PostcardElementLayer>) {
-      final changed = _applyLayerChanges(result);
+      final changed = _applyLayerChanges(_mergeAssetsWithExistingText(result));
       if (changed) {
         _showHint('已应用元素：${_elementLayers.length} 个');
       }
@@ -799,11 +805,106 @@ class _PostcardEditScreenState extends State<PostcardEditScreen>
         }
       }
       if (layers.isEmpty) return;
-      final changed = _applyLayerChanges(layers);
+      final changed = _applyLayerChanges(_mergeAssetsWithExistingText(layers));
       if (changed) {
         _showHint('已应用元素：${_elementLayers.length} 个');
       }
     }
+  }
+
+  Future<void> _openAddText() async {
+    if (_isSaving) return;
+
+    var topZIndex = 0;
+    for (final layer in _elementLayers) {
+      if (layer.zIndex > topZIndex) {
+        topZIndex = layer.zIndex;
+      }
+    }
+
+    final textLayerCount = _elementLayers.where((layer) => layer.isText).length;
+    final x = (0.5 + ((textLayerCount % 3) - 1) * 0.12).clamp(0.16, 0.84);
+    final y = (0.5 + (((textLayerCount ~/ 3) % 3) - 1) * 0.1).clamp(0.16, 0.84);
+    final initialLayer = PostcardElementLayer(
+      id: _buildLayerId('text'),
+      type: 'text',
+      text: '',
+      x: x.toDouble(),
+      y: y.toDouble(),
+      scale: 1,
+      rotation2d: 0,
+      zIndex: topZIndex + 1,
+      style: const PostcardTextLayerStyle(fontFamily: 'serif'),
+      box: const PostcardTextLayerBox(),
+    );
+
+    final result = await Navigator.push<PostcardElementLayer>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => AddTextScreen(initialLayer: initialLayer),
+      ),
+    );
+    if (!mounted || result == null) return;
+
+    final normalizedText = result.text?.trim() ?? '';
+    if (normalizedText.isEmpty) return;
+
+    final textLayer = result.copyWith(
+      type: 'text',
+      text: normalizedText,
+      elementKey: '',
+      assetPath: '',
+      style: (result.style ?? const PostcardTextLayerStyle()).copyWith(
+        fontFamily: 'serif',
+      ),
+      box: result.box ?? const PostcardTextLayerBox(),
+      is3dEnabled: false,
+      rotateX: 0,
+      rotateY: 0,
+      clearSpeedLevel: true,
+    );
+    final nextLayers = List<PostcardElementLayer>.from(_elementLayers)
+      ..add(textLayer);
+    final changed = _applyLayerChanges(nextLayers);
+    if (changed) {
+      _showHint('已添加文字');
+    }
+  }
+
+  List<PostcardElementLayer> _mergeAssetsWithExistingText(
+    List<PostcardElementLayer> incoming,
+  ) {
+    if (incoming.isEmpty) {
+      return List<PostcardElementLayer>.from(_elementLayers);
+    }
+    if (incoming.any((item) => item.isText)) {
+      return List<PostcardElementLayer>.from(incoming);
+    }
+
+    final merged = List<PostcardElementLayer>.from(incoming);
+    final usedIds = merged.map((item) => item.id).toSet();
+    final existingTextLayers = _elementLayers.where((item) => item.isText);
+    for (final textLayer in existingTextLayers) {
+      if (usedIds.add(textLayer.id)) {
+        merged.add(textLayer);
+      } else {
+        merged.add(textLayer.copyWith(id: _buildLayerId('text', usedIds)));
+      }
+    }
+    return merged;
+  }
+
+  String _buildLayerId(String prefix, [Set<String>? occupiedIds]) {
+    final usedIds =
+        occupiedIds ?? _elementLayers.map((item) => item.id).toSet();
+    var seed = DateTime.now().microsecondsSinceEpoch;
+    var candidate = '${prefix}_$seed';
+    while (usedIds.contains(candidate)) {
+      seed += 1;
+      candidate = '${prefix}_$seed';
+    }
+    usedIds.add(candidate);
+    return candidate;
   }
 
   List<PostcardElementLayer> _sortedLayers() {
@@ -817,14 +918,11 @@ class _PostcardEditScreenState extends State<PostcardEditScreen>
     double previewWidth,
     double previewHeight,
   ) {
-    final useFallbackOffset = layer.x == 0 && layer.y == 0;
-    if (!useFallbackOffset) {
-      return Offset(layer.x, layer.y);
-    }
-    final fallbackX = ((layer.zIndex % 4) - 1.5) * (previewWidth * 0.16);
-    final fallbackY =
-        (((layer.zIndex ~/ 4) % 3) - 1.0) * (previewHeight * 0.14);
-    return Offset(fallbackX, fallbackY);
+    return resolvePostcardLayerOffset(
+      layer,
+      previewWidth: previewWidth,
+      previewHeight: previewHeight,
+    );
   }
 
   void _bringLayerToFront(String layerId) {
@@ -865,23 +963,73 @@ class _PostcardEditScreenState extends State<PostcardEditScreen>
       previewWidth,
       previewHeight,
     );
-    final rawScale = current.scale <= 0 ? 1.0 : current.scale;
-    final elementSize = (previewWidth * 0.22 * rawScale).clamp(
-      26.0,
-      previewWidth * 0.45,
+    final elementSize = measurePostcardLayerSize(
+      current,
+      previewWidth: previewWidth,
+      previewHeight: previewHeight,
     );
 
-    final minX = -previewWidth / 2 + elementSize / 2;
-    final maxX = previewWidth / 2 - elementSize / 2;
-    final minY = -previewHeight / 2 + elementSize / 2;
-    final maxY = previewHeight / 2 - elementSize / 2;
+    final minX = -previewWidth / 2 + elementSize.width / 2;
+    final maxX = previewWidth / 2 - elementSize.width / 2;
+    final minY = -previewHeight / 2 + elementSize.height / 2;
+    final maxY = previewHeight / 2 - elementSize.height / 2;
 
     final nextX = (currentOffset.dx + delta.dx).clamp(minX, maxX).toDouble();
     final nextY = (currentOffset.dy + delta.dy).clamp(minY, maxY).toDouble();
+    final normalizedX = ((nextX / previewWidth) + 0.5).clamp(0.0, 1.0);
+    final normalizedY = ((nextY / previewHeight) + 0.5).clamp(0.0, 1.0);
 
     setState(() {
-      _elementLayers[layerIndex] = current.copyWith(x: nextX, y: nextY);
+      _elementLayers[layerIndex] = current.copyWith(
+        x: normalizedX.toDouble(),
+        y: normalizedY.toDouble(),
+      );
     });
+  }
+
+  Future<void> _removeLayer(String layerId) async {
+    if (_isSaving) return;
+    final layerIndex = _elementLayers.indexWhere(
+      (layer) => layer.id == layerId,
+    );
+    if (layerIndex < 0) return;
+
+    final target = _elementLayers[layerIndex];
+    final label = target.isText ? '文字' : '元素';
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text('删除$label'),
+        content: Text('确定删除该$label吗？'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('删除'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted || confirmed != true) return;
+
+    final latestIndex = _elementLayers.indexWhere(
+      (layer) => layer.id == layerId,
+    );
+    if (latestIndex < 0) return;
+
+    final removed = _elementLayers[latestIndex];
+    _pushUndoState();
+    setState(() {
+      final nextLayers = List<PostcardElementLayer>.from(_elementLayers);
+      nextLayers.removeAt(latestIndex);
+      _elementLayers = nextLayers;
+    });
+
+    final removedLabel = removed.isText ? '文字' : '元素';
+    _showHint('已删除$removedLabel，可撤销');
   }
 
   Widget _buildLayerOverlay(double previewWidth, double previewHeight) {
@@ -924,45 +1072,33 @@ class _PostcardEditScreenState extends State<PostcardEditScreen>
     double previewWidth,
     double previewHeight,
   ) {
-    final rawScale = layer.scale <= 0 ? 1.0 : layer.scale;
-    final baseSize = (previewWidth * 0.22 * rawScale).clamp(
-      26.0,
-      previewWidth * 0.45,
+    final layerSize = measurePostcardLayerSize(
+      layer,
+      previewWidth: previewWidth,
+      previewHeight: previewHeight,
     );
 
     final offset = _resolveLayerOffset(layer, previewWidth, previewHeight);
     final offsetX = offset.dx;
     final offsetY = offset.dy;
 
-    final left = previewWidth / 2 + offsetX - baseSize / 2;
-    final top = previewHeight / 2 + offsetY - baseSize / 2;
+    final left = previewWidth / 2 + offsetX - layerSize.width / 2;
+    final top = previewHeight / 2 + offsetY - layerSize.height / 2;
 
-    final image = Image.asset(
-      layer.assetPath,
-      fit: BoxFit.contain,
-      filterQuality: FilterQuality.high,
-      errorBuilder: (context, error, stackTrace) {
-        return Container(
-          decoration: BoxDecoration(
-            color: const Color(0xFFE5E5E5),
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: const Color(0xFFC8C8C8)),
-          ),
-          alignment: Alignment.center,
-          child: const Icon(Icons.image_not_supported, size: 18),
-        );
-      },
+    final visual = buildPostcardLayerVisual(
+      layer,
+      previewWidth: previewWidth,
+      previewHeight: previewHeight,
     );
 
-    final speed = layer.rotationSpeed <= 0 ? 1.0 : layer.rotationSpeed;
-    final directionSign = layer.rotationDirection == 'counterclockwise'
-        ? -1.0
-        : 1.0;
-    final cycleAngle =
-        _effectController.value * math.pi * 2 * speed * directionSign;
-
-    Widget transformed = image;
-    if (layer.is3dEnabled) {
+    Widget transformed = visual;
+    if (layer.isAsset && layer.is3dEnabled) {
+      final speed = layer.rotationSpeed <= 0 ? 1.0 : layer.rotationSpeed;
+      final directionSign = layer.rotationDirection == 'counterclockwise'
+          ? -1.0
+          : 1.0;
+      final cycleAngle =
+          _effectController.value * math.pi * 2 * speed * directionSign;
       final matrix = Matrix4.identity()..setEntry(3, 2, layer.perspective);
       if (layer.rotationAxis == 'horizontal') {
         matrix
@@ -976,10 +1112,10 @@ class _PostcardEditScreenState extends State<PostcardEditScreen>
       transformed = Transform(
         alignment: Alignment.center,
         transform: matrix,
-        child: image,
+        child: visual,
       );
     } else if (layer.rotation2d != 0) {
-      transformed = Transform.rotate(angle: layer.rotation2d, child: image);
+      transformed = Transform.rotate(angle: layer.rotation2d, child: visual);
     }
 
     return Positioned(
@@ -987,6 +1123,7 @@ class _PostcardEditScreenState extends State<PostcardEditScreen>
       top: top,
       child: GestureDetector(
         behavior: HitTestBehavior.translucent,
+        onDoubleTap: () => _removeLayer(layer.id),
         onPanStart: (_) {
           _pushUndoState();
           _bringLayerToFront(layer.id);
@@ -999,7 +1136,11 @@ class _PostcardEditScreenState extends State<PostcardEditScreen>
             previewHeight,
           );
         },
-        child: SizedBox(width: baseSize, height: baseSize, child: transformed),
+        child: SizedBox(
+          width: layerSize.width,
+          height: layerSize.height,
+          child: transformed,
+        ),
       ),
     );
   }
@@ -1037,16 +1178,12 @@ class _PostcardEditScreenState extends State<PostcardEditScreen>
                 final double previewWidth = contentWidth - 16 * scale;
                 final double previewHeight =
                     previewWidth / _postcardAspectRatio;
-                final double actionWidth = 184 * scale;
                 final double actionHeight = 54 * scale;
-                final double templateCardWidth = actionWidth - 20 * scale;
-                final double templateCardHeight =
-                    templateCardWidth / _postcardAspectRatio;
+                final double quickActionGap = 10 * scale;
+                final double quickActionWidth =
+                    (contentWidth - quickActionGap) / 2;
                 final double saveWidth = 353 * scale;
                 final double saveHeight = 87 * scale;
-                double actionGap = contentWidth - actionWidth * 2;
-                if (actionGap < 14 * scale) actionGap = 14 * scale;
-                if (actionGap > 28 * scale) actionGap = 28 * scale;
 
                 return Align(
                   alignment: Alignment.topCenter,
@@ -1168,82 +1305,50 @@ class _PostcardEditScreenState extends State<PostcardEditScreen>
                             ),
                           ),
                           SizedBox(height: 18 * scale),
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                          Column(
                             children: [
-                              SizedBox(
-                                width: actionWidth,
-                                child: Column(
-                                  children: [
-                                    _EditorActionButton(
-                                      icon: Icons.auto_awesome_outlined,
-                                      label: '添加元素',
-                                      width: actionWidth,
-                                      height: actionHeight,
-                                      onTap: _openAddElements,
-                                    ),
-                                    SizedBox(height: 10 * scale),
-                                    _EditorActionButton(
-                                      icon: Icons.auto_mode_rounded,
-                                      label: '动态效果',
-                                      width: actionWidth,
-                                      height: actionHeight,
-                                      onTap: _openDynamicEffects,
-                                    ),
-                                    SizedBox(height: 10 * scale),
-                                    _EditorActionButton(
-                                      icon: Icons.place_rounded,
-                                      label: '地点标注',
-                                      width: actionWidth,
-                                      height: actionHeight,
-                                      onTap: _openLocationAnnotation,
-                                    ),
-                                  ],
-                                ),
+                              Row(
+                                children: [
+                                  _EditorActionButton(
+                                    icon: Icons.auto_awesome_outlined,
+                                    label: '添加元素',
+                                    width: quickActionWidth,
+                                    height: actionHeight,
+                                    onTap: _openAddElements,
+                                  ),
+                                  SizedBox(width: quickActionGap),
+                                  _EditorActionButton(
+                                    icon: Icons.text_fields_rounded,
+                                    label: '添加文字',
+                                    width: quickActionWidth,
+                                    height: actionHeight,
+                                    onTap: _openAddText,
+                                  ),
+                                ],
                               ),
-                              SizedBox(width: actionGap),
-                              Container(
-                                width: actionWidth,
-                                padding: EdgeInsets.fromLTRB(
-                                  8 * scale,
-                                  8 * scale,
-                                  8 * scale,
-                                  10 * scale,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFFEAF7E7),
-                                  borderRadius: BorderRadius.circular(
-                                    16 * scale,
+                              SizedBox(height: quickActionGap),
+                              Row(
+                                children: [
+                                  _EditorActionButton(
+                                    icon: Icons.auto_mode_rounded,
+                                    label: '动态效果',
+                                    width: quickActionWidth,
+                                    height: actionHeight,
+                                    onTap: _openDynamicEffects,
                                   ),
-                                  border: Border.all(
-                                    color: const Color(0xFFAED0AE),
+                                  SizedBox(width: quickActionGap),
+                                  _EditorActionButton(
+                                    icon: Icons.place_rounded,
+                                    label: '地点标注',
+                                    width: quickActionWidth,
+                                    height: actionHeight,
+                                    onTap: _openLocationAnnotation,
                                   ),
-                                ),
-                                child: Column(
-                                  children: [
-                                    SizedBox(
-                                      width: templateCardWidth,
-                                      height: templateCardHeight,
-                                      child: _buildHotTemplateCarousel(
-                                        templateCardWidth,
-                                        templateCardHeight,
-                                      ),
-                                    ),
-                                    SizedBox(height: 8 * scale),
-                                    Text(
-                                      '热门模板',
-                                      style: TextStyle(
-                                        fontSize: 12 * scale,
-                                        color: const Color(0xFF2D5D35),
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                  ],
-                                ),
+                                ],
                               ),
                             ],
                           ),
-                          SizedBox(height: 12 * scale),
+                          SizedBox(height: 10 * scale),
                           Container(
                             padding: EdgeInsets.symmetric(
                               horizontal: 14 * scale,
@@ -1272,6 +1377,43 @@ class _PostcardEditScreenState extends State<PostcardEditScreen>
                                       color: const Color(0xFF2D5D35),
                                       fontWeight: FontWeight.w600,
                                     ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          SizedBox(height: 10 * scale),
+                          Container(
+                            padding: EdgeInsets.fromLTRB(
+                              8 * scale,
+                              8 * scale,
+                              8 * scale,
+                              10 * scale,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFEAF7E7),
+                              borderRadius: BorderRadius.circular(16 * scale),
+                              border: Border.all(
+                                color: const Color(0xFFAED0AE),
+                              ),
+                            ),
+                            child: Column(
+                              children: [
+                                SizedBox(
+                                  width: previewWidth,
+                                  height: previewHeight,
+                                  child: _buildHotTemplateCarousel(
+                                    previewWidth,
+                                    previewHeight,
+                                  ),
+                                ),
+                                SizedBox(height: 8 * scale),
+                                Text(
+                                  '热门模板',
+                                  style: TextStyle(
+                                    fontSize: 12 * scale,
+                                    color: const Color(0xFF2D5D35),
+                                    fontWeight: FontWeight.w600,
                                   ),
                                 ),
                               ],

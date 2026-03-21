@@ -1,12 +1,16 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import '../models/postcard_element_layer.dart';
 import '../services/discussion_service.dart';
 import '../services/backend_api_client.dart';
 import '../services/favorite_postcard_service.dart';
 import '../services/liked_postcard_service.dart';
 import '../services/postcard_comment_service.dart';
 import '../services/storage_service.dart';
+import '../widgets/postcard_layer_render_helper.dart';
 import '../widgets/resolved_image.dart';
 
 class PostCommentsScreen extends StatefulWidget {
@@ -21,6 +25,7 @@ class PostCommentsScreen extends StatefulWidget {
 class _PostCommentsScreenState extends State<PostCommentsScreen> {
   static const double _postcardAspectRatio = 400 / 258;
 
+  final DiscussionService _discussionService = DiscussionService();
   final FavoritePostcardService _favoriteService = FavoritePostcardService();
   final LikedPostcardService _likedService = LikedPostcardService();
   final PostcardCommentService _commentService = PostcardCommentService();
@@ -28,6 +33,7 @@ class _PostCommentsScreenState extends State<PostCommentsScreen> {
   final TextEditingController _inputController = TextEditingController();
   final FocusNode _inputFocusNode = FocusNode();
 
+  late DiscussionPost _displayPost;
   List<_CommentItem> _comments = <_CommentItem>[];
   final Set<String> _currentUsernames = <String>{};
   String? _currentUserId;
@@ -45,14 +51,90 @@ class _PostCommentsScreenState extends State<PostCommentsScreen> {
   bool _likeStateLoaded = false;
   bool _favoriteTouchedByUser = false;
   bool _likeTouchedByUser = false;
+  bool _is3dPreviewEnabled = true;
 
   @override
   void initState() {
     super.initState();
+    _displayPost = widget.post;
+    _loadPostDetail();
     _loadCurrentUserIdentity();
     _loadCommentsFromApi();
     _loadFavoriteState();
     _loadLikeState();
+  }
+
+  Future<void> _loadPostDetail() async {
+    final postId = _displayPost.id;
+    if (postId <= 0) {
+      return;
+    }
+
+    try {
+      final detail = await _discussionService.fetchPostDetail(postId);
+      if (!mounted) return;
+
+      final previous = _displayPost;
+      final merged = _mergePostData(previous, detail);
+      if (!_isSameDisplayPost(previous, merged)) {
+        setState(() {
+          _displayPost = merged;
+        });
+      }
+
+      if (previous.id != merged.id && mounted) {
+        _loadCommentsFromApi();
+        _loadFavoriteState();
+        _loadLikeState();
+      }
+    } catch (e, stackTrace) {
+      debugPrint('加载明信片详情失败: $e\\n$stackTrace');
+    }
+  }
+
+  DiscussionPost _mergePostData(DiscussionPost summary, DiscussionPost detail) {
+    return DiscussionPost(
+      id: detail.id > 0 ? detail.id : summary.id,
+      username: _preferNonEmpty(detail.username, summary.username),
+      avatar: _preferOptionalNonEmpty(detail.avatar, summary.avatar),
+      imageUrl: _preferNonEmpty(detail.imageUrl, summary.imageUrl),
+      layers: detail.layers.isNotEmpty ? detail.layers : summary.layers,
+      createdAt: summary.createdAt,
+      address: _preferNonEmpty(detail.address, summary.address),
+      likeCount: detail.likeCount != 0 ? detail.likeCount : summary.likeCount,
+      commentCount: detail.commentCount != 0
+          ? detail.commentCount
+          : summary.commentCount,
+      hotComment: _preferNonEmpty(detail.hotComment, summary.hotComment),
+    );
+  }
+
+  String _preferNonEmpty(String preferred, String fallback) {
+    return preferred.trim().isNotEmpty ? preferred : fallback;
+  }
+
+  String? _preferOptionalNonEmpty(String? preferred, String? fallback) {
+    final value = preferred?.trim() ?? '';
+    if (value.isNotEmpty) {
+      return preferred;
+    }
+    return fallback;
+  }
+
+  bool _isSameDisplayPost(DiscussionPost a, DiscussionPost b) {
+    if (a.id != b.id) return false;
+    if (a.username != b.username) return false;
+    if (a.avatar != b.avatar) return false;
+    if (a.imageUrl != b.imageUrl) return false;
+    if (a.address != b.address) return false;
+    if (a.likeCount != b.likeCount) return false;
+    if (a.commentCount != b.commentCount) return false;
+    if (a.hotComment != b.hotComment) return false;
+    if (a.layers.length != b.layers.length) return false;
+    for (var i = 0; i < a.layers.length; i++) {
+      if (a.layers[i] != b.layers[i]) return false;
+    }
+    return true;
   }
 
   Future<void> _loadCurrentUserIdentity() async {
@@ -71,12 +153,13 @@ class _PostCommentsScreenState extends State<PostCommentsScreen> {
       if (nickname.isNotEmpty) {
         next.add(_normalizeName(nickname));
       }
-      next.add(_normalizeName('我'));
+      next.add(_normalizeName('\u6211'));
       final userId = user?.id.trim();
-      final avatar = (user?.avatar?.trim().isNotEmpty == true
-              ? user!.avatar!.trim()
-              : (profileAvatar?.trim() ?? ''))
-          .trim();
+      final avatar =
+          (user?.avatar?.trim().isNotEmpty == true
+                  ? user!.avatar!.trim()
+                  : (profileAvatar?.trim() ?? ''))
+              .trim();
       final normalizedAvatar = _normalizeAvatar(avatar);
 
       setState(() {
@@ -93,7 +176,7 @@ class _PostCommentsScreenState extends State<PostCommentsScreen> {
         _currentUserAvatar = null;
         _currentUsernames
           ..clear()
-          ..add(_normalizeName('我'));
+          ..add(_normalizeName('\u6211'));
       });
     }
   }
@@ -141,14 +224,14 @@ class _PostCommentsScreenState extends State<PostCommentsScreen> {
 
   Future<void> _loadFavoriteState() async {
     try {
-      final favorited = await _favoriteService.isFavorited(widget.post);
+      final favorited = await _favoriteService.isFavorited(_displayPost);
       if (!mounted || _favoriteTouchedByUser) return;
       setState(() {
         _isPostFavorited = favorited;
         _favoriteStateLoaded = true;
       });
     } catch (e, stackTrace) {
-      debugPrint('加载收藏状态失败: $e\n$stackTrace');
+      debugPrint('加载收藏状态失败: $e\\n$stackTrace');
       if (!mounted) return;
       setState(() {
         _favoriteStateLoaded = true;
@@ -165,18 +248,20 @@ class _PostCommentsScreenState extends State<PostCommentsScreen> {
     });
 
     try {
-      final favorited = await _favoriteService.toggleFavorite(widget.post);
+      final favorited = await _favoriteService.toggleFavorite(_displayPost);
       if (!mounted) return;
       setState(() {
         _isPostFavorited = favorited;
       });
 
-      final message = favorited ? '已收藏到收藏夹' : '已取消收藏';
+      final message = favorited
+          ? '\u5df2\u6536\u85cf\u5230\u6536\u85cf\u5939'
+          : '\u5df2\u53d6\u6d88\u6536\u85cf';
       final messenger = ScaffoldMessenger.maybeOf(context);
       messenger?.hideCurrentSnackBar();
       messenger?.showSnackBar(SnackBar(content: Text(message)));
     } catch (e, stackTrace) {
-      debugPrint('切换收藏失败: $e\n$stackTrace');
+      debugPrint('切换收藏失败: $e\\n$stackTrace');
       if (!mounted) return;
 
       final messenger = ScaffoldMessenger.maybeOf(context);
@@ -199,11 +284,12 @@ class _PostCommentsScreenState extends State<PostCommentsScreen> {
       });
     }
 
-    if (widget.post.id <= 0) {
+    if (_displayPost.id <= 0) {
       if (!mounted) return;
       setState(() {
         _isCommentsLoading = false;
-        _commentsErrorMessage = '该明信片尚未同步到服务器，无法加载在线评论';
+        _commentsErrorMessage =
+            '\u8be5\u660e\u4fe1\u7247\u5c1a\u672a\u540c\u6b65\u5230\u670d\u52a1\u5668\uff0c\u65e0\u6cd5\u52a0\u8f7d\u5728\u7ebf\u8bc4\u8bba';
         _comments = const <_CommentItem>[];
       });
       return;
@@ -211,7 +297,7 @@ class _PostCommentsScreenState extends State<PostCommentsScreen> {
 
     try {
       final comments = await _commentService.fetchComments(
-        postcardId: widget.post.id,
+        postcardId: _displayPost.id,
         page: 1,
         size: 50,
       );
@@ -223,14 +309,14 @@ class _PostCommentsScreenState extends State<PostCommentsScreen> {
         _commentsErrorMessage = null;
       });
     } on BackendApiException catch (e, stackTrace) {
-      debugPrint('加载评论失败: $e\n$stackTrace');
+      debugPrint('加载评论失败: $e\\n$stackTrace');
       if (!mounted) return;
       setState(() {
         _isCommentsLoading = false;
         _commentsErrorMessage = _friendlyCommentErrorMessage(e);
       });
     } catch (e, stackTrace) {
-      debugPrint('加载评论失败: $e\n$stackTrace');
+      debugPrint('加载评论失败: $e\\n$stackTrace');
       if (!mounted) return;
       setState(() {
         _isCommentsLoading = false;
@@ -244,7 +330,7 @@ class _PostCommentsScreenState extends State<PostCommentsScreen> {
     bool forSubmit = false,
   }) {
     if (error.isUnauthorized) {
-      return '登录状态失效，请重新登录';
+      return '\u767b\u5f55\u72b6\u6001\u5931\u6548\uff0c\u8bf7\u91cd\u65b0\u767b\u5f55';
     }
 
     final lower = error.message.toLowerCase();
@@ -256,21 +342,22 @@ class _PostCommentsScreenState extends State<PostCommentsScreen> {
         lower.contains('timed out') ||
         lower.contains('connection reset');
     if (isNetworkError) {
-      return '网络连接失败，请检查网络后重试';
+      return '\u7f51\u7edc\u8fde\u63a5\u5931\u8d25\uff0c\u8bf7\u68c0\u67e5\u7f51\u7edc\u540e\u91cd\u8bd5';
     }
 
     final isNotFound =
         lower.contains('not found') ||
-        lower.contains('不存在') ||
-        lower.contains('已删除');
+        lower.contains('\u4e0d\u5b58\u5728') ||
+        lower.contains('\u5df2\u5220\u9664');
     if (isNotFound) {
-      return '明信片不存在或已被删除';
+      return '\u660e\u4fe1\u7247\u4e0d\u5b58\u5728\u6216\u5df2\u88ab\u5220\u9664';
     }
 
     final isUnderDevelopment =
-        lower.contains('开发中') || lower.contains('under development');
+        lower.contains('\u5f00\u53d1\u4e2d') ||
+        lower.contains('under development');
     if (isUnderDevelopment) {
-      return '评论功能暂不可用，请稍后再试';
+      return '\u8bc4\u8bba\u529f\u80fd\u6682\u4e0d\u53ef\u7528\uff0c\u8bf7\u7a0d\u540e\u518d\u8bd5';
     }
 
     if (forSubmit) {
@@ -306,14 +393,14 @@ class _PostCommentsScreenState extends State<PostCommentsScreen> {
 
   Future<void> _loadLikeState() async {
     try {
-      final liked = await _likedService.isLiked(widget.post);
+      final liked = await _likedService.isLiked(_displayPost);
       if (!mounted || _likeTouchedByUser) return;
       setState(() {
         _isPostLiked = liked;
         _likeStateLoaded = true;
       });
     } catch (e, stackTrace) {
-      debugPrint('加载点赞状态失败: $e\n$stackTrace');
+      debugPrint('加载点赞状态失败: $e\\n$stackTrace');
       if (!mounted) return;
       setState(() {
         _likeStateLoaded = true;
@@ -330,23 +417,31 @@ class _PostCommentsScreenState extends State<PostCommentsScreen> {
     });
 
     try {
-      final liked = await _likedService.toggleLike(widget.post);
+      final liked = await _likedService.toggleLike(_displayPost);
       if (!mounted) return;
       setState(() {
         _isPostLiked = liked;
       });
 
-      final message = liked ? '已点赞' : '已取消点赞';
+      final message = liked
+          ? '\u5df2\u70b9\u8d5e'
+          : '\u5df2\u53d6\u6d88\u70b9\u8d5e';
       final messenger = ScaffoldMessenger.maybeOf(context);
       messenger?.hideCurrentSnackBar();
       messenger?.showSnackBar(SnackBar(content: Text(message)));
     } catch (e, stackTrace) {
-      debugPrint('切换点赞失败: $e\n$stackTrace');
+      debugPrint('切换点赞失败: $e\\n$stackTrace');
       if (!mounted) return;
 
       final messenger = ScaffoldMessenger.maybeOf(context);
       messenger?.hideCurrentSnackBar();
-      messenger?.showSnackBar(const SnackBar(content: Text('点赞失败，请稍后重试')));
+      messenger?.showSnackBar(
+        const SnackBar(
+          content: Text(
+            '\u70b9\u8d5e\u5931\u8d25\uff0c\u8bf7\u7a0d\u540e\u91cd\u8bd5',
+          ),
+        ),
+      );
     } finally {
       if (mounted) {
         setState(() {
@@ -370,7 +465,7 @@ class _PostCommentsScreenState extends State<PostCommentsScreen> {
     try {
       await _commentService.setCommentLiked(item.id, next);
     } catch (e, stackTrace) {
-      debugPrint('评论点赞操作失败: $e\n$stackTrace');
+      debugPrint('评论点赞操作失败: $e\\n$stackTrace');
       if (!mounted) return;
       setState(() {
         item.liked = previous;
@@ -386,15 +481,17 @@ class _PostCommentsScreenState extends State<PostCommentsScreen> {
       builder: (dialogContext) {
         return AlertDialog(
           title: const Text('删除评论'),
-          content: const Text('确认删除这条评论吗？'),
+          content: const Text(
+            '\u786e\u8ba4\u5220\u9664\u8fd9\u6761\u8bc4\u8bba\u5417\uff1f',
+          ),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(dialogContext).pop(false),
-              child: const Text('取消'),
+              child: const Text('\u53d6\u6d88'),
             ),
             TextButton(
               onPressed: () => Navigator.of(dialogContext).pop(true),
-              child: const Text('删除'),
+              child: const Text('\u5220\u9664'),
             ),
           ],
         );
@@ -413,15 +510,17 @@ class _PostCommentsScreenState extends State<PostCommentsScreen> {
         _comments.removeWhere((comment) => comment.id == item.id);
       });
       await _loadCommentsFromApi(showLoading: false);
-      _showHint('评论已删除');
+      _showHint('\u8bc4\u8bba\u5df2\u5220\u9664');
     } on BackendApiException catch (e, stackTrace) {
-      debugPrint('删除评论失败: $e\n$stackTrace');
+      debugPrint('删除评论失败: $e\\n$stackTrace');
       if (!mounted) return;
       _showHint(
-        e.isUnauthorized ? '登录状态失效，请重新登录' : '删除评论失败，请稍后重试',
+        e.isUnauthorized
+            ? '\u767b\u5f55\u72b6\u6001\u5931\u6548\uff0c\u8bf7\u91cd\u65b0\u767b\u5f55'
+            : '\u5220\u9664\u8bc4\u8bba\u5931\u8d25\uff0c\u8bf7\u7a0d\u540e\u91cd\u8bd5',
       );
     } catch (e, stackTrace) {
-      debugPrint('删除评论失败: $e\n$stackTrace');
+      debugPrint('删除评论失败: $e\\n$stackTrace');
       if (!mounted) return;
       _showHint('删除评论失败，请稍后重试');
     } finally {
@@ -437,7 +536,7 @@ class _PostCommentsScreenState extends State<PostCommentsScreen> {
     final content = _inputController.text.trim();
     if (content.isEmpty || _isCommentSubmitting) return;
 
-    if (widget.post.id <= 0) {
+    if (_displayPost.id <= 0) {
       _showHint('该明信片尚未同步到服务器');
       return;
     }
@@ -450,7 +549,7 @@ class _PostCommentsScreenState extends State<PostCommentsScreen> {
       final profileCityName = await _storageService.getProfileCityName();
       final profileCityCode = await _storageService.getProfileCityCode();
       await _commentService.addComment(
-        postcardId: widget.post.id,
+        postcardId: _displayPost.id,
         content: content,
         commenterCityName: profileCityName,
         commenterCityCode: profileCityCode,
@@ -461,11 +560,11 @@ class _PostCommentsScreenState extends State<PostCommentsScreen> {
       _inputController.clear();
       await _loadCommentsFromApi(showLoading: false);
     } on BackendApiException catch (e, stackTrace) {
-      debugPrint('发布评论失败: $e\n$stackTrace');
+      debugPrint('发布评论失败: $e\\n$stackTrace');
       if (!mounted) return;
       _showHint(_friendlyCommentErrorMessage(e, forSubmit: true));
     } catch (e, stackTrace) {
-      debugPrint('发布评论失败: $e\n$stackTrace');
+      debugPrint('发布评论失败: $e\\n$stackTrace');
       if (!mounted) return;
       _showHint('发布评论失败，请稍后重试');
     } finally {
@@ -483,6 +582,12 @@ class _PostCommentsScreenState extends State<PostCommentsScreen> {
     messenger?.showSnackBar(SnackBar(content: Text(message)));
   }
 
+  void _toggle3dPreview() {
+    setState(() {
+      _is3dPreviewEnabled = !_is3dPreviewEnabled;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -495,26 +600,53 @@ class _PostCommentsScreenState extends State<PostCommentsScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  InkWell(
-                    borderRadius: BorderRadius.circular(14),
-                    onTap: () => Navigator.of(context).pop(),
-                    child: Container(
-                      width: 52,
-                      height: 22,
-                      padding: const EdgeInsets.symmetric(horizontal: 7),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFD5E5C7),
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: const Color(0xFFB7C7AA)),
-                      ),
+                  SizedBox(
+                    height: 28,
+                    child: Stack(
                       alignment: Alignment.center,
-                      child: const Text(
-                        '返回',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Color(0xFF44553B),
+                      children: [
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(13.33),
+                            onTap: () => Navigator.of(context).pop(),
+                            child: Container(
+                              width: 72,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 9.33,
+                                vertical: 5.33,
+                              ),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFE9EEDB),
+                                borderRadius: BorderRadius.circular(13.33),
+                                border: Border.all(
+                                  color: const Color(0xFFB8BDAE),
+                                ),
+                                boxShadow: const [
+                                  BoxShadow(
+                                    color: Color(0x1A000000),
+                                    blurRadius: 5.33,
+                                    offset: Offset(0, 2),
+                                  ),
+                                ],
+                              ),
+                              alignment: Alignment.center,
+                              child: const Text(
+                                '\u8fd4\u56de',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                  color: Colors.black87,
+                                ),
+                              ),
+                            ),
+                          ),
                         ),
-                      ),
+                        _CommentTop3dToggleButton(
+                          checked: _is3dPreviewEnabled,
+                          onTap: _toggle3dPreview,
+                        ),
+                      ],
                     ),
                   ),
                   const SizedBox(height: 8),
@@ -524,7 +656,11 @@ class _PostCommentsScreenState extends State<PostCommentsScreen> {
                       aspectRatio: _postcardAspectRatio,
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(4),
-                        child: _PostHeaderImage(imageUrl: widget.post.imageUrl),
+                        child: _PostHeaderImage(
+                          imageUrl: _displayPost.imageUrl,
+                          layers: _displayPost.layers,
+                          enable3dPreview: _is3dPreviewEnabled,
+                        ),
                       ),
                     ),
                   ),
@@ -546,7 +682,7 @@ class _PostCommentsScreenState extends State<PostCommentsScreen> {
                   child: Column(
                     children: [
                       _PostOwnerInfo(
-                        post: widget.post,
+                        post: _displayPost,
                         isFavorited: _isPostFavorited,
                         isLiked: _isPostLiked,
                         onFavoriteTap: _isFavoriteBusy || !_favoriteStateLoaded
@@ -579,7 +715,7 @@ class _PostCommentsScreenState extends State<PostCommentsScreen> {
                                       const SizedBox(height: 10),
                                       OutlinedButton(
                                         onPressed: _loadCommentsFromApi,
-                                        child: const Text('重试'),
+                                        child: const Text('\u91cd\u8bd5'),
                                       ),
                                     ],
                                   ),
@@ -634,7 +770,8 @@ class _PostCommentsScreenState extends State<PostCommentsScreen> {
                             focusNode: _inputFocusNode,
                             enabled: !_isCommentSubmitting,
                             decoration: InputDecoration(
-                              hintText: '输入您的评论吧',
+                              hintText:
+                                  '\u8f93\u5165\u60a8\u7684\u8bc4\u8bba\u5427',
                               hintStyle: const TextStyle(
                                 color: Color(0xFF97A190),
                                 fontSize: 17,
@@ -675,19 +812,95 @@ class _PostCommentsScreenState extends State<PostCommentsScreen> {
   }
 }
 
-class _PostHeaderImage extends StatelessWidget {
+class _PostHeaderImage extends StatefulWidget {
   final String imageUrl;
+  final List<PostcardElementLayer> layers;
+  final bool enable3dPreview;
 
-  const _PostHeaderImage({required this.imageUrl});
+  const _PostHeaderImage({
+    required this.imageUrl,
+    this.layers = const [],
+    this.enable3dPreview = true,
+  });
+
+  @override
+  State<_PostHeaderImage> createState() => _PostHeaderImageState();
+}
+
+class _PostHeaderImageState extends State<_PostHeaderImage>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _effectController;
+
+  bool get _hasDynamicLayer {
+    if (!widget.enable3dPreview) return false;
+    return widget.layers.any((layer) => layer.is3dEnabled);
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _effectController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 12),
+    );
+    _syncAnimationState();
+  }
+
+  @override
+  void didUpdateWidget(covariant _PostHeaderImage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _syncAnimationState();
+  }
+
+  @override
+  void dispose() {
+    _effectController.dispose();
+    super.dispose();
+  }
+
+  void _syncAnimationState() {
+    if (_hasDynamicLayer) {
+      if (!_effectController.isAnimating) {
+        _effectController.repeat();
+      }
+      return;
+    }
+
+    if (_effectController.isAnimating) {
+      _effectController.stop();
+    }
+    _effectController.value = 0;
+  }
 
   @override
   Widget build(BuildContext context) {
-    return ResolvedImage(
-      source: imageUrl,
-      fit: BoxFit.cover,
-      filterQuality: FilterQuality.high,
-      fallbackBuilder: (_) => _buildFallback(),
-      loadingBuilder: (_) => _buildFallback(showLoading: true),
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        ResolvedImage(
+          source: widget.imageUrl,
+          fit: BoxFit.cover,
+          filterQuality: FilterQuality.high,
+          fallbackBuilder: (_) => _buildFallback(),
+          loadingBuilder: (_) => _buildFallback(showLoading: true),
+        ),
+        if (widget.layers.isNotEmpty)
+          if (_hasDynamicLayer)
+            AnimatedBuilder(
+              animation: _effectController,
+              builder: (_, _) => _PostcardLayerOverlay(
+                layers: widget.layers,
+                animationProgress: _effectController.value,
+                enable3dPreview: widget.enable3dPreview,
+              ),
+            )
+          else
+            _PostcardLayerOverlay(
+              layers: widget.layers,
+              animationProgress: 0,
+              enable3dPreview: widget.enable3dPreview,
+            ),
+      ],
     );
   }
 
@@ -706,6 +919,152 @@ class _PostHeaderImage extends StatelessWidget {
                 color: Color(0xFF8C8C8C),
                 size: 40,
               ),
+      ),
+    );
+  }
+}
+
+class _PostcardLayerOverlay extends StatelessWidget {
+  const _PostcardLayerOverlay({
+    required this.layers,
+    required this.animationProgress,
+    required this.enable3dPreview,
+  });
+
+  final List<PostcardElementLayer> layers;
+  final double animationProgress;
+  final bool enable3dPreview;
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final width = constraints.maxWidth;
+          final height = constraints.maxHeight;
+          final sortedLayers = List<PostcardElementLayer>.from(layers)
+            ..sort((a, b) => a.zIndex.compareTo(b.zIndex));
+
+          return Stack(
+            fit: StackFit.expand,
+            children: [
+              for (final layer in sortedLayers)
+                _buildLayer(layer, width: width, height: height),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildLayer(
+    PostcardElementLayer layer, {
+    required double width,
+    required double height,
+  }) {
+    final layerSize = measurePostcardLayerSize(
+      layer,
+      previewWidth: width,
+      previewHeight: height,
+    );
+    final offset = resolvePostcardLayerOffset(
+      layer,
+      previewWidth: width,
+      previewHeight: height,
+    );
+    final left = width / 2 + offset.dx - layerSize.width / 2;
+    final top = height / 2 + offset.dy - layerSize.height / 2;
+
+    final visual = buildPostcardLayerVisual(
+      layer,
+      previewWidth: width,
+      previewHeight: height,
+      silentAssetError: true,
+    );
+
+    Widget transformed = visual;
+    if (enable3dPreview && layer.isAsset && layer.is3dEnabled) {
+      final speed = layer.rotationSpeed <= 0 ? 1.0 : layer.rotationSpeed;
+      final directionSign = layer.rotationDirection == 'counterclockwise'
+          ? -1.0
+          : 1.0;
+      final cycleAngle =
+          animationProgress * math.pi * 2 * speed * directionSign;
+
+      final matrix = Matrix4.identity()..setEntry(3, 2, layer.perspective);
+      if (layer.rotationAxis == 'horizontal') {
+        matrix
+          ..rotateX(layer.rotateX + cycleAngle)
+          ..rotateY(layer.rotateY);
+      } else {
+        matrix
+          ..rotateY(layer.rotateY + cycleAngle)
+          ..rotateX(layer.rotateX);
+      }
+      transformed = Transform(
+        alignment: Alignment.center,
+        transform: matrix,
+        child: visual,
+      );
+    } else if (layer.rotation2d != 0) {
+      transformed = Transform.rotate(angle: layer.rotation2d, child: visual);
+    }
+
+    return Positioned(
+      left: left,
+      top: top,
+      width: layerSize.width,
+      height: layerSize.height,
+      child: transformed,
+    );
+  }
+}
+
+class _CommentTop3dToggleButton extends StatelessWidget {
+  const _CommentTop3dToggleButton({required this.checked, required this.onTap});
+
+  final bool checked;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 9.33, vertical: 5.33),
+        decoration: BoxDecoration(
+          color: const Color(0xFFE9EEDB),
+          borderRadius: BorderRadius.circular(13.33),
+          border: Border.all(color: const Color(0xFFB8BDAE)),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x1A000000),
+              blurRadius: 5.33,
+              offset: Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              checked
+                  ? Icons.check_box_rounded
+                  : Icons.check_box_outline_blank_rounded,
+              size: 12,
+              color: Colors.black87,
+            ),
+            const SizedBox(width: 2.67),
+            const Text(
+              '\u542f\u75283D\u6548\u679c',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                color: Colors.black87,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -789,7 +1148,7 @@ class _PostOwnerInfo extends StatelessWidget {
                       activeBackgroundColor: const Color(0xFFFAD89C),
                       activeBorderColor: const Color(0xFFD6A74F),
                       icon: isFavorited ? Icons.star : Icons.star_border,
-                      text: isFavorited ? '已收藏' : '收藏',
+                      text: isFavorited ? '\u5df2\u6536\u85cf' : '\u6536\u85cf',
                     ),
                     const SizedBox(width: 6),
                     _PostActionPill(
@@ -798,13 +1157,13 @@ class _PostOwnerInfo extends StatelessWidget {
                       activeBackgroundColor: const Color(0xFFF9C7C7),
                       activeBorderColor: const Color(0xFFE98E8E),
                       icon: isLiked ? Icons.favorite : Icons.favorite_border,
-                      text: isLiked ? '已点赞' : '点赞',
+                      text: isLiked ? '\u5df2\u70b9\u8d5e' : '\u70b9\u8d5e',
                     ),
                   ],
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  post.address.isEmpty ? '地点' : post.address,
+                  post.address.isEmpty ? '\u5730\u70b9' : post.address,
                   style: const TextStyle(fontSize: 14),
                 ),
               ],
@@ -930,7 +1289,7 @@ class _CommentCard extends StatelessWidget {
                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   ),
                   child: Text(
-                    deleting ? '删除中' : '删除',
+                    deleting ? '\u5220\u9664\u4e2d' : '\u5220\u9664',
                     style: const TextStyle(
                       fontSize: 12,
                       color: Color(0xFF6F6F6F),
@@ -963,10 +1322,10 @@ String _formatRelativeTime(DateTime time) {
   final diff = now.difference(time);
 
   if (diff.inMinutes < 60) {
-    return '${diff.inMinutes}分钟前';
+    return '${diff.inMinutes}\u5206\u949f\u524d';
   }
   if (diff.inHours < 24) {
-    return '${diff.inHours}小时前';
+    return '${diff.inHours}\u5c0f\u65f6\u524d';
   }
   return DateFormat('MM-dd HH:mm').format(time);
 }

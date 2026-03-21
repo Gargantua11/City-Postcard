@@ -7,6 +7,7 @@ import '../services/backend_api_client.dart';
 import '../services/discussion_service.dart';
 import '../services/edited_postcard_service.dart';
 import '../services/storage_service.dart';
+import '../widgets/postcard_layer_render_helper.dart';
 import '../widgets/resolved_image.dart';
 
 class CreatePostScreen extends StatefulWidget {
@@ -98,20 +99,23 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
     final avatar = _user?.avatar?.trim();
 
     final address = _resolveAddress(postcard);
+    final needsRemotePublish = await _needsRemotePublish(postcard);
 
     try {
-      await _discussionService.publishPost(
-        username: (username == null || username.isEmpty) ? '我' : username,
-        avatar: avatar == null || avatar.isEmpty ? null : avatar,
-        imageUrl: postcard.imageUrl,
-        address: address,
-        cityName: postcard.cityName,
-        cityCode: postcard.cityCode,
-        provinceName: postcard.provinceName,
-        latitude: postcard.latitude,
-        longitude: postcard.longitude,
-        layers: postcard.layers,
-      );
+      if (needsRemotePublish) {
+        await _discussionService.publishPost(
+          username: (username == null || username.isEmpty) ? '我' : username,
+          avatar: avatar == null || avatar.isEmpty ? null : avatar,
+          imageUrl: postcard.imageUrl,
+          address: address,
+          cityName: postcard.cityName,
+          cityCode: postcard.cityCode,
+          provinceName: postcard.provinceName,
+          latitude: postcard.latitude,
+          longitude: postcard.longitude,
+          layers: postcard.layers,
+        );
+      }
       try {
         await _editedPostcardService.markPostcardPublished(postcard.draftId);
       } catch (_) {
@@ -137,6 +141,34 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
           _isPublishing = false;
         });
       }
+    }
+  }
+
+  Future<bool> _needsRemotePublish(EditedPostcard postcard) async {
+    final id = postcard.draftId.trim().toLowerCase();
+    if (id.isEmpty) return true;
+
+    if (id.startsWith('draft_')) return true;
+    if (id.startsWith('legacy_')) return true;
+
+    // Non-numeric ids are treated as local ids to avoid false "already
+    // published" assumptions.
+    final remotePostId = int.tryParse(id);
+    if (remotePostId == null || remotePostId <= 0) {
+      return true;
+    }
+
+    // For numeric ids, verify remote postcard detail before skipping publish.
+    // If detail lookup fails, fallback to publishing to keep user action valid.
+    try {
+      final detail = await _discussionService
+          .fetchPostDetail(remotePostId)
+          .timeout(const Duration(seconds: 6));
+      final hasRenderableContent =
+          detail.imageUrl.trim().isNotEmpty || detail.layers.isNotEmpty;
+      return !hasRenderableContent;
+    } catch (_) {
+      return true;
     }
   }
 
@@ -557,24 +589,28 @@ class _PostcardLayerOverlay extends StatelessWidget {
     required double width,
     required double height,
   }) {
-    final path = layer.assetPath.trim();
-    if (path.isEmpty) return const SizedBox.shrink();
+    final layerSize = measurePostcardLayerSize(
+      layer,
+      previewWidth: width,
+      previewHeight: height,
+    );
+    final offset = resolvePostcardLayerOffset(
+      layer,
+      previewWidth: width,
+      previewHeight: height,
+    );
+    final left = width / 2 + offset.dx - layerSize.width / 2;
+    final top = height / 2 + offset.dy - layerSize.height / 2;
 
-    final rawScale = layer.scale <= 0 ? 1.0 : layer.scale;
-    final itemSize = (width * 0.22 * rawScale).clamp(20.0, width * 0.45);
-    final offset = _resolveLayerOffset(layer, width, height);
-    final left = width / 2 + offset.dx - itemSize / 2;
-    final top = height / 2 + offset.dy - itemSize / 2;
-
-    final image = Image.asset(
-      path,
-      fit: BoxFit.contain,
-      filterQuality: FilterQuality.high,
-      errorBuilder: (_, _, _) => const SizedBox.shrink(),
+    final visual = buildPostcardLayerVisual(
+      layer,
+      previewWidth: width,
+      previewHeight: height,
+      silentAssetError: true,
     );
 
-    Widget transformed = image;
-    if (layer.is3dEnabled) {
+    Widget transformed = visual;
+    if (layer.isAsset && layer.is3dEnabled) {
       final matrix = Matrix4.identity()..setEntry(3, 2, layer.perspective);
       if (layer.rotationAxis == 'horizontal') {
         matrix
@@ -588,34 +624,18 @@ class _PostcardLayerOverlay extends StatelessWidget {
       transformed = Transform(
         alignment: Alignment.center,
         transform: matrix,
-        child: image,
+        child: visual,
       );
     } else if (layer.rotation2d != 0) {
-      transformed = Transform.rotate(angle: layer.rotation2d, child: image);
+      transformed = Transform.rotate(angle: layer.rotation2d, child: visual);
     }
 
     return Positioned(
       left: left,
       top: top,
-      width: itemSize,
-      height: itemSize,
+      width: layerSize.width,
+      height: layerSize.height,
       child: transformed,
     );
-  }
-
-  Offset _resolveLayerOffset(
-    PostcardElementLayer layer,
-    double previewWidth,
-    double previewHeight,
-  ) {
-    final useFallbackOffset = layer.x == 0 && layer.y == 0;
-    if (!useFallbackOffset) {
-      return Offset(layer.x, layer.y);
-    }
-
-    final fallbackX = ((layer.zIndex % 4) - 1.5) * (previewWidth * 0.16);
-    final fallbackY =
-        (((layer.zIndex ~/ 4) % 3) - 1.0) * (previewHeight * 0.14);
-    return Offset(fallbackX, fallbackY);
   }
 }

@@ -92,10 +92,13 @@ class _SearchScreenState extends State<SearchScreen> {
   }
 
   List<String> _extractElementKeywords(PostcardElementLayer layer) {
+    final text = layer.text?.trim() ?? '';
     final elementKey = layer.elementKey.trim();
     final assetPath = layer.assetPath.trim();
     final filename = _filenameWithoutExtension(assetPath);
     return <String>[
+      if (layer.isText) 'text',
+      if (text.isNotEmpty) text,
       if (elementKey.isNotEmpty) elementKey,
       if (assetPath.isNotEmpty) assetPath,
       if (filename.isNotEmpty) filename,
@@ -134,6 +137,16 @@ class _SearchScreenState extends State<SearchScreen> {
     if (postcard.layers.isEmpty) return '无元素';
     final names = <String>[];
     for (final layer in postcard.layers) {
+      if (layer.isText) {
+        final text = layer.text?.trim() ?? '';
+        if (text.isNotEmpty) {
+          names.add(text.length <= 8 ? text : '${text.substring(0, 8)}...');
+        } else {
+          names.add('text');
+        }
+        continue;
+      }
+
       final key = layer.elementKey.trim();
       if (key.isNotEmpty) {
         names.add(key);

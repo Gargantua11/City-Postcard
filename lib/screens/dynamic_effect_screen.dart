@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../models/postcard_element_layer.dart';
+import '../widgets/postcard_layer_render_helper.dart';
 
 const Color _kDynamicBg = Colors.white;
 const Color _kDynamicCard = Color(0xFFDDF1D0);
@@ -35,13 +36,15 @@ class _DynamicEffectScreenState extends State<DynamicEffectScreen> {
     _LevelOption.high: 0.0018,
   };
 
+  late List<PostcardElementLayer> _originalLayers;
   late List<PostcardElementLayer> _layers;
   int _selectedLayerIndex = 0;
 
   @override
   void initState() {
     super.initState();
-    _layers = List<PostcardElementLayer>.from(widget.initialLayers);
+    _originalLayers = List<PostcardElementLayer>.from(widget.initialLayers);
+    _layers = _originalLayers.where((item) => item.isAsset).toList();
   }
 
   bool get _hasLayers => _layers.isNotEmpty;
@@ -167,7 +170,24 @@ class _DynamicEffectScreenState extends State<DynamicEffectScreen> {
   }
 
   void _apply() {
-    Navigator.pop(context, List<PostcardElementLayer>.from(_layers));
+    if (_originalLayers.isEmpty) {
+      Navigator.pop(context, const <PostcardElementLayer>[]);
+      return;
+    }
+
+    final updatedById = <String, PostcardElementLayer>{
+      for (final layer in _layers) layer.id: layer,
+    };
+    final merged = <PostcardElementLayer>[];
+    for (final original in _originalLayers) {
+      if (original.isText) {
+        merged.add(original);
+        continue;
+      }
+      merged.add(updatedById[original.id] ?? original);
+    }
+
+    Navigator.pop(context, merged);
   }
 
   @override
@@ -480,9 +500,10 @@ class _LayerSelector extends StatelessWidget {
   }
 
   String _buildLabel(PostcardElementLayer layer, Map<String, int> counts) {
-    final next = (counts[layer.elementKey] ?? 0) + 1;
-    counts[layer.elementKey] = next;
-    return '${layer.elementKey}#$next';
+    final name = resolveLayerLabel(layer);
+    final next = (counts[name] ?? 0) + 1;
+    counts[name] = next;
+    return '$name#$next';
   }
 }
 

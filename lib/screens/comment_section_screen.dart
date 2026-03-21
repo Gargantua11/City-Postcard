@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import '../models/postcard_element_layer.dart';
 import '../services/app_route_observer.dart';
 import '../services/backend_api_client.dart';
 import 'post_comments_screen.dart';
 import '../services/discussion_service.dart';
+import '../widgets/postcard_layer_render_helper.dart';
 import '../widgets/resolved_image.dart';
 import '../widgets/app_bottom_nav_bar.dart';
 
@@ -369,7 +371,10 @@ class _DiscussionPostCard extends StatelessWidget {
                       height: imageHeight,
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(4),
-                        child: _PostImage(imageUrl: item.imageUrl),
+                        child: _PostImage(
+                          imageUrl: item.imageUrl,
+                          layers: item.layers,
+                        ),
                       ),
                     ),
                     const SizedBox(width: gap),
@@ -492,18 +497,108 @@ class _PostAvatar extends StatelessWidget {
 }
 
 class _PostImage extends StatelessWidget {
-  const _PostImage({required this.imageUrl});
+  const _PostImage({required this.imageUrl, this.layers = const []});
 
   final String imageUrl;
+  final List<PostcardElementLayer> layers;
 
   @override
   Widget build(BuildContext context) {
-    return ResolvedImage(
-      source: imageUrl,
-      fit: BoxFit.cover,
-      filterQuality: FilterQuality.high,
-      fallbackBuilder: (_) => const ColoredBox(color: Color(0xFFD2D2D2)),
-      loadingBuilder: (_) => const ColoredBox(color: Color(0xFFD2D2D2)),
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        ResolvedImage(
+          source: imageUrl,
+          fit: BoxFit.cover,
+          filterQuality: FilterQuality.high,
+          fallbackBuilder: (_) => const ColoredBox(color: Color(0xFFD2D2D2)),
+          loadingBuilder: (_) => const ColoredBox(color: Color(0xFFD2D2D2)),
+        ),
+        if (layers.isNotEmpty) _PostcardLayerOverlay(layers: layers),
+      ],
+    );
+  }
+}
+
+class _PostcardLayerOverlay extends StatelessWidget {
+  const _PostcardLayerOverlay({required this.layers});
+
+  final List<PostcardElementLayer> layers;
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final width = constraints.maxWidth;
+          final height = constraints.maxHeight;
+          final sortedLayers = List<PostcardElementLayer>.from(layers)
+            ..sort((a, b) => a.zIndex.compareTo(b.zIndex));
+
+          return Stack(
+            fit: StackFit.expand,
+            children: [
+              for (final layer in sortedLayers)
+                _buildLayer(layer, width: width, height: height),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildLayer(
+    PostcardElementLayer layer, {
+    required double width,
+    required double height,
+  }) {
+    final layerSize = measurePostcardLayerSize(
+      layer,
+      previewWidth: width,
+      previewHeight: height,
+    );
+    final offset = resolvePostcardLayerOffset(
+      layer,
+      previewWidth: width,
+      previewHeight: height,
+    );
+    final left = width / 2 + offset.dx - layerSize.width / 2;
+    final top = height / 2 + offset.dy - layerSize.height / 2;
+
+    final visual = buildPostcardLayerVisual(
+      layer,
+      previewWidth: width,
+      previewHeight: height,
+      silentAssetError: true,
+    );
+
+    Widget transformed = visual;
+    if (layer.isAsset && layer.is3dEnabled) {
+      final matrix = Matrix4.identity()..setEntry(3, 2, layer.perspective);
+      if (layer.rotationAxis == 'horizontal') {
+        matrix
+          ..rotateX(layer.rotateX)
+          ..rotateY(layer.rotateY);
+      } else {
+        matrix
+          ..rotateY(layer.rotateY)
+          ..rotateX(layer.rotateX);
+      }
+      transformed = Transform(
+        alignment: Alignment.center,
+        transform: matrix,
+        child: visual,
+      );
+    } else if (layer.rotation2d != 0) {
+      transformed = Transform.rotate(angle: layer.rotation2d, child: visual);
+    }
+
+    return Positioned(
+      left: left,
+      top: top,
+      width: layerSize.width,
+      height: layerSize.height,
+      child: transformed,
     );
   }
 }

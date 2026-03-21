@@ -155,6 +155,22 @@ class _ResolvedImageState extends State<ResolvedImage> {
         headers: await _resolveAuthHeadersIfNeeded(absolute),
       );
     }
+    if (_looksLikeRelativeResourceKey(resolvedByOss)) {
+      final relativePath = _toRelativeResourcePath(resolvedByOss);
+      final absolute = _toAbsoluteApiUrl(relativePath);
+      return _ResolvedImagePayload.network(
+        absolute,
+        headers: await _resolveAuthHeadersIfNeeded(absolute),
+      );
+    }
+    if (_looksLikeRelativeResourceKey(source)) {
+      final relativePath = _toRelativeResourcePath(source);
+      final absolute = _toAbsoluteApiUrl(relativePath);
+      return _ResolvedImagePayload.network(
+        absolute,
+        headers: await _resolveAuthHeadersIfNeeded(absolute),
+      );
+    }
 
     return const _ResolvedImagePayload.empty();
   }
@@ -306,6 +322,43 @@ class _ResolvedImageState extends State<ResolvedImage> {
     if (!source.startsWith('/')) return false;
     if (source.startsWith('//')) return false;
     return !_looksLikeUnixLocalPath(source);
+  }
+
+  static bool _looksLikeRelativeResourceKey(String source) {
+    final text = source.trim();
+    if (text.isEmpty) return false;
+    if (text.startsWith('/')) return false;
+    if (_isHttpSource(text) || _isAssetSource(text)) return false;
+    if (_resolveLocalPath(text) != null) return false;
+
+    final normalized = text.replaceAll('\\', '/');
+    final likelyImagePath =
+        normalized.contains('/') && _looksLikeImagePath(normalized);
+    if (likelyImagePath) {
+      return true;
+    }
+
+    if (normalized.startsWith('postcards/') ||
+        normalized.startsWith('uploads/') ||
+        normalized.startsWith('images/')) {
+      return true;
+    }
+    return false;
+  }
+
+  static bool _looksLikeImagePath(String source) {
+    return RegExp(
+      r'\.(jpg|jpeg|png|webp|gif|bmp|svg|avif)(\?.*)?$',
+      caseSensitive: false,
+    ).hasMatch(source);
+  }
+
+  static String _toRelativeResourcePath(String source) {
+    final normalized = source
+        .trim()
+        .replaceAll('\\', '/')
+        .replaceFirst(RegExp(r'^/+'), '');
+    return '/$normalized';
   }
 
   static bool _looksLikeUnixLocalPath(String source) {
