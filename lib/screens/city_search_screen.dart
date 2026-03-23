@@ -452,6 +452,7 @@ class _CitySearchScreenState extends State<CitySearchScreen> {
             child: TextField(
               controller: _searchController,
               autofocus: true,
+              textAlignVertical: TextAlignVertical.center,
               decoration: InputDecoration(
                 hintText: '搜索城市',
                 prefixIcon: const Icon(Icons.search, color: Colors.grey),

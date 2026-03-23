@@ -20,13 +20,19 @@ class CommentSectionScreen extends StatefulWidget {
 class _CommentSectionScreenState extends State<CommentSectionScreen>
     with RouteAware {
   final TextEditingController _searchController = TextEditingController();
+  final FocusNode _searchFocusNode = FocusNode();
+  final ScrollController _scrollController = ScrollController();
   final DiscussionService _discussionService = DiscussionService();
 
   bool _isLoading = true;
+  bool _isLoadingMore = false;
+  bool _hasMore = true;
   bool _isOfflineMode = false;
   bool _isPostBallExpanded = false;
   String? _errorMessage;
   String? _offlineNotice;
+  String? _loadMoreErrorMessage;
+  DateTime? _loadMoreCursor;
   List<DiscussionPost> _posts = const [];
   PageRoute<dynamic>? _route;
 
@@ -34,6 +40,7 @@ class _CommentSectionScreenState extends State<CommentSectionScreen>
   void initState() {
     super.initState();
     _searchController.addListener(_onSearchChanged);
+    _scrollController.addListener(_onScroll);
     _loadPosts();
   }
 
@@ -60,12 +67,97 @@ class _CommentSectionScreenState extends State<CommentSectionScreen>
     appRouteObserver.unsubscribe(this);
     _searchController.removeListener(_onSearchChanged);
     _searchController.dispose();
+    _searchFocusNode.dispose();
+    _scrollController.removeListener(_onScroll);
+    _scrollController.dispose();
     super.dispose();
   }
 
   void _onSearchChanged() {
     if (!mounted) return;
     setState(() {});
+  }
+
+  void _onScroll() {
+    if (!_scrollController.hasClients) return;
+    final position = _scrollController.position;
+    if (position.extentAfter < 260) {
+      _loadMorePosts();
+    }
+  }
+
+  void _clearSearch() {
+    if (_searchController.text.isEmpty) return;
+    _searchController.clear();
+    _searchFocusNode.requestFocus();
+  }
+
+  String _normalizeForSearch(String input) {
+    final normalized = input.trim().toLowerCase();
+    if (normalized.isEmpty) return '';
+    return normalized.replaceAll(RegExp(r'\s+'), ' ');
+  }
+
+  List<String> _searchTokens(String input) {
+    final normalized = _normalizeForSearch(input);
+    if (normalized.isEmpty) return const [];
+    return normalized
+        .split(' ')
+        .where((token) => token.isNotEmpty)
+        .toList(growable: false);
+  }
+
+  bool _postMatchesSearch(DiscussionPost post, List<String> tokens) {
+    if (tokens.isEmpty) return true;
+    final searchable = _normalizeForSearch(
+      '${post.username} ${post.address} ${post.hotComment}',
+    );
+    for (final token in tokens) {
+      if (!searchable.contains(token)) return false;
+    }
+    return true;
+  }
+
+  bool get _isSearching => _searchController.text.trim().isNotEmpty;
+
+  String _postIdentityKey(DiscussionPost post) {
+    if (post.id > 0) {
+      return 'id:${post.id}';
+    }
+    return [
+      post.username.trim(),
+      post.address.trim(),
+      post.hotComment.trim(),
+      post.imageUrl.trim(),
+      post.createdAt.millisecondsSinceEpoch.toString(),
+    ].join('|');
+  }
+
+  DateTime? _resolveNextCursor(List<DiscussionPost> posts) {
+    if (posts.isEmpty) return null;
+    var oldest = posts.first.createdAt;
+    for (final post in posts.skip(1)) {
+      if (post.createdAt.isBefore(oldest)) {
+        oldest = post.createdAt;
+      }
+    }
+    return oldest.subtract(const Duration(seconds: 1));
+  }
+
+  List<DiscussionPost> _mergePostPages(
+    List<DiscussionPost> current,
+    List<DiscussionPost> incoming,
+  ) {
+    if (incoming.isEmpty) return current;
+    final merged = List<DiscussionPost>.from(current);
+    final existing = current.map(_postIdentityKey).toSet();
+    for (final post in incoming) {
+      final key = _postIdentityKey(post);
+      if (!existing.add(key)) continue;
+      merged.add(post);
+    }
+    merged.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    return merged;
   }
 
   Future<void> _openPostComments(DiscussionPost post) async {
@@ -93,8 +185,12 @@ class _CommentSectionScreenState extends State<CommentSectionScreen>
   Future<void> _loadPosts() async {
     setState(() {
       _isLoading = true;
+      _isLoadingMore = false;
+      _hasMore = true;
       _errorMessage = null;
       _offlineNotice = null;
+      _loadMoreErrorMessage = null;
+      _loadMoreCursor = null;
     });
 
     try {
@@ -107,6 +203,8 @@ class _CommentSectionScreenState extends State<CommentSectionScreen>
         _posts = result.posts;
         _isOfflineMode = result.isOffline;
         _offlineNotice = result.notice;
+        _hasMore = !result.isOffline && result.posts.isNotEmpty;
+        _loadMoreCursor = _resolveNextCursor(result.posts);
         _isLoading = false;
       });
     } on BackendApiException catch (e) {
@@ -118,6 +216,8 @@ class _CommentSectionScreenState extends State<CommentSectionScreen>
       setState(() {
         _isLoading = false;
         _isOfflineMode = false;
+        _isLoadingMore = false;
+        _hasMore = false;
         _errorMessage = e.isUnauthorized
             ? '登录状态失效，请重新登录'
             : (isUnderDevelopment ? '讨论区暂不可用，请稍后再试' : '加载讨论区失败，请稍后重试');
@@ -127,25 +227,146 @@ class _CommentSectionScreenState extends State<CommentSectionScreen>
       setState(() {
         _isLoading = false;
         _isOfflineMode = false;
+        _isLoadingMore = false;
+        _hasMore = false;
         _errorMessage = '加载讨论区失败，请稍后重试';
       });
     }
   }
 
-  List<DiscussionPost> get _visiblePosts {
-    final keyword = _searchController.text.trim();
-    if (keyword.isEmpty) return _posts;
+  Future<void> _loadMorePosts() async {
+    if (!mounted ||
+        _isLoading ||
+        _isLoadingMore ||
+        !_hasMore ||
+        _isOfflineMode) {
+      return;
+    }
 
-    return _posts.where((post) {
-      return post.username.contains(keyword) ||
-          post.address.contains(keyword) ||
-          post.hotComment.contains(keyword);
-    }).toList();
+    final cursor = _loadMoreCursor ?? _resolveNextCursor(_posts);
+    if (cursor == null) {
+      setState(() {
+        _hasMore = false;
+      });
+      return;
+    }
+
+    setState(() {
+      _isLoadingMore = true;
+      _loadMoreErrorMessage = null;
+    });
+
+    try {
+      final page = await _discussionService.fetchPostsPage(lastTime: cursor);
+      if (!mounted) return;
+
+      if (page.isEmpty) {
+        setState(() {
+          _isLoadingMore = false;
+          _hasMore = false;
+          _loadMoreCursor = cursor.subtract(const Duration(seconds: 1));
+        });
+        return;
+      }
+
+      final merged = _mergePostPages(_posts, page);
+      final hasAdded = merged.length > _posts.length;
+      setState(() {
+        _posts = merged;
+        _isLoadingMore = false;
+        _hasMore = hasAdded;
+        _loadMoreCursor = _resolveNextCursor(merged);
+      });
+    } on BackendApiException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isLoadingMore = false;
+        _loadMoreErrorMessage = e.isUnauthorized ? '登录状态已失效' : '加载更多失败，请重试';
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _isLoadingMore = false;
+        _loadMoreErrorMessage = '加载更多失败，请重试';
+      });
+    }
+  }
+
+  List<DiscussionPost> get _visiblePosts {
+    final tokens = _searchTokens(_searchController.text);
+    if (tokens.isEmpty) return _posts;
+    return _posts
+        .where((post) {
+          return _postMatchesSearch(post, tokens);
+        })
+        .toList(growable: false);
+  }
+
+  Widget _buildLoadMoreSection() {
+    if (_isOfflineMode) {
+      return const Padding(
+        padding: EdgeInsets.only(top: 4, bottom: 10),
+        child: Center(
+          child: Text(
+            '离线模式下不可加载更多',
+            style: TextStyle(fontSize: 12, color: Color(0xFF7A837D)),
+          ),
+        ),
+      );
+    }
+
+    if (_isLoadingMore) {
+      return const Padding(
+        padding: EdgeInsets.only(top: 4, bottom: 10),
+        child: Center(
+          child: SizedBox(
+            width: 18,
+            height: 18,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+        ),
+      );
+    }
+
+    if (_loadMoreErrorMessage != null) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 4, bottom: 10),
+        child: Center(
+          child: TextButton(
+            onPressed: _loadMorePosts,
+            child: Text(_loadMoreErrorMessage!),
+          ),
+        ),
+      );
+    }
+
+    if (!_hasMore) {
+      return const Padding(
+        padding: EdgeInsets.only(top: 4, bottom: 10),
+        child: Center(
+          child: Text(
+            '没有更多了',
+            style: TextStyle(fontSize: 12, color: Color(0xFF7A837D)),
+          ),
+        ),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 4, bottom: 10),
+      child: Center(
+        child: OutlinedButton(
+          onPressed: _loadMorePosts,
+          child: const Text('加载更多'),
+        ),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     const postButtonBottomGap = 18.0;
+    final visiblePosts = _visiblePosts;
 
     return Scaffold(
       backgroundColor: const Color(0xFFEDEDED),
@@ -155,6 +376,7 @@ class _CommentSectionScreenState extends State<CommentSectionScreen>
             RefreshIndicator(
               onRefresh: _loadPosts,
               child: ListView(
+                controller: _scrollController,
                 physics: const AlwaysScrollableScrollPhysics(),
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 56),
                 children: [
@@ -179,26 +401,81 @@ class _CommentSectionScreenState extends State<CommentSectionScreen>
                             borderRadius: BorderRadius.circular(30),
                           ),
                           padding: const EdgeInsets.symmetric(horizontal: 16),
-                          alignment: Alignment.center,
                           child: TextField(
                             controller: _searchController,
-                            decoration: const InputDecoration(
+                            focusNode: _searchFocusNode,
+                            textInputAction: TextInputAction.search,
+                            textAlignVertical: TextAlignVertical.center,
+                            onSubmitted: (_) =>
+                                FocusManager.instance.primaryFocus?.unfocus(),
+                            decoration: InputDecoration(
                               border: InputBorder.none,
                               hintText: '输入昵称、地点或热评',
-                              hintStyle: TextStyle(
+                              hintStyle: const TextStyle(
                                 color: Color(0xFFA7AEA2),
                                 fontSize: 16,
                               ),
-                              isCollapsed: true,
+                              isDense: true,
+                              contentPadding: const EdgeInsets.symmetric(
+                                vertical: 8,
+                              ),
+                              suffixIcon: _isSearching
+                                  ? IconButton(
+                                      tooltip: '清除',
+                                      onPressed: _clearSearch,
+                                      splashRadius: 18,
+                                      padding: EdgeInsets.zero,
+                                      icon: const Icon(
+                                        Icons.close,
+                                        size: 18,
+                                        color: Color(0xFF7D8578),
+                                      ),
+                                    )
+                                  : null,
+                              suffixIconConstraints: const BoxConstraints(
+                                minHeight: 30,
+                                minWidth: 30,
+                              ),
                             ),
                             style: const TextStyle(fontSize: 16),
                           ),
                         ),
                       ),
                       const SizedBox(width: 8),
-                      const Icon(Icons.search, size: 34, color: Colors.black87),
+                      InkWell(
+                        borderRadius: BorderRadius.circular(24),
+                        onTap: () {
+                          if (_searchFocusNode.hasFocus) {
+                            _searchFocusNode.unfocus();
+                            return;
+                          }
+                          _searchFocusNode.requestFocus();
+                        },
+                        child: const Padding(
+                          padding: EdgeInsets.all(2),
+                          child: Icon(
+                            Icons.search,
+                            size: 34,
+                            color: Colors.black87,
+                          ),
+                        ),
+                      ),
                     ],
                   ),
+                  if (_isSearching) ...[
+                    const SizedBox(height: 8),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        '搜索结果 ${visiblePosts.length} 条',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Color(0xFF707873),
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ],
                   if (_isOfflineMode && _offlineNotice != null) ...[
                     const SizedBox(height: 12),
                     Container(
@@ -241,21 +518,25 @@ class _CommentSectionScreenState extends State<CommentSectionScreen>
                     )
                   else if (_errorMessage != null)
                     _ErrorSection(message: _errorMessage!, onRetry: _loadPosts)
-                  else if (_visiblePosts.isEmpty)
-                    const Padding(
+                  else if (visiblePosts.isEmpty) ...[
+                    Padding(
                       padding: EdgeInsets.symmetric(vertical: 40),
                       child: Center(
                         child: Text(
-                          '暂无帖子',
-                          style: TextStyle(
+                          _posts.isEmpty
+                              ? '暂无帖子'
+                              : (_isSearching ? '未找到匹配内容' : '暂无帖子'),
+                          style: const TextStyle(
                             color: Color(0xFF6D7680),
                             fontSize: 14,
                           ),
                         ),
                       ),
-                    )
-                  else
-                    ..._visiblePosts.map(
+                    ),
+                    if (_isSearching && _posts.isNotEmpty)
+                      _buildLoadMoreSection(),
+                  ] else ...[
+                    ...visiblePosts.map(
                       (item) => Padding(
                         padding: const EdgeInsets.only(bottom: 20),
                         child: _DiscussionPostCard(
@@ -264,6 +545,8 @@ class _CommentSectionScreenState extends State<CommentSectionScreen>
                         ),
                       ),
                     ),
+                    _buildLoadMoreSection(),
+                  ],
                 ],
               ),
             ),

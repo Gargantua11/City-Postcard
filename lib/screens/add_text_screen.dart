@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../models/postcard_element_layer.dart';
 import '../widgets/postcard_layer_render_helper.dart';
@@ -16,7 +17,20 @@ class AddTextScreen extends StatefulWidget {
 
 class _AddTextScreenState extends State<AddTextScreen> {
   static const double _previewAspectRatio = 400 / 258;
-  static const List<String> _alignOptions = <String>['left', 'center', 'right'];
+  static const List<String> _alignOptions = <String>[
+    'left',
+    'center',
+    'right',
+    'justify',
+  ];
+  static const List<String> _fontFamilyOptions = <String>[
+    'PingFang SC',
+    'Microsoft YaHei',
+    'serif',
+    'sans-serif',
+    'monospace',
+  ];
+  static const List<String> _fontStyleOptions = <String>['normal', 'italic'];
   static const List<String> _textColors = <String>[
     '#FFFFFF',
     '#000000',
@@ -35,6 +49,8 @@ class _AddTextScreenState extends State<AddTextScreen> {
   ];
 
   late final TextEditingController _textController;
+  late final TextEditingController _hexColorController;
+  late final FocusNode _hexColorFocusNode;
   late PostcardElementLayer _layer;
 
   PostcardTextLayerStyle get _style => _layer.resolvedStyle;
@@ -43,15 +59,12 @@ class _AddTextScreenState extends State<AddTextScreen> {
   @override
   void initState() {
     super.initState();
-
     final initial = widget.initialLayer.isText
         ? widget.initialLayer
         : widget.initialLayer.copyWith(type: 'text', text: '');
     _layer = initial.copyWith(
       type: 'text',
-      style: (initial.style ?? const PostcardTextLayerStyle()).copyWith(
-        fontFamily: 'serif',
-      ),
+      style: initial.style ?? const PostcardTextLayerStyle(),
       box: initial.box ?? const PostcardTextLayerBox(),
       elementKey: '',
       assetPath: '',
@@ -64,12 +77,18 @@ class _AddTextScreenState extends State<AddTextScreen> {
 
     _textController = TextEditingController(text: _layer.text ?? '');
     _textController.addListener(_onTextChanged);
+    _hexColorController = TextEditingController(
+      text: _resolveCurrentHexColor(),
+    );
+    _hexColorFocusNode = FocusNode();
   }
 
   @override
   void dispose() {
     _textController.removeListener(_onTextChanged);
     _textController.dispose();
+    _hexColorController.dispose();
+    _hexColorFocusNode.dispose();
     super.dispose();
   }
 
@@ -125,15 +144,128 @@ class _AddTextScreenState extends State<AddTextScreen> {
     return 'center';
   }
 
+  String get _fontFamilyValue {
+    final raw = _style.fontFamily.trim();
+    if (_fontFamilyOptions.contains(raw)) return raw;
+    return _fontFamilyOptions.first;
+  }
+
+  String get _fontStyleValue {
+    final raw = _style.fontStyle.trim().toLowerCase();
+    if (_fontStyleOptions.contains(raw)) return raw;
+    return _fontStyleOptions.first;
+  }
+
+  HSVColor get _textHsv {
+    final base = parseFlexibleColor(_style.color, Colors.white);
+    return HSVColor.fromColor(base.withAlpha(255));
+  }
+
   String _displayAlignLabel(String value) {
     switch (value) {
       case 'left':
         return '左对齐';
       case 'right':
         return '右对齐';
+      case 'justify':
+        return '两端对齐';
       default:
         return '居中';
     }
+  }
+
+  String _displayFontFamilyLabel(String value) {
+    switch (value) {
+      case 'PingFang SC':
+        return '苹方';
+      case 'Microsoft YaHei':
+        return '微软雅黑';
+      case 'serif':
+        return '衬线';
+      case 'sans-serif':
+        return '无衬线';
+      case 'monospace':
+        return '等宽';
+      default:
+        return value;
+    }
+  }
+
+  String _displayFontStyleLabel(String value) {
+    if (value == 'italic') return '斜体';
+    return '常规';
+  }
+
+  String _toHexColorString(Color color) {
+    final r = (color.r * 255.0)
+        .round()
+        .clamp(0, 255)
+        .toRadixString(16)
+        .padLeft(2, '0')
+        .toUpperCase();
+    final g = (color.g * 255.0)
+        .round()
+        .clamp(0, 255)
+        .toRadixString(16)
+        .padLeft(2, '0')
+        .toUpperCase();
+    final b = (color.b * 255.0)
+        .round()
+        .clamp(0, 255)
+        .toRadixString(16)
+        .padLeft(2, '0')
+        .toUpperCase();
+    return '#$r$g$b';
+  }
+
+  void _updateTextColorFromHsv(HSVColor hsv) {
+    final nextHex = _toHexColorString(hsv.toColor());
+    _updateStyle((style) => style.copyWith(color: nextHex));
+  }
+
+  String _resolveCurrentHexColor() {
+    final color = parseFlexibleColor(_style.color, Colors.white);
+    return _toHexColorString(color);
+  }
+
+  String? _normalizeManualHexColor(String raw) {
+    final trimmed = raw.trim();
+    if (trimmed.isEmpty) return null;
+    var value = trimmed.toUpperCase();
+    if (value.startsWith('#')) {
+      value = value.substring(1);
+    }
+    if (value.length == 3 &&
+        RegExp(r'^[0-9A-F]{3}$', caseSensitive: false).hasMatch(value)) {
+      value = value.split('').map((ch) => '$ch$ch').join();
+    }
+    if (!RegExp(r'^[0-9A-F]{6}$', caseSensitive: false).hasMatch(value)) {
+      return null;
+    }
+    return '#$value';
+  }
+
+  void _syncHexInputWithCurrentColor() {
+    if (_hexColorFocusNode.hasFocus) return;
+    final current = _resolveCurrentHexColor();
+    if (_hexColorController.text.trim().toUpperCase() == current) return;
+    _hexColorController.value = TextEditingValue(
+      text: current,
+      selection: TextSelection.collapsed(offset: current.length),
+    );
+  }
+
+  void _applyManualHexColor() {
+    final normalized = _normalizeManualHexColor(_hexColorController.text);
+    if (normalized == null) {
+      _showHint('请输入正确颜色，例如 #BACEFF');
+      return;
+    }
+    _hexColorController.value = TextEditingValue(
+      text: normalized,
+      selection: TextSelection.collapsed(offset: normalized.length),
+    );
+    _updateStyle((style) => style.copyWith(color: normalized));
   }
 
   void _applyAndBack() {
@@ -149,7 +281,7 @@ class _AddTextScreenState extends State<AddTextScreen> {
         text: text,
         elementKey: '',
         assetPath: '',
-        style: _style.copyWith(fontFamily: 'serif'),
+        style: _style,
         box: _box,
         is3dEnabled: false,
         rotateX: 0,
@@ -324,6 +456,24 @@ class _AddTextScreenState extends State<AddTextScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _buildDropdownTile(
+            label: '字体',
+            value: _fontFamilyValue,
+            options: _fontFamilyOptions,
+            displayText: _displayFontFamilyLabel,
+            onChanged: (value) =>
+                _updateStyle((style) => style.copyWith(fontFamily: value)),
+          ),
+          const SizedBox(height: 10),
+          _buildDropdownTile(
+            label: '字形',
+            value: _fontStyleValue,
+            options: _fontStyleOptions,
+            displayText: _displayFontStyleLabel,
+            onChanged: (value) =>
+                _updateStyle((style) => style.copyWith(fontStyle: value)),
+          ),
+          const SizedBox(height: 10),
+          _buildDropdownTile(
             label: '对齐',
             value: _alignValue,
             options: _alignOptions,
@@ -333,7 +483,7 @@ class _AddTextScreenState extends State<AddTextScreen> {
           ),
           const SizedBox(height: 10),
           _buildSliderTile(
-            label: 'fontWeight',
+            label: '字重',
             value: _fontWeightNumber,
             min: 100,
             max: 900,
@@ -375,7 +525,7 @@ class _AddTextScreenState extends State<AddTextScreen> {
           ),
           const SizedBox(height: 6),
           const Text(
-            '颜色',
+            '预设颜色',
             style: TextStyle(fontSize: 12, color: Color(0xFF5B7562)),
           ),
           const SizedBox(height: 6),
@@ -385,6 +535,8 @@ class _AddTextScreenState extends State<AddTextScreen> {
             onSelected: (value) =>
                 _updateStyle((style) => style.copyWith(color: value)),
           ),
+          const SizedBox(height: 12),
+          _buildTextColorPalette(),
         ],
       ),
     );
@@ -511,7 +663,7 @@ class _AddTextScreenState extends State<AddTextScreen> {
                 alignment: Alignment.center,
                 child: isTransparent
                     ? const Text(
-                        'T',
+                        '透',
                         style: TextStyle(
                           color: Color(0xFF5B7562),
                           fontSize: 11,
@@ -523,6 +675,113 @@ class _AddTextScreenState extends State<AddTextScreen> {
             );
           })
           .toList(growable: false),
+    );
+  }
+
+  Widget _buildTextColorPalette() {
+    _syncHexInputWithCurrentColor();
+    final hsv = _textHsv;
+    final previewColor = hsv.toColor();
+    final hexColor = _toHexColorString(previewColor);
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(10, 10, 10, 8),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF4FBF2),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFC6DEBB)),
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 32,
+                height: 20,
+                decoration: BoxDecoration(
+                  color: previewColor,
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: const Color(0xFF9FBF93)),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: TextField(
+                  controller: _hexColorController,
+                  focusNode: _hexColorFocusNode,
+                  textInputAction: TextInputAction.done,
+                  inputFormatters: <TextInputFormatter>[
+                    FilteringTextInputFormatter.allow(RegExp(r'[#0-9a-fA-F]')),
+                  ],
+                  onSubmitted: (_) => _applyManualHexColor(),
+                  decoration: InputDecoration(
+                    isDense: true,
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 8,
+                    ),
+                    hintText: hexColor,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: Color(0xFF35543B),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          Align(
+            alignment: Alignment.centerRight,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextButton(
+                  onPressed: _applyManualHexColor,
+                  child: const Text('应用'),
+                ),
+                TextButton(
+                  onPressed: () {
+                    _updateStyle((style) => style.copyWith(color: '#FFFFFF'));
+                  },
+                  child: const Text('重置'),
+                ),
+              ],
+            ),
+          ),
+          _buildSliderTile(
+            label: '色相',
+            value: hsv.hue.clamp(0.0, 360.0).toDouble(),
+            min: 0,
+            max: 360,
+            divisions: 360,
+            formatter: (value) => value.round().toString(),
+            onChanged: (value) => _updateTextColorFromHsv(hsv.withHue(value)),
+          ),
+          _buildSliderTile(
+            label: '饱和度',
+            value: hsv.saturation.clamp(0.0, 1.0).toDouble(),
+            min: 0,
+            max: 1,
+            divisions: 100,
+            formatter: (value) => value.toStringAsFixed(2),
+            onChanged: (value) =>
+                _updateTextColorFromHsv(hsv.withSaturation(value)),
+          ),
+          _buildSliderTile(
+            label: '明度',
+            value: hsv.value.clamp(0.0, 1.0).toDouble(),
+            min: 0,
+            max: 1,
+            divisions: 100,
+            formatter: (value) => value.toStringAsFixed(2),
+            onChanged: (value) => _updateTextColorFromHsv(hsv.withValue(value)),
+          ),
+        ],
+      ),
     );
   }
 

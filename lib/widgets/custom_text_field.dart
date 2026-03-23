@@ -86,6 +86,7 @@ class _CustomTextFieldState extends State<CustomTextField> {
                   keyboardType: widget.keyboardType,
                   maxLength: widget.maxLength,
                   enabled: widget.enabled,
+                  textAlignVertical: TextAlignVertical.center,
                   onChanged: (value) {
                     widget.onChanged?.call(value);
                     // 实时验证

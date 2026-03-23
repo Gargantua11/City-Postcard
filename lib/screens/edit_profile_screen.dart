@@ -253,7 +253,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                     width: rowWidth,
                                     icon: Icons.lock_outline,
                                     text: '密码',
-                                    value: _hasPassword ? '已设置' : '未设置',
+                                    value: _hasPassword ? '已设置' : '',
                                     onTap: _openPasswordEdit,
                                   ),
                                 ],

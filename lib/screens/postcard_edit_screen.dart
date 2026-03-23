@@ -1,10 +1,13 @@
 import 'dart:async';
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:image_cropper/image_cropper.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../data/city_code_center.dart';
 import '../models/postcard_element_layer.dart';
@@ -36,6 +39,7 @@ class _PostcardEditScreenState extends State<PostcardEditScreen>
   final EditedPostcardService _editedPostcardService = EditedPostcardService();
   final ImagePicker _imagePicker = ImagePicker();
   final PageController _templatePageController = PageController();
+  final GlobalKey _sharePreviewKey = GlobalKey();
   final List<_EditorSnapshot> _undoStack = <_EditorSnapshot>[];
   List<PostcardElementLayer> _elementLayers = const [];
   List<EditedPostcard> _hotTemplates = const [];
@@ -47,6 +51,7 @@ class _PostcardEditScreenState extends State<PostcardEditScreen>
   bool _isLoadingHotTemplates = true;
   int _currentTemplateIndex = 0;
   bool _isSaving = false;
+  bool _isSharing = false;
   late final AnimationController _effectController;
 
   @override
@@ -415,26 +420,27 @@ class _PostcardEditScreenState extends State<PostcardEditScreen>
   }
 
   Future<void> _loadHotTemplates() async {
-    final postcards = await _editedPostcardService.getEditedPostcards();
-    if (!mounted) return;
-
-    final templates = postcards
-        .where((item) => !item.isDraft && item.imageUrl.trim().isNotEmpty)
-        .toList(growable: false);
-
-    List<EditedPostcard> selected = templates;
-    if (templates.length > 5) {
-      final shuffled = List<EditedPostcard>.from(templates)
-        ..shuffle(math.Random());
-      selected = shuffled.take(5).toList(growable: false);
+    List<EditedPostcard> templates = const <EditedPostcard>[];
+    try {
+      templates = await _editedPostcardService.getTopLikedPostcards(limit: 5);
+    } catch (_) {
+      final localPostcards = await _editedPostcardService.getEditedPostcards();
+      templates = localPostcards
+          .where((item) => !item.isDraft && item.imageUrl.trim().isNotEmpty)
+          .toList(growable: false);
+      if (templates.length > 5) {
+        final shuffled = List<EditedPostcard>.from(templates)
+          ..shuffle(math.Random());
+        templates = shuffled.take(5).toList(growable: false);
+      }
     }
 
+    if (!mounted) return;
     setState(() {
-      _hotTemplates = selected;
+      _hotTemplates = templates;
       _isLoadingHotTemplates = false;
       _currentTemplateIndex = 0;
     });
-
     _startTemplateAutoPlay();
   }
 
@@ -764,8 +770,63 @@ class _PostcardEditScreenState extends State<PostcardEditScreen>
     _showHint('已撤回到上一步');
   }
 
-  void _share() {
+  // ignore: unused_element
+  Future<void> _shareLegacyPlaceholder() async {
     _showHint('分享功能开发中');
+  }
+
+  Future<void> _share() async {
+    if (_isSaving || _isSharing) return;
+
+    setState(() => _isSharing = true);
+    try {
+      await WidgetsBinding.instance.endOfFrame;
+      final imageBytes = await _captureShareImageBytes();
+      if (imageBytes == null || imageBytes.isEmpty) {
+        if (mounted) _showHint('分享失败，请稍后重试');
+        return;
+      }
+
+      final location = _buildFullLocationText().trim();
+      final shareText = location.isEmpty
+          ? '我在城市明信片制作了一张明信片，分享给你。'
+          : '我在城市明信片制作了一张明信片，地点：$location';
+      final fileName =
+          'city_postcard_${DateTime.now().millisecondsSinceEpoch}.png';
+      final shareFile = XFile.fromData(
+        imageBytes,
+        mimeType: 'image/png',
+        name: fileName,
+      );
+
+      await Share.shareXFiles(
+        <XFile>[shareFile],
+        text: shareText,
+        subject: '城市明信片',
+      );
+    } catch (e, stackTrace) {
+      debugPrint('分享明信片失败: $e\n$stackTrace');
+      if (mounted) _showHint('分享失败，请稍后重试');
+    } finally {
+      if (mounted) {
+        setState(() => _isSharing = false);
+      }
+    }
+  }
+
+  Future<Uint8List?> _captureShareImageBytes() async {
+    final renderObject = _sharePreviewKey.currentContext?.findRenderObject();
+    if (renderObject is! RenderRepaintBoundary) {
+      return null;
+    }
+
+    final pixelRatio = (MediaQuery.maybeOf(context)?.devicePixelRatio ?? 2.0)
+        .clamp(2.0, 3.0)
+        .toDouble();
+    final image = await renderObject.toImage(pixelRatio: pixelRatio);
+    final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+    if (byteData == null) return null;
+    return byteData.buffer.asUint8List();
   }
 
   Future<void> _openDynamicEffects() async {
@@ -834,7 +895,7 @@ class _PostcardEditScreenState extends State<PostcardEditScreen>
       scale: 1,
       rotation2d: 0,
       zIndex: topZIndex + 1,
-      style: const PostcardTextLayerStyle(fontFamily: 'serif'),
+      style: const PostcardTextLayerStyle(),
       box: const PostcardTextLayerBox(),
     );
 
@@ -854,9 +915,7 @@ class _PostcardEditScreenState extends State<PostcardEditScreen>
       text: normalizedText,
       elementKey: '',
       assetPath: '',
-      style: (result.style ?? const PostcardTextLayerStyle()).copyWith(
-        fontFamily: 'serif',
-      ),
+      style: result.style ?? const PostcardTextLayerStyle(),
       box: result.box ?? const PostcardTextLayerBox(),
       is3dEnabled: false,
       rotateX: 0,
@@ -1236,7 +1295,7 @@ class _PostcardEditScreenState extends State<PostcardEditScreen>
                                     label: '分享',
                                     width: topButtonWidth,
                                     height: topButtonHeight,
-                                    onTap: _share,
+                                    onTap: _isSharing ? null : _share,
                                   ),
                                 ),
                               ],
@@ -1261,35 +1320,38 @@ class _PostcardEditScreenState extends State<PostcardEditScreen>
                             ),
                             child: GestureDetector(
                               onTap: _pickLocalPreviewImage,
-                              child: SizedBox(
-                                width: previewWidth,
-                                height: previewHeight,
-                                child: Stack(
-                                  fit: StackFit.expand,
-                                  children: [
-                                    if (_customPreviewImagePath != null &&
-                                        _customPreviewImagePath!
-                                            .trim()
-                                            .isNotEmpty)
-                                      ResolvedImage(
-                                        source: _customPreviewImagePath!,
-                                        fit: BoxFit.cover,
-                                        filterQuality: FilterQuality.high,
-                                        fallbackBuilder: (_) =>
-                                            _buildPreviewPlaceholder(scale),
-                                        loadingBuilder: (_) =>
-                                            _buildPreviewPlaceholder(
-                                              scale,
-                                              showLoading: true,
-                                            ),
-                                      )
-                                    else
-                                      _buildPreviewPlaceholder(scale),
-                                    _buildLayerOverlay(
-                                      previewWidth,
-                                      previewHeight,
-                                    ),
-                                  ],
+                              child: RepaintBoundary(
+                                key: _sharePreviewKey,
+                                child: SizedBox(
+                                  width: previewWidth,
+                                  height: previewHeight,
+                                  child: Stack(
+                                    fit: StackFit.expand,
+                                    children: [
+                                      if (_customPreviewImagePath != null &&
+                                          _customPreviewImagePath!
+                                              .trim()
+                                              .isNotEmpty)
+                                        ResolvedImage(
+                                          source: _customPreviewImagePath!,
+                                          fit: BoxFit.cover,
+                                          filterQuality: FilterQuality.high,
+                                          fallbackBuilder: (_) =>
+                                              _buildPreviewPlaceholder(scale),
+                                          loadingBuilder: (_) =>
+                                              _buildPreviewPlaceholder(
+                                                scale,
+                                                showLoading: true,
+                                              ),
+                                        )
+                                      else
+                                        _buildPreviewPlaceholder(scale),
+                                      _buildLayerOverlay(
+                                        previewWidth,
+                                        previewHeight,
+                                      ),
+                                    ],
+                                  ),
                                 ),
                               ),
                             ),

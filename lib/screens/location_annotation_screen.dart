@@ -164,10 +164,15 @@ class _LocationAnnotationScreenState extends State<LocationAnnotationScreen> {
               TextField(
                 controller: _detailController,
                 maxLength: 40,
+                textAlignVertical: TextAlignVertical.center,
                 decoration: InputDecoration(
                   hintText: '例如：朝阳区三里屯街道',
                   filled: true,
                   fillColor: Colors.white,
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 12,
+                  ),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(14),
                     borderSide: const BorderSide(color: Color(0xFFBED9BE)),

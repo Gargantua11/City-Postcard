@@ -140,6 +140,41 @@ class EditedPostcardService {
         .toList(growable: false);
   }
 
+  Future<List<EditedPostcard>> getTopLikedPostcards({int limit = 5}) async {
+    final safeLimit = limit <= 0 ? 5 : limit;
+    final body = await _apiClient.get(
+      '/postcard/top-liked',
+      queryParameters: <String, String>{'limit': '$safeLimit'},
+      requireAuth: true,
+    );
+
+    final data = BackendApiClient.extractData(body);
+    final records = BackendApiClient.extractList(data);
+    if (records.isEmpty) {
+      return const <EditedPostcard>[];
+    }
+
+    final templates = <EditedPostcard>[];
+    final seenIds = <String>{};
+    for (var i = 0; i < records.length; i++) {
+      final map = BackendApiClient.asMap(records[i]);
+      if (map == null) continue;
+
+      final postcard = await _mapTopLikedRecordToEditedPostcard(
+        map,
+        fallbackIndex: i,
+      );
+      if (postcard == null) continue;
+      if (!seenIds.add(postcard.draftId)) continue;
+
+      templates.add(postcard);
+      if (templates.length >= safeLimit) {
+        break;
+      }
+    }
+    return templates;
+  }
+
   Future<void> addEditedPostcard(
     String imageUrl, {
     double? latitude,
@@ -695,16 +730,7 @@ class EditedPostcardService {
               ? '来自$normalizedProvinceName的明信片'
               : '我的明信片');
 
-    final elements = layers
-        .map((item) {
-          final json = Map<String, dynamic>.from(item.toJson());
-          // Keep the API field aligned with the current contract.
-          if (item.isAsset) {
-            json["type"] = "asset";
-          }
-          return json;
-        })
-        .toList(growable: false);
+    final elements = _buildElementPayload(layers, useLegacyAssetType: false);
 
     final payload = <String, dynamic>{
       'title': title,
@@ -730,6 +756,148 @@ class EditedPostcardService {
           value == null || (value is String && value.trim().isEmpty),
     );
     return payload;
+  }
+
+  List<Map<String, dynamic>> _buildElementPayload(
+    List<PostcardElementLayer> layers, {
+    required bool useLegacyAssetType,
+  }) {
+    if (layers.isEmpty) return const <Map<String, dynamic>>[];
+    return layers
+        .map(
+          (item) => _normalizeElementPayload(
+            item,
+            useLegacyAssetType: useLegacyAssetType,
+          ),
+        )
+        .toList(growable: false);
+  }
+
+  Map<String, dynamic> _normalizeElementPayload(
+    PostcardElementLayer layer, {
+    required bool useLegacyAssetType,
+  }) {
+    final json = Map<String, dynamic>.from(layer.toJson());
+    json['type'] = layer.isText
+        ? 'text'
+        : (useLegacyAssetType ? 'assert' : 'asset');
+
+    final elementKey = json['elementKey']?.toString().trim() ?? '';
+    if (elementKey.isNotEmpty) {
+      json['assetKey'] = elementKey;
+      json['asset_key'] = elementKey;
+    }
+    final assetPath = json['assetPath']?.toString().trim() ?? '';
+    if (assetPath.isNotEmpty) {
+      json['asset_path'] = assetPath;
+    }
+
+    final text = json['text']?.toString().trim() ?? '';
+    if (text.isNotEmpty) {
+      json['textContent'] = text;
+      json['text_content'] = text;
+    }
+
+    final style = _toStringDynamicMap(json['style']);
+    if (style != null) {
+      final normalizedStyle = Map<String, dynamic>.from(style);
+      final fontSize = _toRoundedInt(normalizedStyle['fontSize']);
+      if (fontSize != null) {
+        normalizedStyle['fontSize'] = fontSize;
+      }
+      final letterSpacing = _toRoundedInt(normalizedStyle['letterSpacing']);
+      if (letterSpacing != null) {
+        normalizedStyle['letterSpacing'] = letterSpacing;
+      }
+      final align = normalizedStyle['align']?.toString().trim() ?? '';
+      if (align.isNotEmpty) {
+        normalizedStyle['textAlign'] = align;
+      }
+      final fontWeight = normalizedStyle['fontWeight']?.toString().trim() ?? '';
+      if (fontWeight.isNotEmpty) {
+        normalizedStyle['weight'] = fontWeight;
+      }
+      json['style'] = normalizedStyle;
+    }
+
+    final box =
+        _toStringDynamicMap(json['box']) ??
+        _toStringDynamicMap(json['textBox']);
+    if (box != null) {
+      final normalizedBox = Map<String, dynamic>.from(box);
+      final maxWidth = _toRoundedInt(normalizedBox['maxWidth']);
+      if (maxWidth != null) {
+        normalizedBox['maxWidth'] = maxWidth;
+        normalizedBox['width'] = maxWidth;
+      }
+      final padding = _toRoundedInt(normalizedBox['padding']);
+      if (padding != null) {
+        normalizedBox['padding'] = padding;
+      }
+      final borderRadius = _toRoundedInt(normalizedBox['borderRadius']);
+      if (borderRadius != null) {
+        normalizedBox['borderRadius'] = borderRadius;
+      }
+      final backgroundColor =
+          normalizedBox['backgroundColor']?.toString().trim() ?? '';
+      if (backgroundColor.isNotEmpty) {
+        normalizedBox['bgColor'] = backgroundColor;
+      }
+      json['box'] = normalizedBox;
+      json['textBox'] = Map<String, dynamic>.from(normalizedBox);
+    }
+
+    json.removeWhere(
+      (key, value) =>
+          value == null || (value is String && value.trim().isEmpty),
+    );
+    return json;
+  }
+
+  Map<String, dynamic> _rewriteAssetTypeInPayload(
+    Map<String, dynamic> source, {
+    required bool useLegacyAssetType,
+  }) {
+    final payload = Map<String, dynamic>.from(source);
+    final rawElements = payload['elements'];
+    if (rawElements is! List || rawElements.isEmpty) {
+      return payload;
+    }
+
+    final elements = <Map<String, dynamic>>[];
+    for (final item in rawElements) {
+      final map = _toStringDynamicMap(item);
+      if (map == null) continue;
+      final next = Map<String, dynamic>.from(map);
+      final type = next['type']?.toString().trim().toLowerCase() ?? '';
+      next['type'] = type == 'text'
+          ? 'text'
+          : (useLegacyAssetType ? 'assert' : 'asset');
+      elements.add(next);
+    }
+    if (elements.isNotEmpty) {
+      payload['elements'] = elements;
+    }
+    return payload;
+  }
+
+  Map<String, dynamic>? _toStringDynamicMap(dynamic raw) {
+    if (raw is Map<String, dynamic>) return raw;
+    if (raw is Map) {
+      try {
+        return raw.cast<String, dynamic>();
+      } catch (_) {
+        return null;
+      }
+    }
+    return null;
+  }
+
+  int? _toRoundedInt(dynamic value) {
+    if (value == null) return null;
+    if (value is int) return value;
+    if (value is num) return value.round();
+    return int.tryParse(value.toString());
   }
 
   String _resolveAddressText({
@@ -777,6 +945,10 @@ class EditedPostcardService {
     final longitude = payload["longitude"];
 
     final fullPayload = Map<String, dynamic>.from(payload);
+    final legacyTypePayload = _rewriteAssetTypeInPayload(
+      fullPayload,
+      useLegacyAssetType: true,
+    );
     final noElementsPayload = <String, dynamic>{
       if (title.isNotEmpty) "title": title,
       if (content.isNotEmpty) "content": content,
@@ -817,6 +989,7 @@ class EditedPostcardService {
     };
 
     final attempts = <_CreateAttempt>[
+      _CreateAttempt(name: "完整参数-兼容元素类型", body: legacyTypePayload),
       _CreateAttempt(name: "完整参数", body: fullPayload),
       _CreateAttempt(name: "去除元素", body: noElementsPayload),
       _CreateAttempt(name: "核心字段+HTTP地址", body: keyCoreWithHttpUrlPayload),
@@ -1447,6 +1620,266 @@ class EditedPostcardService {
     final text = value.toString().trim();
     if (text.isEmpty) return null;
     return text;
+  }
+
+  Future<EditedPostcard?> _mapTopLikedRecordToEditedPostcard(
+    Map<String, dynamic> record, {
+    required int fallbackIndex,
+  }) async {
+    final imageSource = _resolveTopLikedImageSource(record);
+    if (imageSource.isEmpty) return null;
+    final normalizedImageSource = await _normalizeStoredImageSource(
+      imageSource,
+    );
+    if (normalizedImageSource.trim().isEmpty) return null;
+
+    final createdAtText =
+        BackendApiClient.readString(record, const [
+          'createdAt',
+          'createTime',
+          'updatedAt',
+          'updateTime',
+          'editedAt',
+        ]) ??
+        '';
+    final createdAt = _parseLooseDateTime(createdAtText);
+    final remoteId =
+        BackendApiClient.readString(record, const [
+          'id',
+          'postcardId',
+          'cardId',
+          'postId',
+        ]) ??
+        '';
+    final draftId = remoteId.isEmpty
+        ? 'top_liked_${fallbackIndex}_${createdAt.microsecondsSinceEpoch}'
+        : 'top_liked_$remoteId';
+
+    final locationText =
+        BackendApiClient.readString(record, const [
+          'address',
+          'location',
+          'detailAddress',
+          'addressDetail',
+        ]) ??
+        '';
+    final layers = _extractTopLikedLayers(record, fallbackIndex: fallbackIndex);
+
+    return EditedPostcard(
+      draftId: draftId,
+      imageUrl: normalizedImageSource,
+      editedAt: createdAt,
+      isPublished: true,
+      isDraft: false,
+      latitude: BackendApiClient.readDouble(record, const ['latitude', 'lat']),
+      longitude: BackendApiClient.readDouble(record, const [
+        'longitude',
+        'lng',
+        'lon',
+      ]),
+      cityName: _toNullableTrimmedString(
+        BackendApiClient.readString(record, const ['cityName', 'city']),
+      ),
+      cityCode: _toNullableCodeString(
+        BackendApiClient.readString(record, const ['cityCode', 'city_code']),
+      ),
+      provinceName: _toNullableTrimmedString(
+        BackendApiClient.readString(record, const ['provinceName', 'province']),
+      ),
+      locationDetail: _toNullableTrimmedString(locationText),
+      layers: layers,
+    );
+  }
+
+  String _resolveTopLikedImageSource(Map<String, dynamic> record) {
+    final directUrl =
+        _readDeepString(record, const [
+          'imageUrl',
+          'image',
+          'url',
+          'coverUrl',
+          'postcardUrl',
+          'postcardImageUrl',
+          'postcardImage',
+        ]) ??
+        '';
+    final normalizedDirectUrl = directUrl.trim();
+    if (normalizedDirectUrl.isNotEmpty &&
+        !_looksLikeApiEndpointValue(normalizedDirectUrl)) {
+      return normalizedDirectUrl;
+    }
+
+    final keySource =
+        _readDeepString(record, const [
+          'imageKey',
+          'key',
+          'objectKey',
+          'fileKey',
+          'coverKey',
+          'path',
+        ]) ??
+        '';
+    final normalizedKey = keySource.trim();
+    if (normalizedKey.isNotEmpty &&
+        !_looksLikeApiEndpointValue(normalizedKey)) {
+      return normalizedKey;
+    }
+    return '';
+  }
+
+  List<PostcardElementLayer> _extractTopLikedLayers(
+    Map<String, dynamic> record, {
+    required int fallbackIndex,
+  }) {
+    final sources = <dynamic>[
+      record['elements'],
+      record['layers'],
+      record['elementList'],
+      record['layerList'],
+      record['elementVOList'],
+      record['layerVOList'],
+      record['postcardElements'],
+      record['postcardElementList'],
+    ];
+
+    final nested = BackendApiClient.asMap(
+      record['postcard'] ?? record['postcardInfo'] ?? record['data'],
+    );
+    if (nested != null) {
+      sources.addAll(<dynamic>[
+        nested['elements'],
+        nested['layers'],
+        nested['elementList'],
+        nested['layerList'],
+        nested['elementVOList'],
+        nested['layerVOList'],
+      ]);
+    }
+
+    for (final source in sources) {
+      final parsed = _parseTopLikedLayersRaw(
+        source,
+        fallbackPrefix: 'top_$fallbackIndex',
+      );
+      if (parsed.isNotEmpty) {
+        return parsed;
+      }
+    }
+    return const <PostcardElementLayer>[];
+  }
+
+  List<PostcardElementLayer> _parseTopLikedLayersRaw(
+    dynamic raw, {
+    required String fallbackPrefix,
+  }) {
+    if (raw == null) return const <PostcardElementLayer>[];
+
+    final decoded = _decodeJsonIfString(raw);
+    if (decoded is List) {
+      final layers = <PostcardElementLayer>[];
+      for (var i = 0; i < decoded.length; i++) {
+        final item = decoded[i];
+        final map = BackendApiClient.asMap(item);
+        if (map == null) continue;
+        layers.add(
+          PostcardElementLayer.fromJson(
+            map,
+            fallbackId: '${fallbackPrefix}_layer_$i',
+          ),
+        );
+      }
+      return layers;
+    }
+
+    final map = BackendApiClient.asMap(decoded);
+    if (map == null) return const <PostcardElementLayer>[];
+    for (final key in const <String>[
+      'elements',
+      'layers',
+      'elementList',
+      'layerList',
+      'elementVOList',
+      'layerVOList',
+      'postcardElements',
+      'postcardElementList',
+    ]) {
+      final nested = _parseTopLikedLayersRaw(
+        map[key],
+        fallbackPrefix: fallbackPrefix,
+      );
+      if (nested.isNotEmpty) {
+        return nested;
+      }
+    }
+    if (!_looksLikeLayerMap(map)) {
+      return const <PostcardElementLayer>[];
+    }
+    return <PostcardElementLayer>[
+      PostcardElementLayer.fromJson(map, fallbackId: '${fallbackPrefix}_layer'),
+    ];
+  }
+
+  dynamic _decodeJsonIfString(dynamic raw) {
+    if (raw is! String) return raw;
+    final text = raw.trim();
+    if (text.isEmpty) return raw;
+    if (!(text.startsWith('{') || text.startsWith('['))) {
+      return raw;
+    }
+    try {
+      return jsonDecode(text);
+    } catch (_) {
+      return raw;
+    }
+  }
+
+  DateTime _parseLooseDateTime(String raw) {
+    final text = raw.trim();
+    if (text.isEmpty) return DateTime.now();
+
+    final parsed = DateTime.tryParse(text);
+    if (parsed != null) return parsed;
+
+    final normalized = text.replaceFirst(' ', 'T');
+    final parsedNormalized = DateTime.tryParse(normalized);
+    if (parsedNormalized != null) return parsedNormalized;
+
+    return DateTime.now();
+  }
+
+  bool _looksLikeLayerMap(Map<String, dynamic> map) {
+    final keys = map.keys
+        .map((item) => item.trim().toLowerCase())
+        .where((item) => item.isNotEmpty)
+        .toList(growable: false);
+    if (keys.isEmpty) return false;
+
+    const directKeys = <String>{
+      'type',
+      'x',
+      'y',
+      'scale',
+      'rotation2d',
+      'rotation_2d',
+      'zindex',
+      'z_index',
+      'text',
+      'elementkey',
+      'element_key',
+      'assetpath',
+      'asset_path',
+      'style',
+      'box',
+    };
+    for (final key in keys) {
+      if (directKeys.contains(key)) {
+        return true;
+      }
+      if (key.contains('layer') || key.contains('element')) {
+        return true;
+      }
+    }
+    return false;
   }
 
   Future<bool> deleteEditedPostcardAt(int index) async {

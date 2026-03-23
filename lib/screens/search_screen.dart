@@ -282,11 +282,13 @@ class _SearchInput extends StatelessWidget {
           Expanded(
             child: TextField(
               controller: controller,
+              textAlignVertical: TextAlignVertical.center,
               decoration: const InputDecoration(
                 border: InputBorder.none,
                 hintText: '按时间/地点/元素搜索',
                 hintStyle: TextStyle(fontSize: 13, color: Color(0xFF7D8873)),
-                isCollapsed: true,
+                isDense: true,
+                contentPadding: EdgeInsets.symmetric(vertical: 8),
               ),
               style: const TextStyle(
                 fontSize: 13,

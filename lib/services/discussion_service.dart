@@ -762,7 +762,7 @@ class DiscussionService {
         ? _defaultHotComment
         : trimmedHotComment;
     final imageKey = _normalizeImageKeyCandidate(source);
-    final elements = _buildElementPayload(layers);
+    final elements = _buildElementPayload(layers, useLegacyAssetType: false);
     final title = normalizedCityName != null && normalizedCityName.isNotEmpty
         ? '$normalizedCityName 明信片'
         : (normalizedProvinceName != null && normalizedProvinceName.isNotEmpty
@@ -773,7 +773,7 @@ class DiscussionService {
       'title': title,
       'content': normalizedHotComment,
       'imageUrl': source,
-      if (imageKey != null) 'imageKey': imageKey,
+      'imageKey': imageKey,
       'address': resolvedAddress,
       'cityName': normalizedCityName,
       'cityCode': normalizedCityCodeValue,
@@ -782,27 +782,39 @@ class DiscussionService {
       'longitude': longitude,
       if (elements.isNotEmpty) 'elements': elements,
     });
+    final fullPayloadLegacy = _rewriteAssetTypeInPayload(
+      fullPayload,
+      useLegacyAssetType: true,
+    );
 
     final fullPayloadWithAliases = _compactPayload(<String, dynamic>{
       ...fullPayload,
-      if (imageKey != null) 'key': imageKey,
-      if (imageKey != null) 'objectKey': imageKey,
+      'key': imageKey,
+      'objectKey': imageKey,
     });
+    final fullPayloadWithAliasesLegacy = _rewriteAssetTypeInPayload(
+      fullPayloadWithAliases,
+      useLegacyAssetType: true,
+    );
 
     final corePayload = _compactPayload(<String, dynamic>{
       'title': title,
       'content': normalizedHotComment,
       'imageUrl': source,
-      if (imageKey != null) 'imageKey': imageKey,
+      'imageKey': imageKey,
       'address': resolvedAddress,
       'cityCode': normalizedCityCodeValue,
       'cityName': normalizedCityName,
       'provinceName': normalizedProvinceName,
       if (elements.isNotEmpty) 'elements': elements,
     });
+    final corePayloadLegacy = _rewriteAssetTypeInPayload(
+      corePayload,
+      useLegacyAssetType: true,
+    );
 
     final minimalPayload = _compactPayload(<String, dynamic>{
-      if (imageKey != null) 'imageKey': imageKey,
+      'imageKey': imageKey,
       'imageUrl': source,
       'address': resolvedAddress,
       'cityCode': normalizedCityCodeValue,
@@ -811,6 +823,9 @@ class DiscussionService {
     });
 
     final attempts = <Map<String, dynamic>>[
+      fullPayloadLegacy,
+      fullPayloadWithAliasesLegacy,
+      corePayloadLegacy,
       fullPayload,
       fullPayloadWithAliases,
       corePayload,
@@ -854,19 +869,146 @@ class DiscussionService {
   }
 
   List<Map<String, dynamic>> _buildElementPayload(
-    List<PostcardElementLayer> layers,
-  ) {
+    List<PostcardElementLayer> layers, {
+    required bool useLegacyAssetType,
+  }) {
     if (layers.isEmpty) return const <Map<String, dynamic>>[];
     return layers
-        .map((item) {
-          final json = Map<String, dynamic>.from(item.toJson());
-          // Keep the API field aligned with the current contract.
-          if (item.isAsset) {
-            json['type'] = 'asset';
-          }
-          return json;
-        })
+        .map(
+          (item) => _normalizeElementPayload(
+            item,
+            useLegacyAssetType: useLegacyAssetType,
+          ),
+        )
         .toList(growable: false);
+  }
+
+  Map<String, dynamic> _normalizeElementPayload(
+    PostcardElementLayer layer, {
+    required bool useLegacyAssetType,
+  }) {
+    final json = Map<String, dynamic>.from(layer.toJson());
+    json['type'] = layer.isText
+        ? 'text'
+        : (useLegacyAssetType ? 'assert' : 'asset');
+
+    final elementKey = json['elementKey']?.toString().trim() ?? '';
+    if (elementKey.isNotEmpty) {
+      json['assetKey'] = elementKey;
+      json['asset_key'] = elementKey;
+    }
+    final assetPath = json['assetPath']?.toString().trim() ?? '';
+    if (assetPath.isNotEmpty) {
+      json['asset_path'] = assetPath;
+    }
+
+    final text = json['text']?.toString().trim() ?? '';
+    if (text.isNotEmpty) {
+      json['textContent'] = text;
+      json['text_content'] = text;
+    }
+
+    final style = _toStringDynamicMap(json['style']);
+    if (style != null) {
+      final normalizedStyle = Map<String, dynamic>.from(style);
+      final fontSize = _toRoundedInt(normalizedStyle['fontSize']);
+      if (fontSize != null) {
+        normalizedStyle['fontSize'] = fontSize;
+      }
+      final letterSpacing = _toRoundedInt(normalizedStyle['letterSpacing']);
+      if (letterSpacing != null) {
+        normalizedStyle['letterSpacing'] = letterSpacing;
+      }
+      final align = normalizedStyle['align']?.toString().trim() ?? '';
+      if (align.isNotEmpty) {
+        normalizedStyle['textAlign'] = align;
+      }
+      final fontWeight = normalizedStyle['fontWeight']?.toString().trim() ?? '';
+      if (fontWeight.isNotEmpty) {
+        normalizedStyle['weight'] = fontWeight;
+      }
+      json['style'] = normalizedStyle;
+    }
+
+    final box =
+        _toStringDynamicMap(json['box']) ??
+        _toStringDynamicMap(json['textBox']);
+    if (box != null) {
+      final normalizedBox = Map<String, dynamic>.from(box);
+      final maxWidth = _toRoundedInt(normalizedBox['maxWidth']);
+      if (maxWidth != null) {
+        normalizedBox['maxWidth'] = maxWidth;
+        normalizedBox['width'] = maxWidth;
+      }
+      final padding = _toRoundedInt(normalizedBox['padding']);
+      if (padding != null) {
+        normalizedBox['padding'] = padding;
+      }
+      final borderRadius = _toRoundedInt(normalizedBox['borderRadius']);
+      if (borderRadius != null) {
+        normalizedBox['borderRadius'] = borderRadius;
+      }
+      final backgroundColor =
+          normalizedBox['backgroundColor']?.toString().trim() ?? '';
+      if (backgroundColor.isNotEmpty) {
+        normalizedBox['bgColor'] = backgroundColor;
+      }
+      json['box'] = normalizedBox;
+      json['textBox'] = Map<String, dynamic>.from(normalizedBox);
+    }
+
+    json.removeWhere((key, value) {
+      if (value == null) return true;
+      if (value is String && value.trim().isEmpty) return true;
+      return false;
+    });
+    return json;
+  }
+
+  Map<String, dynamic> _rewriteAssetTypeInPayload(
+    Map<String, dynamic> source, {
+    required bool useLegacyAssetType,
+  }) {
+    final payload = Map<String, dynamic>.from(source);
+    final rawElements = payload['elements'];
+    if (rawElements is! List || rawElements.isEmpty) {
+      return payload;
+    }
+
+    final elements = <Map<String, dynamic>>[];
+    for (final item in rawElements) {
+      final map = _toStringDynamicMap(item);
+      if (map == null) continue;
+      final next = Map<String, dynamic>.from(map);
+      final type = next['type']?.toString().trim().toLowerCase() ?? '';
+      next['type'] = type == 'text'
+          ? 'text'
+          : (useLegacyAssetType ? 'assert' : 'asset');
+      elements.add(next);
+    }
+    if (elements.isNotEmpty) {
+      payload['elements'] = elements;
+    }
+    return payload;
+  }
+
+  Map<String, dynamic>? _toStringDynamicMap(dynamic raw) {
+    if (raw is Map<String, dynamic>) return raw;
+    if (raw is Map) {
+      try {
+        return raw.cast<String, dynamic>();
+      } catch (_) {
+        return null;
+      }
+    }
+    return null;
+  }
+
+  int? _toRoundedInt(dynamic value) {
+    if (value == null) return null;
+    if (value is int) return value;
+    if (value is num) return value.round();
+    return int.tryParse(value.toString());
   }
 
   Map<String, dynamic> _compactPayload(Map<String, dynamic> payload) {
@@ -1012,6 +1154,12 @@ class DiscussionService {
   Future<List<DiscussionPost>> fetchPosts({DateTime? lastTime}) async {
     final result = await fetchPostsWithOfflineFallback(lastTime: lastTime);
     return result.posts;
+  }
+
+  Future<List<DiscussionPost>> fetchPostsPage({
+    required DateTime lastTime,
+  }) async {
+    return _fetchPostsOnline(lastTime: lastTime);
   }
 
   Future<DiscussionPost> fetchPostDetail(int postId) async {

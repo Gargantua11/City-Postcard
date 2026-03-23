@@ -196,13 +196,43 @@ class _HomeScreenState extends State<HomeScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            const Text(
-              '城市明信片',
-              style: TextStyle(
-                fontSize: 40,
-                fontWeight: FontWeight.w500,
-                color: Colors.black,
-                letterSpacing: 2,
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: <Color>[Color(0xFFEFF7EC), Color(0xFFDDEDD7)],
+                ),
+                borderRadius: BorderRadius.circular(22),
+                boxShadow: const <BoxShadow>[
+                  BoxShadow(
+                    color: Color(0x12000000),
+                    blurRadius: 12,
+                    offset: Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: const Text(
+                '城市明信片',
+                style: TextStyle(
+                  fontSize: 42,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF2F5B34),
+                  letterSpacing: 1.6,
+                  shadows: <Shadow>[
+                    Shadow(
+                      color: Color(0x22FFFFFF),
+                      offset: Offset(0, 1),
+                      blurRadius: 1,
+                    ),
+                    Shadow(
+                      color: Color(0x22000000),
+                      offset: Offset(0, 2),
+                      blurRadius: 5,
+                    ),
+                  ],
+                ),
               ),
             ),
             const SizedBox(height: 20),

@@ -219,6 +219,7 @@ class _SearchIndexScreenState extends State<SearchIndexScreen> {
             Expanded(
               child: TextField(
                 controller: _searchController,
+                textAlignVertical: TextAlignVertical.center,
                 onChanged: (value) {
                   setState(() {
                     _searchKeyword = value;
@@ -229,7 +230,7 @@ class _SearchIndexScreenState extends State<SearchIndexScreen> {
                   hintStyle: TextStyle(fontSize: 14, color: Colors.grey),
                   border: InputBorder.none,
                   isDense: true,
-                  contentPadding: EdgeInsets.zero,
+                  contentPadding: EdgeInsets.symmetric(vertical: 8),
                 ),
               ),
             ),

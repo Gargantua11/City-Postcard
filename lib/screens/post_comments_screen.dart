@@ -153,7 +153,7 @@ class _PostCommentsScreenState extends State<PostCommentsScreen> {
       if (nickname.isNotEmpty) {
         next.add(_normalizeName(nickname));
       }
-      next.add(_normalizeName('\u6211'));
+      next.add(_normalizeName('我'));
       final userId = user?.id.trim();
       final avatar =
           (user?.avatar?.trim().isNotEmpty == true
@@ -176,7 +176,7 @@ class _PostCommentsScreenState extends State<PostCommentsScreen> {
         _currentUserAvatar = null;
         _currentUsernames
           ..clear()
-          ..add(_normalizeName('\u6211'));
+          ..add(_normalizeName('我'));
       });
     }
   }
@@ -254,9 +254,7 @@ class _PostCommentsScreenState extends State<PostCommentsScreen> {
         _isPostFavorited = favorited;
       });
 
-      final message = favorited
-          ? '\u5df2\u6536\u85cf\u5230\u6536\u85cf\u5939'
-          : '\u5df2\u53d6\u6d88\u6536\u85cf';
+      final message = favorited ? '已收藏到收藏夹' : '已取消收藏';
       final messenger = ScaffoldMessenger.maybeOf(context);
       messenger?.hideCurrentSnackBar();
       messenger?.showSnackBar(SnackBar(content: Text(message)));
@@ -288,8 +286,7 @@ class _PostCommentsScreenState extends State<PostCommentsScreen> {
       if (!mounted) return;
       setState(() {
         _isCommentsLoading = false;
-        _commentsErrorMessage =
-            '\u8be5\u660e\u4fe1\u7247\u5c1a\u672a\u540c\u6b65\u5230\u670d\u52a1\u5668\uff0c\u65e0\u6cd5\u52a0\u8f7d\u5728\u7ebf\u8bc4\u8bba';
+        _commentsErrorMessage = '该明信片尚未同步到服务器，无法加载在线评论';
         _comments = const <_CommentItem>[];
       });
       return;
@@ -330,7 +327,7 @@ class _PostCommentsScreenState extends State<PostCommentsScreen> {
     bool forSubmit = false,
   }) {
     if (error.isUnauthorized) {
-      return '\u767b\u5f55\u72b6\u6001\u5931\u6548\uff0c\u8bf7\u91cd\u65b0\u767b\u5f55';
+      return '登录状态失效，请重新登录';
     }
 
     final lower = error.message.toLowerCase();
@@ -342,22 +339,21 @@ class _PostCommentsScreenState extends State<PostCommentsScreen> {
         lower.contains('timed out') ||
         lower.contains('connection reset');
     if (isNetworkError) {
-      return '\u7f51\u7edc\u8fde\u63a5\u5931\u8d25\uff0c\u8bf7\u68c0\u67e5\u7f51\u7edc\u540e\u91cd\u8bd5';
+      return '网络连接失败，请检查网络后重试';
     }
 
     final isNotFound =
         lower.contains('not found') ||
-        lower.contains('\u4e0d\u5b58\u5728') ||
-        lower.contains('\u5df2\u5220\u9664');
+        lower.contains('不存在') ||
+        lower.contains('已删除');
     if (isNotFound) {
-      return '\u660e\u4fe1\u7247\u4e0d\u5b58\u5728\u6216\u5df2\u88ab\u5220\u9664';
+      return '明信片不存在或已被删除';
     }
 
     final isUnderDevelopment =
-        lower.contains('\u5f00\u53d1\u4e2d') ||
-        lower.contains('under development');
+        lower.contains('开发中') || lower.contains('under development');
     if (isUnderDevelopment) {
-      return '\u8bc4\u8bba\u529f\u80fd\u6682\u4e0d\u53ef\u7528\uff0c\u8bf7\u7a0d\u540e\u518d\u8bd5';
+      return '评论功能暂不可用，请稍后再试';
     }
 
     if (forSubmit) {
@@ -423,9 +419,7 @@ class _PostCommentsScreenState extends State<PostCommentsScreen> {
         _isPostLiked = liked;
       });
 
-      final message = liked
-          ? '\u5df2\u70b9\u8d5e'
-          : '\u5df2\u53d6\u6d88\u70b9\u8d5e';
+      final message = liked ? '已点赞' : '已取消点赞';
       final messenger = ScaffoldMessenger.maybeOf(context);
       messenger?.hideCurrentSnackBar();
       messenger?.showSnackBar(SnackBar(content: Text(message)));
@@ -435,13 +429,7 @@ class _PostCommentsScreenState extends State<PostCommentsScreen> {
 
       final messenger = ScaffoldMessenger.maybeOf(context);
       messenger?.hideCurrentSnackBar();
-      messenger?.showSnackBar(
-        const SnackBar(
-          content: Text(
-            '\u70b9\u8d5e\u5931\u8d25\uff0c\u8bf7\u7a0d\u540e\u91cd\u8bd5',
-          ),
-        ),
-      );
+      messenger?.showSnackBar(const SnackBar(content: Text('点赞失败，请稍后重试')));
     } finally {
       if (mounted) {
         setState(() {
@@ -481,17 +469,15 @@ class _PostCommentsScreenState extends State<PostCommentsScreen> {
       builder: (dialogContext) {
         return AlertDialog(
           title: const Text('删除评论'),
-          content: const Text(
-            '\u786e\u8ba4\u5220\u9664\u8fd9\u6761\u8bc4\u8bba\u5417\uff1f',
-          ),
+          content: const Text('确认删除这条评论吗？'),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(dialogContext).pop(false),
-              child: const Text('\u53d6\u6d88'),
+              child: const Text('取消'),
             ),
             TextButton(
               onPressed: () => Navigator.of(dialogContext).pop(true),
-              child: const Text('\u5220\u9664'),
+              child: const Text('删除'),
             ),
           ],
         );
@@ -510,15 +496,11 @@ class _PostCommentsScreenState extends State<PostCommentsScreen> {
         _comments.removeWhere((comment) => comment.id == item.id);
       });
       await _loadCommentsFromApi(showLoading: false);
-      _showHint('\u8bc4\u8bba\u5df2\u5220\u9664');
+      _showHint('评论已删除');
     } on BackendApiException catch (e, stackTrace) {
       debugPrint('删除评论失败: $e\\n$stackTrace');
       if (!mounted) return;
-      _showHint(
-        e.isUnauthorized
-            ? '\u767b\u5f55\u72b6\u6001\u5931\u6548\uff0c\u8bf7\u91cd\u65b0\u767b\u5f55'
-            : '\u5220\u9664\u8bc4\u8bba\u5931\u8d25\uff0c\u8bf7\u7a0d\u540e\u91cd\u8bd5',
-      );
+      _showHint(e.isUnauthorized ? '登录状态失效，请重新登录' : '删除评论失败，请稍后重试');
     } catch (e, stackTrace) {
       debugPrint('删除评论失败: $e\\n$stackTrace');
       if (!mounted) return;
@@ -632,7 +614,7 @@ class _PostCommentsScreenState extends State<PostCommentsScreen> {
                               ),
                               alignment: Alignment.center,
                               child: const Text(
-                                '\u8fd4\u56de',
+                                '返回',
                                 style: TextStyle(
                                   fontSize: 12,
                                   fontWeight: FontWeight.w500,
@@ -715,7 +697,7 @@ class _PostCommentsScreenState extends State<PostCommentsScreen> {
                                       const SizedBox(height: 10),
                                       OutlinedButton(
                                         onPressed: _loadCommentsFromApi,
-                                        child: const Text('\u91cd\u8bd5'),
+                                        child: const Text('重试'),
                                       ),
                                     ],
                                   ),
@@ -769,19 +751,23 @@ class _PostCommentsScreenState extends State<PostCommentsScreen> {
                             controller: _inputController,
                             focusNode: _inputFocusNode,
                             enabled: !_isCommentSubmitting,
+                            textAlignVertical: TextAlignVertical.center,
                             decoration: InputDecoration(
-                              hintText:
-                                  '\u8f93\u5165\u60a8\u7684\u8bc4\u8bba\u5427',
+                              hintText: '输入您的评论吧',
                               hintStyle: const TextStyle(
                                 color: Color(0xFF97A190),
                                 fontSize: 17,
                               ),
                               border: InputBorder.none,
-                              isCollapsed: true,
+                              isDense: true,
+                              contentPadding: const EdgeInsets.symmetric(
+                                vertical: 8,
+                              ),
                               suffixIcon: IconButton(
                                 onPressed: _isCommentSubmitting
                                     ? null
                                     : _submitInput,
+                                padding: EdgeInsets.zero,
                                 icon: const Icon(
                                   Icons.send_rounded,
                                   color: Color(0xFF7B8C72),
@@ -1056,7 +1042,7 @@ class _CommentTop3dToggleButton extends StatelessWidget {
             ),
             const SizedBox(width: 2.67),
             const Text(
-              '\u542f\u75283D\u6548\u679c',
+              '启用3D效果',
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w500,
@@ -1148,7 +1134,7 @@ class _PostOwnerInfo extends StatelessWidget {
                       activeBackgroundColor: const Color(0xFFFAD89C),
                       activeBorderColor: const Color(0xFFD6A74F),
                       icon: isFavorited ? Icons.star : Icons.star_border,
-                      text: isFavorited ? '\u5df2\u6536\u85cf' : '\u6536\u85cf',
+                      text: isFavorited ? '已收藏' : '收藏',
                     ),
                     const SizedBox(width: 6),
                     _PostActionPill(
@@ -1157,13 +1143,13 @@ class _PostOwnerInfo extends StatelessWidget {
                       activeBackgroundColor: const Color(0xFFF9C7C7),
                       activeBorderColor: const Color(0xFFE98E8E),
                       icon: isLiked ? Icons.favorite : Icons.favorite_border,
-                      text: isLiked ? '\u5df2\u70b9\u8d5e' : '\u70b9\u8d5e',
+                      text: isLiked ? '已点赞' : '点赞',
                     ),
                   ],
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  post.address.isEmpty ? '\u5730\u70b9' : post.address,
+                  post.address.isEmpty ? '地点' : post.address,
                   style: const TextStyle(fontSize: 14),
                 ),
               ],
@@ -1289,7 +1275,7 @@ class _CommentCard extends StatelessWidget {
                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   ),
                   child: Text(
-                    deleting ? '\u5220\u9664\u4e2d' : '\u5220\u9664',
+                    deleting ? '删除中' : '删除',
                     style: const TextStyle(
                       fontSize: 12,
                       color: Color(0xFF6F6F6F),
@@ -1322,10 +1308,10 @@ String _formatRelativeTime(DateTime time) {
   final diff = now.difference(time);
 
   if (diff.inMinutes < 60) {
-    return '${diff.inMinutes}\u5206\u949f\u524d';
+    return '${diff.inMinutes}分钟前';
   }
   if (diff.inHours < 24) {
-    return '${diff.inHours}\u5c0f\u65f6\u524d';
+    return '${diff.inHours}小时前';
   }
   return DateFormat('MM-dd HH:mm').format(time);
 }
