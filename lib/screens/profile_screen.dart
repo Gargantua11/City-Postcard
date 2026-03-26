@@ -382,10 +382,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
         child: LayoutBuilder(
           builder: (context, constraints) {
             final double maxWidth = constraints.maxWidth;
-            final double contentWidth = (maxWidth - 24).clamp(320.0, 440.0);
+            final double contentWidth = (maxWidth - 24).clamp(0.0, 440.0);
             final double headerHeight = contentWidth * (236 / 440);
             final double rowWidth = contentWidth * (397 / 440);
-            final double rowHeight = rowWidth * (48 / 397);
+            final double rowHeight = (rowWidth * (48 / 397)).clamp(48.0, 56.0);
+            // Anchor avatar to the exact placeholder area in
+            // assets/images/profile/用户-画面.png to avoid visual drift.
+            final double headerScale = contentWidth / 440;
+            final double avatarSize = 128 * headerScale;
+            final double avatarLeft = 156 * headerScale;
+            final double avatarTop = 66 * headerScale;
+            final double nameChipWidth = (contentWidth * 0.42).clamp(
+              120.0,
+              180.0,
+            );
 
             return Center(
               child: SizedBox(
@@ -407,18 +417,29 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 filterQuality: FilterQuality.high,
                               ),
                             ),
-                            Align(
-                              alignment: const Alignment(0, -0.1),
-                              child: _ProfileAvatar(
-                                imageSource: _avatarSource,
-                                size: 128,
+                            Positioned(
+                              left: avatarLeft,
+                              top: avatarTop,
+                              width: avatarSize,
+                              height: avatarSize,
+                              child: GestureDetector(
+                                onTap: _openEditProfile,
+                                child: _ProfileAvatar(
+                                  imageSource: _avatarSource,
+                                  size: avatarSize,
+                                ),
                               ),
                             ),
                           ],
                         ),
                       ),
                       const SizedBox(height: 10),
-                      _NameChip(width: 150, height: 40, text: _username),
+                      const SizedBox(height: 8),
+                      _NameChip(
+                        width: nameChipWidth,
+                        height: 40,
+                        text: _username,
+                      ),
                       const SizedBox(height: 22),
                       _ProfileMenuItem(
                         width: rowWidth,
@@ -465,7 +486,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         height: rowHeight,
                         icon: Icons.thumb_up_alt_outlined,
                         text: '点赞帖子',
-                        onTap: () => Navigator.pushNamed(context, '/liked_posts'),
+                        onTap: () =>
+                            Navigator.pushNamed(context, '/liked_posts'),
                       ),
                       const SizedBox(height: 16),
                       _ProfileMenuItem(

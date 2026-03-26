@@ -112,8 +112,7 @@ class _RegisterStep1ScreenState extends State<RegisterStep1Screen> {
     await Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) =>
-            RegisterStep2Screen(phone: phone, regToken: ''),
+        builder: (context) => RegisterStep2Screen(phone: phone, regToken: ''),
       ),
     );
   }
@@ -174,8 +173,8 @@ class _RegisterStep1ScreenState extends State<RegisterStep1Screen> {
                       ),
                       const SizedBox(height: 55),
                       Center(
-                        child: SizedBox(
-                          width: 300,
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 320),
                           child: CustomTextField(
                             controller: _phoneController,
                             hintText: '请输入手机号',
@@ -187,8 +186,8 @@ class _RegisterStep1ScreenState extends State<RegisterStep1Screen> {
                       ),
                       const SizedBox(height: 30),
                       Center(
-                        child: SizedBox(
-                          width: 300,
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 320),
                           child: CustomTextField(
                             controller: _codeController,
                             hintText: '请输入验证码',

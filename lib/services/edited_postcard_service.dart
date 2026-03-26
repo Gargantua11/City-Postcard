@@ -142,14 +142,7 @@ class EditedPostcardService {
 
   Future<List<EditedPostcard>> getTopLikedPostcards({int limit = 5}) async {
     final safeLimit = limit <= 0 ? 5 : limit;
-    final body = await _apiClient.get(
-      '/postcard/top-liked',
-      queryParameters: <String, String>{'limit': '$safeLimit'},
-      requireAuth: true,
-    );
-
-    final data = BackendApiClient.extractData(body);
-    final records = BackendApiClient.extractList(data);
+    final records = await _fetchTopLikedRecordsFromTopLikedEndpoint(safeLimit);
     if (records.isEmpty) {
       return const <EditedPostcard>[];
     }
@@ -157,7 +150,9 @@ class EditedPostcardService {
     final templates = <EditedPostcard>[];
     final seenIds = <String>{};
     for (var i = 0; i < records.length; i++) {
-      final map = BackendApiClient.asMap(records[i]);
+      final rawMap = BackendApiClient.asMap(records[i]);
+      if (rawMap == null) continue;
+      final map = await _enrichTopLikedRecord(rawMap);
       if (map == null) continue;
 
       final postcard = await _mapTopLikedRecordToEditedPostcard(
@@ -173,6 +168,117 @@ class EditedPostcardService {
       }
     }
     return templates;
+  }
+
+  Future<Map<String, dynamic>?> _enrichTopLikedRecord(
+    Map<String, dynamic> record,
+  ) async {
+    final postcardId = _extractTopLikedPostcardId(record);
+    if (postcardId == null || postcardId <= 0) {
+      return record;
+    }
+
+    try {
+      final body = await _apiClient.get(
+        '/postcard/$postcardId',
+        requireAuth: true,
+      );
+      final data = BackendApiClient.extractData(body);
+      final detailMap = BackendApiClient.asMap(data);
+      if (detailMap == null || detailMap.isEmpty) {
+        return record;
+      }
+
+      // Keep top-liked list ordering/count semantics, and enrich with detail
+      // fields such as imageUrl/elements for stable template rendering.
+      return <String, dynamic>{
+        ...record,
+        ...detailMap,
+        'id': postcardId,
+        'postcardId': postcardId,
+      };
+    } on BackendApiException catch (_) {
+      return record;
+    } catch (_) {
+      return record;
+    }
+  }
+
+  int? _extractTopLikedPostcardId(Map<String, dynamic> record) {
+    return _readDeepInt(record, const <String>[
+      'postcardId',
+      'id',
+      'cardId',
+      'postId',
+    ]);
+  }
+
+  Future<List<dynamic>> _fetchTopLikedRecordsFromTopLikedEndpoint(
+    int limit,
+  ) async {
+    final body = await _apiClient.get(
+      '/postcard/top-liked',
+      queryParameters: <String, String>{'limit': '$limit'},
+      requireAuth: true,
+    );
+    final data = BackendApiClient.extractData(body);
+    final records = BackendApiClient.extractList(data);
+    if (records.isEmpty) {
+      return const <dynamic>[];
+    }
+
+    final sorted = List<dynamic>.from(records);
+    sorted.sort(_compareTopLikedRecords);
+    return sorted;
+  }
+
+  int _compareTopLikedRecords(dynamic leftRaw, dynamic rightRaw) {
+    final left = BackendApiClient.asMap(leftRaw);
+    final right = BackendApiClient.asMap(rightRaw);
+
+    final leftLikes = _extractLikeCountForTopLiked(left);
+    final rightLikes = _extractLikeCountForTopLiked(right);
+    final likeCompare = rightLikes.compareTo(leftLikes);
+    if (likeCompare != 0) {
+      return likeCompare;
+    }
+
+    final leftTime = _extractCreatedAtForTopLiked(left);
+    final rightTime = _extractCreatedAtForTopLiked(right);
+    return rightTime.compareTo(leftTime);
+  }
+
+  int _extractLikeCountForTopLiked(Map<String, dynamic>? record) {
+    if (record == null) return 0;
+    return _readDeepInt(record, const <String>[
+          'likeCount',
+          'likes',
+          'likeNum',
+          'upCount',
+          'thumbsUpCount',
+          'praiseCount',
+        ]) ??
+        0;
+  }
+
+  DateTime _extractCreatedAtForTopLiked(Map<String, dynamic>? record) {
+    if (record == null) {
+      return DateTime.fromMillisecondsSinceEpoch(0);
+    }
+
+    final text =
+        _readDeepString(record, const <String>[
+          'createdAt',
+          'createTime',
+          'updatedAt',
+          'updateTime',
+          'editedAt',
+        ]) ??
+        '';
+    if (text.trim().isEmpty) {
+      return DateTime.fromMillisecondsSinceEpoch(0);
+    }
+    return _parseLooseDateTime(text);
   }
 
   Future<void> addEditedPostcard(
@@ -207,22 +313,30 @@ class EditedPostcardService {
     String? provinceName,
     String? locationDetail,
     List<PostcardElementLayer>? layers,
+    bool syncToBackend = false,
   }) async {
-    final syncResult = await _syncPostcardToBackend(
-      imageSource: imageUrl,
-      cityName: cityName,
-      cityCode: cityCode,
-      provinceName: provinceName,
-      locationDetail: locationDetail,
-      latitude: latitude,
-      longitude: longitude,
-      layers: layers ?? const <PostcardElementLayer>[],
-    );
+    String finalImageUrl = imageUrl;
+    String? remotePostcardId;
+
+    if (syncToBackend) {
+      final syncResult = await _syncPostcardToBackend(
+        imageSource: imageUrl,
+        cityName: cityName,
+        cityCode: cityCode,
+        provinceName: provinceName,
+        locationDetail: locationDetail,
+        latitude: latitude,
+        longitude: longitude,
+        layers: layers ?? const <PostcardElementLayer>[],
+      );
+      finalImageUrl = syncResult.imageUrl;
+      remotePostcardId = syncResult.remotePostcardId;
+    }
 
     return _savePostcard(
       draftId: draftId,
-      imageUrl: syncResult.imageUrl,
-      remotePostcardId: syncResult.remotePostcardId,
+      imageUrl: finalImageUrl,
+      remotePostcardId: remotePostcardId,
       isDraft: false,
       latitude: latitude,
       longitude: longitude,
@@ -1622,6 +1736,14 @@ class EditedPostcardService {
     return text;
   }
 
+  int? _readDeepInt(dynamic raw, List<String> keys) {
+    final value = _readDeepValue(raw, keys);
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    if (value is String) return int.tryParse(value.trim());
+    return null;
+  }
+
   Future<EditedPostcard?> _mapTopLikedRecordToEditedPostcard(
     Map<String, dynamic> record, {
     required int fallbackIndex,
@@ -1727,96 +1849,237 @@ class EditedPostcardService {
     return '';
   }
 
+  static const List<String> _topLikedLayerPayloadKeys = <String>[
+    'elements',
+    'layers',
+    'elementList',
+    'layerList',
+    'elementVOList',
+    'layerVOList',
+    'postcardElements',
+    'postcardElementList',
+    'postcardElementVOList',
+    'elementsJson',
+    'layersJson',
+    'postcardElementsJson',
+    'postcardElementJson',
+    'elementJson',
+    'layerJson',
+    'elementsData',
+    'layersData',
+  ];
+
+  static const List<String> _topLikedLayerContainerKeys = <String>[
+    'data',
+    'postcard',
+    'postcardInfo',
+    'postcardDetail',
+    'postcardDto',
+    'postcardVO',
+    'postcardVo',
+    'detail',
+    'card',
+    'record',
+    'item',
+  ];
+
   List<PostcardElementLayer> _extractTopLikedLayers(
     Map<String, dynamic> record, {
     required int fallbackIndex,
   }) {
-    final sources = <dynamic>[
-      record['elements'],
-      record['layers'],
-      record['elementList'],
-      record['layerList'],
-      record['elementVOList'],
-      record['layerVOList'],
-      record['postcardElements'],
-      record['postcardElementList'],
-    ];
+    final layers = <PostcardElementLayer>[];
+    final fingerprints = <String>{};
 
-    final nested = BackendApiClient.asMap(
-      record['postcard'] ?? record['postcardInfo'] ?? record['data'],
+    void append(List<PostcardElementLayer> incoming) {
+      _appendUniqueTopLikedLayers(layers, fingerprints, incoming);
+    }
+
+    append(
+      _parseTopLikedLayersRaw(record, fallbackPrefix: 'top_$fallbackIndex'),
     );
-    if (nested != null) {
-      sources.addAll(<dynamic>[
-        nested['elements'],
-        nested['layers'],
-        nested['elementList'],
-        nested['layerList'],
-        nested['elementVOList'],
-        nested['layerVOList'],
-      ]);
+
+    for (final key in _topLikedLayerPayloadKeys) {
+      append(
+        _parseTopLikedLayersRaw(
+          record[key],
+          fallbackPrefix: 'top_$fallbackIndex',
+        ),
+      );
     }
 
-    for (final source in sources) {
-      final parsed = _parseTopLikedLayersRaw(
-        source,
-        fallbackPrefix: 'top_$fallbackIndex',
+    for (final key in _topLikedLayerContainerKeys) {
+      append(
+        _parseTopLikedLayersRaw(
+          record[key],
+          fallbackPrefix: 'top_$fallbackIndex',
+        ),
       );
-      if (parsed.isNotEmpty) {
-        return parsed;
-      }
+      append(
+        _parseTopLikedLayersRaw(
+          _decodeJsonIfStringDeep(record[key]),
+          fallbackPrefix: 'top_$fallbackIndex',
+        ),
+      );
     }
-    return const <PostcardElementLayer>[];
+
+    for (final entry in record.entries) {
+      final key = entry.key.trim().toLowerCase();
+      if (!(key.contains('element') || key.contains('layer'))) {
+        continue;
+      }
+      append(
+        _parseTopLikedLayersRaw(
+          entry.value,
+          fallbackPrefix: 'top_$fallbackIndex',
+        ),
+      );
+    }
+
+    return layers;
   }
 
   List<PostcardElementLayer> _parseTopLikedLayersRaw(
     dynamic raw, {
     required String fallbackPrefix,
+    int depth = 0,
   }) {
-    if (raw == null) return const <PostcardElementLayer>[];
+    if (raw == null || depth > 4) return const <PostcardElementLayer>[];
 
-    final decoded = _decodeJsonIfString(raw);
-    if (decoded is List) {
+    final decoded = _decodeJsonIfStringDeep(raw);
+    if (decoded is String && decoded.trim().isEmpty) {
+      return const <PostcardElementLayer>[];
+    }
+
+    final sourceMap = BackendApiClient.asMap(decoded);
+    if (sourceMap != null) {
       final layers = <PostcardElementLayer>[];
-      for (var i = 0; i < decoded.length; i++) {
-        final item = decoded[i];
-        final map = BackendApiClient.asMap(item);
-        if (map == null) continue;
-        layers.add(
-          PostcardElementLayer.fromJson(
-            map,
-            fallbackId: '${fallbackPrefix}_layer_$i',
+      final fingerprints = <String>{};
+
+      void append(List<PostcardElementLayer> incoming) {
+        _appendUniqueTopLikedLayers(layers, fingerprints, incoming);
+      }
+
+      for (final key in _topLikedLayerPayloadKeys) {
+        append(
+          _parseTopLikedLayersRaw(
+            sourceMap[key],
+            fallbackPrefix: fallbackPrefix,
+            depth: depth + 1,
           ),
         );
       }
-      return layers;
+
+      for (final key in _topLikedLayerContainerKeys) {
+        append(
+          _parseTopLikedLayersRaw(
+            sourceMap[key],
+            fallbackPrefix: fallbackPrefix,
+            depth: depth + 1,
+          ),
+        );
+      }
+
+      for (final entry in sourceMap.entries) {
+        final key = entry.key.trim().toLowerCase();
+        if (!(key.contains('element') || key.contains('layer'))) {
+          continue;
+        }
+        append(
+          _parseTopLikedLayersRaw(
+            entry.value,
+            fallbackPrefix: fallbackPrefix,
+            depth: depth + 1,
+          ),
+        );
+      }
+
+      if (layers.isNotEmpty) {
+        return layers;
+      }
+      if (!_looksLikeLayerMap(sourceMap)) {
+        return const <PostcardElementLayer>[];
+      }
+
+      final layer = PostcardElementLayer.fromJson(
+        sourceMap,
+        fallbackId: '${fallbackPrefix}_layer',
+      );
+      if (!_isRenderableTopLikedLayer(layer)) {
+        return const <PostcardElementLayer>[];
+      }
+      return <PostcardElementLayer>[layer];
     }
 
-    final map = BackendApiClient.asMap(decoded);
-    if (map == null) return const <PostcardElementLayer>[];
-    for (final key in const <String>[
-      'elements',
-      'layers',
-      'elementList',
-      'layerList',
-      'elementVOList',
-      'layerVOList',
-      'postcardElements',
-      'postcardElementList',
-    ]) {
-      final nested = _parseTopLikedLayersRaw(
-        map[key],
-        fallbackPrefix: fallbackPrefix,
+    if (decoded is! List) return const <PostcardElementLayer>[];
+
+    final layers = <PostcardElementLayer>[];
+    final fingerprints = <String>{};
+    for (var i = 0; i < decoded.length; i++) {
+      final item = _decodeJsonIfStringDeep(decoded[i]);
+      final map = BackendApiClient.asMap(item);
+      if (map == null) continue;
+
+      if (!_looksLikeLayerMap(map)) {
+        _appendUniqueTopLikedLayers(
+          layers,
+          fingerprints,
+          _parseTopLikedLayersRaw(
+            map,
+            fallbackPrefix: '${fallbackPrefix}_nested_$i',
+            depth: depth + 1,
+          ),
+        );
+        continue;
+      }
+
+      final layer = PostcardElementLayer.fromJson(
+        map,
+        fallbackId: '${fallbackPrefix}_layer_$i',
       );
-      if (nested.isNotEmpty) {
-        return nested;
+      if (_isRenderableTopLikedLayer(layer)) {
+        _appendUniqueTopLikedLayers(
+          layers,
+          fingerprints,
+          <PostcardElementLayer>[layer],
+        );
       }
     }
-    if (!_looksLikeLayerMap(map)) {
-      return const <PostcardElementLayer>[];
+    return layers;
+  }
+
+  void _appendUniqueTopLikedLayers(
+    List<PostcardElementLayer> target,
+    Set<String> fingerprints,
+    Iterable<PostcardElementLayer> incoming,
+  ) {
+    for (final layer in incoming) {
+      final fingerprint = _topLikedLayerFingerprint(layer);
+      if (!fingerprints.add(fingerprint)) {
+        continue;
+      }
+      target.add(layer);
     }
-    return <PostcardElementLayer>[
-      PostcardElementLayer.fromJson(map, fallbackId: '${fallbackPrefix}_layer'),
-    ];
+  }
+
+  String _topLikedLayerFingerprint(PostcardElementLayer layer) {
+    return [
+      layer.id,
+      layer.normalizedType,
+      layer.elementKey.trim(),
+      layer.assetPath.trim(),
+      layer.text?.trim() ?? '',
+      layer.x.toString(),
+      layer.y.toString(),
+      layer.zIndex.toString(),
+    ].join('|');
+  }
+
+  bool _isRenderableTopLikedLayer(PostcardElementLayer layer) {
+    if (layer.isText) {
+      return layer.normalizedText.trim().isNotEmpty;
+    }
+    return layer.assetPath.trim().isNotEmpty ||
+        layer.elementKey.trim().isNotEmpty;
   }
 
   dynamic _decodeJsonIfString(dynamic raw) {
@@ -1829,8 +2092,26 @@ class EditedPostcardService {
     try {
       return jsonDecode(text);
     } catch (_) {
+      if (text.contains(r'\"')) {
+        final unescaped = text.replaceAll(r'\"', '"').replaceAll(r'\\/', '/');
+        try {
+          return jsonDecode(unescaped);
+        } catch (_) {}
+      }
       return raw;
     }
+  }
+
+  dynamic _decodeJsonIfStringDeep(dynamic raw) {
+    dynamic current = raw;
+    for (var i = 0; i < 3; i++) {
+      final decoded = _decodeJsonIfString(current);
+      if (decoded == current) {
+        break;
+      }
+      current = decoded;
+    }
+    return current;
   }
 
   DateTime _parseLooseDateTime(String raw) {
@@ -1848,37 +2129,88 @@ class EditedPostcardService {
   }
 
   bool _looksLikeLayerMap(Map<String, dynamic> map) {
-    final keys = map.keys
-        .map((item) => item.trim().toLowerCase())
-        .where((item) => item.isNotEmpty)
-        .toList(growable: false);
-    if (keys.isEmpty) return false;
+    bool hasAny(Iterable<String> keys) {
+      for (final key in keys) {
+        if (map.containsKey(key)) {
+          return true;
+        }
+      }
+      return false;
+    }
 
-    const directKeys = <String>{
+    final hasAssetIdentity = hasAny(const <String>[
+      'assetPath',
+      'asset_path',
+      'assetUrl',
+      'asset_url',
+      'elementPath',
+      'element_path',
+      'resourcePath',
+      'resource_path',
+      'materialPath',
+      'material_path',
+      'elementKey',
+      'element_key',
+      'elementCode',
+      'element_code',
+      'elementName',
+      'materialKey',
+      'material_key',
+      'materialCode',
+      'material_code',
+    ]);
+    if (hasAssetIdentity) {
+      return true;
+    }
+
+    final hasLayerType = hasAny(const <String>[
       'type',
+      'layerType',
+      'layer_type',
+      'elementType',
+      'element_type',
+    ]);
+
+    final hasTransform = hasAny(const <String>[
       'x',
       'y',
+      'left',
+      'top',
+      'positionX',
+      'position_x',
+      'positionY',
+      'position_y',
       'scale',
       'rotation2d',
       'rotation_2d',
-      'zindex',
+      'rotation',
+      'angle',
+      'zIndex',
       'z_index',
+      'z',
+      'is3dEnabled',
+      'is_3d_enabled',
+      'rotateX',
+      'rotate_x',
+      'rotateY',
+      'rotate_y',
+    ]);
+
+    final hasTextIdentity = hasAny(const <String>[
       'text',
-      'elementkey',
-      'element_key',
-      'assetpath',
-      'asset_path',
+      'textContent',
+      'text_content',
       'style',
       'box',
-    };
-    for (final key in keys) {
-      if (directKeys.contains(key)) {
-        return true;
-      }
-      if (key.contains('layer') || key.contains('element')) {
-        return true;
-      }
+    ]);
+    if (hasTextIdentity && (hasTransform || hasLayerType)) {
+      return true;
     }
+
+    if (hasLayerType && hasTransform) {
+      return true;
+    }
+
     return false;
   }
 

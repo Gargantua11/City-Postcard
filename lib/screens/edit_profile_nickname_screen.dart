@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../services/backend_api_client.dart';
+import '../services/profile_account_service.dart';
 import '../services/storage_service.dart';
 import '../widgets/custom_text_field.dart';
 
@@ -13,11 +15,13 @@ class EditProfileNicknameScreen extends StatefulWidget {
 
 class _EditProfileNicknameScreenState extends State<EditProfileNicknameScreen> {
   final StorageService _storageService = StorageService();
+  final ProfileAccountService _profileAccountService = ProfileAccountService();
   final TextEditingController _controller = TextEditingController();
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
 
   bool _isLoading = true;
   bool _isSaving = false;
+  String _initialUsername = '';
 
   @override
   void initState() {
@@ -32,19 +36,28 @@ class _EditProfileNicknameScreenState extends State<EditProfileNicknameScreen> {
   }
 
   Future<void> _loadInitial() async {
-    final nickname = await _storageService.getProfileNickname();
+    final username = await _storageService.getProfileNickname();
     if (!mounted) return;
 
-    _controller.text = (nickname ?? '').trim();
+    _initialUsername = (username ?? '').trim();
+    _controller.text = _initialUsername;
     setState(() {
       _isLoading = false;
     });
   }
 
-  String? _validateNickname(String? value) {
+  String? _validateUsername(String? value) {
     final text = (value ?? '').trim();
-    if (text.length < 2 || text.length > 20) {
-      return '昵称长度需在2-20之间';
+    if (text.isEmpty) {
+      return '请输入用户名';
+    }
+    if (text.length < 4 || text.length > 20) {
+      return '用户名长度需在 4-20 之间';
+    }
+
+    final usernameRegExp = RegExp(r'^[a-zA-Z][a-zA-Z0-9_]{3,19}$');
+    if (!usernameRegExp.hasMatch(text)) {
+      return '用户名需以字母开头，仅支持字母/数字/下划线';
     }
     return null;
   }
@@ -53,14 +66,26 @@ class _EditProfileNicknameScreenState extends State<EditProfileNicknameScreen> {
     if (_isSaving) return;
     if (!_formKey.currentState!.validate()) return;
 
+    final username = _controller.text.trim();
+    if (username == _initialUsername) {
+      Navigator.pop(context, false);
+      return;
+    }
+
     setState(() {
       _isSaving = true;
     });
 
     try {
-      await _storageService.saveProfileNickname(_controller.text.trim());
+      await _profileAccountService.changeUsername(username);
+      await _storageService.saveProfileNickname(username);
       if (!mounted) return;
       Navigator.pop(context, true);
+    } on BackendApiException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(e.message)));
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(
@@ -118,7 +143,7 @@ class _EditProfileNicknameScreenState extends State<EditProfileNicknameScreen> {
                           children: [
                             const SizedBox(height: 56),
                             const Text(
-                              '修改昵称',
+                              '修改用户名',
                               style: TextStyle(
                                 fontSize: 28,
                                 fontWeight: FontWeight.w600,
@@ -126,14 +151,14 @@ class _EditProfileNicknameScreenState extends State<EditProfileNicknameScreen> {
                               ),
                             ),
                             const SizedBox(height: 28),
-                            SizedBox(
-                              width: 300,
+                            ConstrainedBox(
+                              constraints: const BoxConstraints(maxWidth: 320),
                               child: CustomTextField(
                                 controller: _controller,
-                                hintText: '请输入昵称（2-20字）',
+                                hintText: '请输入用户名（4-20 位）',
                                 prefixIcon: Icons.person,
                                 maxLength: 20,
-                                validator: _validateNickname,
+                                validator: _validateUsername,
                                 enabled: !_isSaving,
                               ),
                             ),

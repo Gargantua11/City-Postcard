@@ -240,12 +240,16 @@ class _DynamicEffectScreenState extends State<DynamicEffectScreen> {
                                 children: [
                                   Row(
                                     children: [
-                                      SizedBox(
-                                        width: 176,
-                                        child: _TopToggleChip(
-                                          label: '启用3D效果',
-                                          checked: _enable3dEffect,
-                                          onTap: _toggle3dEffect,
+                                      Flexible(
+                                        child: ConstrainedBox(
+                                          constraints: const BoxConstraints(
+                                            maxWidth: 176,
+                                          ),
+                                          child: _TopToggleChip(
+                                            label: '启用3D效果',
+                                            checked: _enable3dEffect,
+                                            onTap: _toggle3dEffect,
+                                          ),
                                         ),
                                       ),
                                     ],

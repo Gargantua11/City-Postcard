@@ -102,6 +102,12 @@ class _SearchIndexScreenState extends State<SearchIndexScreen> {
     super.dispose();
   }
 
+  int _gridCrossAxisCount(double width) {
+    if (width >= 420) return 4;
+    if (width >= 320) return 3;
+    return 2;
+  }
+
   // 过滤元素列表（根据搜索关键词）
   List<Map<String, dynamic>> _filterElements(
     List<Map<String, dynamic>> elements,
@@ -316,18 +322,24 @@ class _SearchIndexScreenState extends State<SearchIndexScreen> {
                     style: TextStyle(fontSize: 13, color: Colors.grey),
                   ),
                 )
-              : GridView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 4,
-                    crossAxisSpacing: 8,
-                    mainAxisSpacing: 8,
-                    childAspectRatio: 1,
-                  ),
-                  itemCount: filteredElements.length,
-                  itemBuilder: (context, index) {
-                    return _buildElementItem(filteredElements[index]);
+              : LayoutBuilder(
+                  builder: (context, constraints) {
+                    return GridView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: _gridCrossAxisCount(
+                          constraints.maxWidth,
+                        ),
+                        crossAxisSpacing: 8,
+                        mainAxisSpacing: 8,
+                        childAspectRatio: 1,
+                      ),
+                      itemCount: filteredElements.length,
+                      itemBuilder: (context, index) {
+                        return _buildElementItem(filteredElements[index]);
+                      },
+                    );
                   },
                 ),
         ],
@@ -421,18 +433,24 @@ class _SearchIndexScreenState extends State<SearchIndexScreen> {
                     style: TextStyle(fontSize: 13, color: Colors.grey),
                   ),
                 )
-              : GridView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 4,
-                    crossAxisSpacing: 8,
-                    mainAxisSpacing: 8,
-                    childAspectRatio: 1,
-                  ),
-                  itemCount: filteredElements.length,
-                  itemBuilder: (context, index) {
-                    return _buildElementItem(filteredElements[index]);
+              : LayoutBuilder(
+                  builder: (context, constraints) {
+                    return GridView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: _gridCrossAxisCount(
+                          constraints.maxWidth,
+                        ),
+                        crossAxisSpacing: 8,
+                        mainAxisSpacing: 8,
+                        childAspectRatio: 1,
+                      ),
+                      itemCount: filteredElements.length,
+                      itemBuilder: (context, index) {
+                        return _buildElementItem(filteredElements[index]);
+                      },
+                    );
                   },
                 ),
         ],

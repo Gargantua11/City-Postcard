@@ -882,6 +882,8 @@ class _CitySpot {
 }
 
 class _MapPostcardCard extends StatelessWidget {
+  static const double _postcardAspectRatio = 400 / 258;
+
   const _MapPostcardCard({
     required this.postcard,
     required this.enable3dPreview,
@@ -894,72 +896,92 @@ class _MapPostcardCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: 184,
-      decoration: BoxDecoration(
-        color: const Color(0xFFCBE6BB),
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: const Color(0xFF9EB694)),
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(21),
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            _MapPostcardImage(
-              imageSource: postcard.imageUrl,
-              layers: postcard.layers,
-              enable3dPreview: enable3dPreview,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final cardHeight = (constraints.maxWidth / _postcardAspectRatio).clamp(
+          156.0,
+          220.0,
+        );
+
+        return SizedBox(
+          height: cardHeight,
+          child: Container(
+            decoration: BoxDecoration(
+              color: const Color(0xFFCBE6BB),
+              borderRadius: BorderRadius.circular(22),
+              border: Border.all(color: const Color(0xFF9EB694)),
             ),
-            Positioned(
-              right: 10,
-              left: 10,
-              bottom: 10,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
-                decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.45),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(
-                      Icons.schedule_rounded,
-                      size: 12,
-                      color: Colors.white70,
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      DateFormat('yyyy-MM-dd HH:mm').format(postcard.editedAt),
-                      style: const TextStyle(color: Colors.white, fontSize: 12),
-                    ),
-                    if (locationText != null && locationText!.isNotEmpty) ...[
-                      const SizedBox(width: 8),
-                      const Icon(
-                        Icons.place_rounded,
-                        size: 12,
-                        color: Colors.white70,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(21),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  _MapPostcardImage(
+                    imageSource: postcard.imageUrl,
+                    layers: postcard.layers,
+                    enable3dPreview: enable3dPreview,
+                  ),
+                  Positioned(
+                    right: 10,
+                    left: 10,
+                    bottom: 10,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 9,
+                        vertical: 6,
                       ),
-                      const SizedBox(width: 2),
-                      Expanded(
-                        child: Text(
-                          locationText!,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 12,
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.45),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(
+                            Icons.schedule_rounded,
+                            size: 12,
+                            color: Colors.white70,
                           ),
-                        ),
+                          const SizedBox(width: 4),
+                          Text(
+                            DateFormat(
+                              'yyyy-MM-dd HH:mm',
+                            ).format(postcard.editedAt),
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                            ),
+                          ),
+                          if (locationText != null &&
+                              locationText!.isNotEmpty) ...[
+                            const SizedBox(width: 8),
+                            const Icon(
+                              Icons.place_rounded,
+                              size: 12,
+                              color: Colors.white70,
+                            ),
+                            const SizedBox(width: 2),
+                            Expanded(
+                              child: Text(
+                                locationText!,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
-                    ],
-                  ],
-                ),
+                    ),
+                  ),
+                ],
               ),
             ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 }

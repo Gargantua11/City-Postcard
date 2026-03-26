@@ -172,8 +172,8 @@ class _EditProfilePhoneScreenState extends State<EditProfilePhoneScreen> {
                                 ),
                               ),
                             const SizedBox(height: 28),
-                            SizedBox(
-                              width: 300,
+                            ConstrainedBox(
+                              constraints: const BoxConstraints(maxWidth: 320),
                               child: CustomTextField(
                                 controller: _oldPhoneController,
                                 hintText: '请输入完整原手机号',
@@ -419,8 +419,8 @@ class _EditProfilePhoneChangeScreenState
                         ),
                       ),
                       const SizedBox(height: 28),
-                      SizedBox(
-                        width: 300,
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 320),
                         child: CustomTextField(
                           controller: _newPhoneController,
                           hintText: '请输入要更改的手机号',
@@ -432,8 +432,8 @@ class _EditProfilePhoneChangeScreenState
                         ),
                       ),
                       const SizedBox(height: 14),
-                      SizedBox(
-                        width: 300,
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 320),
                         child: CustomTextField(
                           controller: _codeController,
                           hintText: '请输入验证码',

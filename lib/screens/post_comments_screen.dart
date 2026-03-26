@@ -572,6 +572,8 @@ class _PostCommentsScreenState extends State<PostCommentsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final compactHeader = MediaQuery.sizeOf(context).width < 360;
+
     return Scaffold(
       backgroundColor: const Color(0xFFCFE7BA),
       body: SafeArea(
@@ -593,7 +595,7 @@ class _PostCommentsScreenState extends State<PostCommentsScreen> {
                             borderRadius: BorderRadius.circular(13.33),
                             onTap: () => Navigator.of(context).pop(),
                             child: Container(
-                              width: 72,
+                              width: compactHeader ? 62 : 72,
                               padding: const EdgeInsets.symmetric(
                                 horizontal: 9.33,
                                 vertical: 5.33,
@@ -1014,6 +1016,8 @@ class _CommentTop3dToggleButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final compact = MediaQuery.sizeOf(context).width < 380;
+
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -1037,14 +1041,14 @@ class _CommentTop3dToggleButton extends StatelessWidget {
               checked
                   ? Icons.check_box_rounded
                   : Icons.check_box_outline_blank_rounded,
-              size: 12,
+              size: compact ? 11 : 12,
               color: Colors.black87,
             ),
-            const SizedBox(width: 2.67),
-            const Text(
+            SizedBox(width: compact ? 2 : 2.67),
+            Text(
               '启用3D效果',
               style: TextStyle(
-                fontSize: 12,
+                fontSize: compact ? 11 : 12,
                 fontWeight: FontWeight.w500,
                 color: Colors.black87,
               ),
@@ -1114,38 +1118,45 @@ class _PostOwnerInfo extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        post.username.isEmpty ? 'XXX(昵称)' : post.username,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 30 / 1.8,
-                          fontWeight: FontWeight.w500,
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(
+                          minWidth: 90,
+                          maxWidth: 180,
+                        ),
+                        child: Text(
+                          post.username.isEmpty ? 'XXX(昵称)' : post.username,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 30 / 1.8,
+                            fontWeight: FontWeight.w500,
+                          ),
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    _PostActionPill(
-                      active: isFavorited,
-                      onTap: onFavoriteTap,
-                      activeBackgroundColor: const Color(0xFFFAD89C),
-                      activeBorderColor: const Color(0xFFD6A74F),
-                      icon: isFavorited ? Icons.star : Icons.star_border,
-                      text: isFavorited ? '已收藏' : '收藏',
-                    ),
-                    const SizedBox(width: 6),
-                    _PostActionPill(
-                      active: isLiked,
-                      onTap: onLikeTap,
-                      activeBackgroundColor: const Color(0xFFF9C7C7),
-                      activeBorderColor: const Color(0xFFE98E8E),
-                      icon: isLiked ? Icons.favorite : Icons.favorite_border,
-                      text: isLiked ? '已点赞' : '点赞',
-                    ),
-                  ],
+                      const SizedBox(width: 8),
+                      _PostActionPill(
+                        active: isFavorited,
+                        onTap: onFavoriteTap,
+                        activeBackgroundColor: const Color(0xFFFAD89C),
+                        activeBorderColor: const Color(0xFFD6A74F),
+                        icon: isFavorited ? Icons.star : Icons.star_border,
+                        text: isFavorited ? '已收藏' : '收藏',
+                      ),
+                      const SizedBox(width: 6),
+                      _PostActionPill(
+                        active: isLiked,
+                        onTap: onLikeTap,
+                        activeBackgroundColor: const Color(0xFFF9C7C7),
+                        activeBorderColor: const Color(0xFFE98E8E),
+                        icon: isLiked ? Icons.favorite : Icons.favorite_border,
+                        text: isLiked ? '已点赞' : '点赞',
+                      ),
+                    ],
+                  ),
                 ),
                 const SizedBox(height: 2),
                 Text(

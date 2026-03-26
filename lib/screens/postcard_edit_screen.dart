@@ -115,6 +115,7 @@ class _PostcardEditScreenState extends State<PostcardEditScreen>
         latitude: coordinate?.latitude,
         longitude: coordinate?.longitude,
         layers: _elementLayers,
+        syncToBackend: false,
       );
       if (!mounted) return;
       setState(() {
@@ -424,15 +425,7 @@ class _PostcardEditScreenState extends State<PostcardEditScreen>
     try {
       templates = await _editedPostcardService.getTopLikedPostcards(limit: 5);
     } catch (_) {
-      final localPostcards = await _editedPostcardService.getEditedPostcards();
-      templates = localPostcards
-          .where((item) => !item.isDraft && item.imageUrl.trim().isNotEmpty)
-          .toList(growable: false);
-      if (templates.length > 5) {
-        final shuffled = List<EditedPostcard>.from(templates)
-          ..shuffle(math.Random());
-        templates = shuffled.take(5).toList(growable: false);
-      }
+      templates = const <EditedPostcard>[];
     }
 
     if (!mounted) return;

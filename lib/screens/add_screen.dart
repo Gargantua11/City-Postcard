@@ -109,6 +109,12 @@ class _AddIndexPageState extends State<AddIndexPage> {
     return count;
   }
 
+  int _sheetGridCrossAxisCount(double width) {
+    if (width >= 560) return 4;
+    if (width >= 360) return 3;
+    return 2;
+  }
+
   void _addElement(String elementName, {required String iconPath}) {
     final normalizedName = elementName.trim();
     if (normalizedName.isEmpty) return;
@@ -236,6 +242,8 @@ class _AddIndexPageState extends State<AddIndexPage> {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (context) {
+        final sheetWidth = MediaQuery.of(context).size.width - 32;
+        final crossAxisCount = _sheetGridCrossAxisCount(sheetWidth);
         return Container(
           height: MediaQuery.of(context).size.height * 0.62,
           decoration: const BoxDecoration(
@@ -265,8 +273,8 @@ class _AddIndexPageState extends State<AddIndexPage> {
               Expanded(
                 child: GridView.builder(
                   padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 3,
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: crossAxisCount,
                     crossAxisSpacing: 12,
                     mainAxisSpacing: 12,
                     childAspectRatio: 0.95,
@@ -388,13 +396,17 @@ class _TopBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final sideWidth = screenWidth < 360 ? 62.0 : 74.0;
+    final titleFontSize = screenWidth < 360 ? 32.0 : 42.0;
+
     return Row(
       children: [
         InkWell(
           onTap: onBack,
           borderRadius: BorderRadius.circular(20),
           child: SizedBox(
-            width: 74,
+            width: sideWidth,
             height: 34,
             child: Image.asset(
               'assets/images/add_elements/返回.png',
@@ -405,19 +417,19 @@ class _TopBar extends StatelessWidget {
             ),
           ),
         ),
-        const Expanded(
+        Expanded(
           child: Center(
             child: Text(
               '元素库',
               style: TextStyle(
-                fontSize: 42,
+                fontSize: titleFontSize,
                 fontWeight: FontWeight.w500,
                 letterSpacing: 1.5,
               ),
             ),
           ),
         ),
-        const SizedBox(width: 74),
+        SizedBox(width: sideWidth),
       ],
     );
   }

@@ -243,8 +243,8 @@ class _RegisterStep2ScreenState extends State<RegisterStep2Screen> {
                         ),
                       const SizedBox(height: 15),
                       Center(
-                        child: SizedBox(
-                          width: 300,
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 320),
                           child: CustomTextField(
                             controller: _usernameController,
                             hintText: '请输入用户名',
@@ -256,8 +256,8 @@ class _RegisterStep2ScreenState extends State<RegisterStep2Screen> {
                       ),
                       const SizedBox(height: 18),
                       Center(
-                        child: SizedBox(
-                          width: 300,
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 320),
                           child: CustomTextField(
                             controller: _passwordController,
                             hintText: '请设置6-24位密码',
@@ -286,8 +286,8 @@ class _RegisterStep2ScreenState extends State<RegisterStep2Screen> {
                       ),
                       const SizedBox(height: 18),
                       Center(
-                        child: SizedBox(
-                          width: 300,
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 320),
                           child: CustomTextField(
                             controller: _confirmPasswordController,
                             hintText: '请再次输入密码',
@@ -317,8 +317,8 @@ class _RegisterStep2ScreenState extends State<RegisterStep2Screen> {
                       ),
                       const SizedBox(height: 18),
                       Center(
-                        child: SizedBox(
-                          width: 300,
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 320),
                           child: GestureDetector(
                             onTap: _isSubmitting ? null : _selectCity,
                             child: Container(

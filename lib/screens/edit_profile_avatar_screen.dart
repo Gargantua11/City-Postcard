@@ -343,19 +343,22 @@ class _EditProfileAvatarScreenState extends State<EditProfileAvatarScreen> {
                             ),
                           ),
                           const SizedBox(height: 18),
-                          SizedBox(
-                            width: 300,
-                            height: 44,
-                            child: OutlinedButton.icon(
-                              onPressed: _isSaving ? null : _pickLocalAvatar,
-                              icon: const Icon(Icons.photo_library_outlined),
-                              label: const Text('从相册选择头像'),
-                              style: OutlinedButton.styleFrom(
-                                foregroundColor: const Color(0xFF2E3A2A),
-                                side: const BorderSide(
-                                  color: Color(0xFF90EE90),
+                          ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 320),
+                            child: SizedBox(
+                              width: double.infinity,
+                              height: 44,
+                              child: OutlinedButton.icon(
+                                onPressed: _isSaving ? null : _pickLocalAvatar,
+                                icon: const Icon(Icons.photo_library_outlined),
+                                label: const Text('从相册选择头像'),
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: const Color(0xFF2E3A2A),
+                                  side: const BorderSide(
+                                    color: Color(0xFF90EE90),
+                                  ),
+                                  backgroundColor: const Color(0xFFE7F2E7),
                                 ),
-                                backgroundColor: const Color(0xFFE7F2E7),
                               ),
                             ),
                           ),
@@ -486,4 +489,3 @@ class _AvatarPreview extends StatelessWidget {
     );
   }
 }
-

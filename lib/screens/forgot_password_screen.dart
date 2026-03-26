@@ -244,21 +244,24 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
                       const SizedBox(height: 30),
-                      Container(
-                        width: 150,
-                        height: 50,
-                        decoration: const BoxDecoration(
-                          image: DecorationImage(
-                            image: AssetImage('assets/images/auth/找回密码.png'),
-                            fit: BoxFit.contain,
-                            filterQuality: FilterQuality.high,
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 180),
+                        child: Container(
+                          width: double.infinity,
+                          height: 50,
+                          decoration: const BoxDecoration(
+                            image: DecorationImage(
+                              image: AssetImage('assets/images/auth/找回密码.png'),
+                              fit: BoxFit.contain,
+                              filterQuality: FilterQuality.high,
+                            ),
                           ),
                         ),
                       ),
                       const SizedBox(height: 20),
                       Center(
-                        child: SizedBox(
-                          width: 300,
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 320),
                           child: CustomTextField(
                             controller: _phoneController,
                             hintText: '请输入手机号',
@@ -270,8 +273,8 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                       ),
                       const SizedBox(height: 15),
                       Center(
-                        child: SizedBox(
-                          width: 300,
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 320),
                           child: CustomTextField(
                             controller: _codeController,
                             hintText: '请输入验证码',
@@ -303,8 +306,8 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                       ),
                       const SizedBox(height: 15),
                       Center(
-                        child: SizedBox(
-                          width: 300,
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 320),
                           child: CustomTextField(
                             controller: _passwordController,
                             hintText: '请输入新密码',
@@ -333,8 +336,8 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                       ),
                       const SizedBox(height: 15),
                       Center(
-                        child: SizedBox(
-                          width: 300,
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 320),
                           child: CustomTextField(
                             controller: _confirmPasswordController,
                             hintText: '请再次输入密码',

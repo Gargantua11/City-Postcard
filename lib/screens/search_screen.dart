@@ -330,6 +330,11 @@ class _ResultCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final imageWidth = (MediaQuery.of(context).size.width * 0.34).clamp(
+      112.0,
+      180.0,
+    );
+
     return Container(
       height: 116,
       decoration: BoxDecoration(
@@ -345,7 +350,7 @@ class _ResultCard extends StatelessWidget {
               bottomLeft: Radius.circular(15),
             ),
             child: SizedBox(
-              width: 150,
+              width: imageWidth,
               height: double.infinity,
               child: ResolvedImage(
                 source: imageSource,

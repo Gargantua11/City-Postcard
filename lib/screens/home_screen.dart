@@ -184,20 +184,29 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    final horizontalPadding = screenWidth < 360 ? 12.0 : 20.0;
+    final topPadding = screenWidth < 360 ? 40.0 : 56.0;
+    final titleFontSize = (screenWidth * 0.105).clamp(30.0, 42.0);
+    final titleContainerPadding = EdgeInsets.symmetric(
+      horizontal: screenWidth < 360 ? 16 : 24,
+      vertical: 12,
+    );
+
     return Scaffold(
       backgroundColor: const Color(0xFFEDEDED),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.only(
-          top: 56,
+        padding: EdgeInsets.only(
+          top: topPadding,
           bottom: 24,
-          left: 20,
-          right: 20,
+          left: horizontalPadding,
+          right: horizontalPadding,
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              padding: titleContainerPadding,
               decoration: BoxDecoration(
                 gradient: const LinearGradient(
                   begin: Alignment.topLeft,
@@ -213,10 +222,10 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ],
               ),
-              child: const Text(
+              child: Text(
                 '城市明信片',
                 style: TextStyle(
-                  fontSize: 42,
+                  fontSize: titleFontSize,
                   fontWeight: FontWeight.w700,
                   color: Color(0xFF2F5B34),
                   letterSpacing: 1.6,
@@ -236,26 +245,29 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
             const SizedBox(height: 20),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                _TopActionButton(
-                  icon: _isSelectionMode
-                      ? Icons.check_circle_outline
-                      : Icons.edit_outlined,
-                  label: _isSelectionMode ? '完成' : '编辑',
-                  onTap: _toggleSelectionMode,
-                ),
-                _Top3dToggleButton(
-                  checked: _isHome3dPreviewEnabled,
-                  onTap: _toggleHome3dPreview,
-                ),
-                _TopActionButton(
-                  icon: Icons.search,
-                  label: '搜索',
-                  onTap: () => Navigator.pushNamed(context, '/search_screen'),
-                ),
-              ],
+            SizedBox(
+              width: double.infinity,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  _TopActionButton(
+                    icon: _isSelectionMode
+                        ? Icons.check_circle_outline
+                        : Icons.edit_outlined,
+                    label: _isSelectionMode ? '完成' : '编辑',
+                    onTap: _toggleSelectionMode,
+                  ),
+                  _Top3dToggleButton(
+                    checked: _isHome3dPreviewEnabled,
+                    onTap: _toggleHome3dPreview,
+                  ),
+                  _TopActionButton(
+                    icon: Icons.search,
+                    label: '搜索',
+                    onTap: () => Navigator.pushNamed(context, '/search_screen'),
+                  ),
+                ],
+              ),
             ),
             const SizedBox(height: 22),
             _AddPostcardCard(onTap: _openPostcardEditor),
@@ -349,10 +361,16 @@ class _AddPostcardCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    final cardHeight = (screenWidth * 0.52).clamp(160.0, 220.0);
+    final circleSize = (cardHeight * 0.54).clamp(84.0, 112.0);
+    final addIconSize = (circleSize * 0.66).clamp(56.0, 72.0);
+    final circleBorderWidth = (circleSize * 0.065).clamp(5.0, 7.0);
+
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        height: 200,
+        height: cardHeight,
         width: double.infinity,
         decoration: BoxDecoration(
           color: const Color(0xFFCBE6BB),
@@ -361,13 +379,13 @@ class _AddPostcardCard extends StatelessWidget {
         ),
         child: Center(
           child: Container(
-            width: 108,
-            height: 108,
+            width: circleSize,
+            height: circleSize,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              border: Border.all(color: Colors.black, width: 7),
+              border: Border.all(color: Colors.black, width: circleBorderWidth),
             ),
-            child: const Icon(Icons.add, size: 72, color: Colors.black),
+            child: Icon(Icons.add, size: addIconSize, color: Colors.black),
           ),
         ),
       ),
@@ -388,10 +406,15 @@ class _TopActionButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final compact = MediaQuery.sizeOf(context).width < 360;
+
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 9.33, vertical: 5.33),
+        padding: EdgeInsets.symmetric(
+          horizontal: compact ? 8 : 9.33,
+          vertical: 5.33,
+        ),
         decoration: BoxDecoration(
           color: const Color(0xFFE9EEDB),
           borderRadius: BorderRadius.circular(13.33),
@@ -407,12 +430,12 @@ class _TopActionButton extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 12, color: Colors.black87),
-            const SizedBox(width: 2.67),
+            Icon(icon, size: compact ? 11 : 12, color: Colors.black87),
+            SizedBox(width: compact ? 2 : 2.67),
             Text(
               label,
-              style: const TextStyle(
-                fontSize: 12,
+              style: TextStyle(
+                fontSize: compact ? 11 : 12,
                 fontWeight: FontWeight.w500,
                 color: Colors.black87,
               ),
@@ -432,6 +455,8 @@ class _Top3dToggleButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final compact = MediaQuery.sizeOf(context).width < 380;
+
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -455,14 +480,14 @@ class _Top3dToggleButton extends StatelessWidget {
               checked
                   ? Icons.check_box_rounded
                   : Icons.check_box_outline_blank_rounded,
-              size: 12,
+              size: compact ? 11 : 12,
               color: Colors.black87,
             ),
-            const SizedBox(width: 2.67),
-            const Text(
-              '启用3D效果',
+            SizedBox(width: compact ? 2 : 2.67),
+            Text(
+              compact ? '3D效果' : '启用3D效果',
               style: TextStyle(
-                fontSize: 12,
+                fontSize: compact ? 11 : 12,
                 fontWeight: FontWeight.w500,
                 color: Colors.black87,
               ),
@@ -492,11 +517,14 @@ class _EditedPostcardCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final locationText = _resolveLocation(item);
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    final cardHeight = (screenWidth * 0.52).clamp(160.0, 220.0);
+
     return GestureDetector(
       onTap: selectable ? onTap : null,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 160),
-        height: 200,
+        height: cardHeight,
         width: double.infinity,
         decoration: BoxDecoration(
           color: const Color(0xFFCBE6BB),

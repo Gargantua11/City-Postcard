@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../services/backend_api_client.dart';
+import '../services/profile_account_service.dart';
 import '../services/storage_service.dart';
 import '../widgets/custom_text_field.dart';
 
@@ -13,33 +15,56 @@ class EditProfilePasswordScreen extends StatefulWidget {
 
 class _EditProfilePasswordScreenState extends State<EditProfilePasswordScreen> {
   final StorageService _storageService = StorageService();
-  final TextEditingController _passwordController = TextEditingController();
+  final ProfileAccountService _profileAccountService = ProfileAccountService();
+  final TextEditingController _oldPasswordController = TextEditingController();
+  final TextEditingController _newPasswordController = TextEditingController();
   final TextEditingController _confirmController = TextEditingController();
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
 
   bool _isSaving = false;
-  bool _obscurePassword = true;
+  bool _obscureOldPassword = true;
+  bool _obscureNewPassword = true;
   bool _obscureConfirm = true;
 
   @override
   void dispose() {
-    _passwordController.dispose();
+    _oldPasswordController.dispose();
+    _newPasswordController.dispose();
     _confirmController.dispose();
     super.dispose();
   }
 
-  String? _validatePassword(String? value) {
-    final text = (value ?? '').trim();
-    if (text.length < 6) {
-      return '密码至少6位';
+  String? _validateOldPassword(String? value) {
+    final text = value ?? '';
+    if (text.isEmpty) {
+      return '请输入旧密码';
     }
     return null;
   }
 
+  String? _validateNewPassword(String? value) {
+    final text = value ?? '';
+    if (text.isEmpty) {
+      return '请输入新密码';
+    }
+
+    final passwordRegExp = RegExp(
+      r'^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d@$!%*#?&]{6,24}$',
+    );
+    if (!passwordRegExp.hasMatch(text)) {
+      return '密码需 6-24 位，且同时包含字母和数字';
+    }
+
+    return null;
+  }
+
   String? _validateConfirm(String? value) {
-    final text = (value ?? '').trim();
-    if (text != _passwordController.text.trim()) {
-      return '两次输入的密码不一致';
+    final text = value ?? '';
+    if (text.isEmpty) {
+      return '请确认新密码';
+    }
+    if (text != _newPasswordController.text) {
+      return '两次输入的新密码不一致';
     }
     return null;
   }
@@ -52,17 +77,29 @@ class _EditProfilePasswordScreenState extends State<EditProfilePasswordScreen> {
       _isSaving = true;
     });
 
+    final oldPassword = _oldPasswordController.text;
+    final newPassword = _newPasswordController.text;
+    final confirmPassword = _confirmController.text;
+
     try {
-      await _storageService.saveProfilePassword(
-        _passwordController.text.trim(),
+      await _profileAccountService.changePassword(
+        oldPassword: oldPassword,
+        newPassword: newPassword,
+        confirmPassword: confirmPassword,
       );
+      await _storageService.saveProfilePassword(newPassword);
       if (!mounted) return;
       Navigator.pop(context, true);
+    } on BackendApiException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(e.message)));
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('保存失败，请重试')));
+      ).showSnackBar(const SnackBar(content: Text('修改失败，请重试')));
     } finally {
       if (mounted) {
         setState(() {
@@ -121,25 +158,26 @@ class _EditProfilePasswordScreenState extends State<EditProfilePasswordScreen> {
                         ),
                       ),
                       const SizedBox(height: 28),
-                      SizedBox(
-                        width: 300,
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 320),
                         child: CustomTextField(
-                          controller: _passwordController,
-                          hintText: '请输入新密码（至少6位）',
-                          prefixIcon: Icons.lock,
-                          obscureText: _obscurePassword,
-                          validator: _validatePassword,
+                          controller: _oldPasswordController,
+                          hintText: '请输入旧密码',
+                          prefixIcon: Icons.lock_clock_outlined,
+                          obscureText: _obscureOldPassword,
+                          validator: _validateOldPassword,
                           enabled: !_isSaving,
                           suffixIcon: IconButton(
                             onPressed: _isSaving
                                 ? null
                                 : () {
                                     setState(() {
-                                      _obscurePassword = !_obscurePassword;
+                                      _obscureOldPassword =
+                                          !_obscureOldPassword;
                                     });
                                   },
                             icon: Icon(
-                              _obscurePassword
+                              _obscureOldPassword
                                   ? Icons.visibility_off
                                   : Icons.visibility,
                               color: Colors.grey,
@@ -149,8 +187,37 @@ class _EditProfilePasswordScreenState extends State<EditProfilePasswordScreen> {
                         ),
                       ),
                       const SizedBox(height: 14),
-                      SizedBox(
-                        width: 300,
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 320),
+                        child: CustomTextField(
+                          controller: _newPasswordController,
+                          hintText: '请输入新密码（6-24 位）',
+                          prefixIcon: Icons.lock,
+                          obscureText: _obscureNewPassword,
+                          validator: _validateNewPassword,
+                          enabled: !_isSaving,
+                          suffixIcon: IconButton(
+                            onPressed: _isSaving
+                                ? null
+                                : () {
+                                    setState(() {
+                                      _obscureNewPassword =
+                                          !_obscureNewPassword;
+                                    });
+                                  },
+                            icon: Icon(
+                              _obscureNewPassword
+                                  ? Icons.visibility_off
+                                  : Icons.visibility,
+                              color: Colors.grey,
+                              size: 20,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 320),
                         child: CustomTextField(
                           controller: _confirmController,
                           hintText: '请再次输入新密码',

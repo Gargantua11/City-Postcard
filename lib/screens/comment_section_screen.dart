@@ -367,6 +367,10 @@ class _CommentSectionScreenState extends State<CommentSectionScreen>
   Widget build(BuildContext context) {
     const postButtonBottomGap = 18.0;
     final visiblePosts = _visiblePosts;
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    final titleFontSize = (screenWidth * 0.115).clamp(34.0, 46.0);
+    final searchHintFontSize = screenWidth < 360 ? 14.0 : 16.0;
+    final searchIconSize = screenWidth < 360 ? 28.0 : 34.0;
 
     return Scaffold(
       backgroundColor: const Color(0xFFEDEDED),
@@ -380,11 +384,11 @@ class _CommentSectionScreenState extends State<CommentSectionScreen>
                 physics: const AlwaysScrollableScrollPhysics(),
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 56),
                 children: [
-                  const Center(
+                  Center(
                     child: Text(
                       '讨论区',
                       style: TextStyle(
-                        fontSize: 46,
+                        fontSize: titleFontSize,
                         fontWeight: FontWeight.w700,
                         color: Colors.black,
                       ),
@@ -411,9 +415,9 @@ class _CommentSectionScreenState extends State<CommentSectionScreen>
                             decoration: InputDecoration(
                               border: InputBorder.none,
                               hintText: '输入昵称、地点或热评',
-                              hintStyle: const TextStyle(
+                              hintStyle: TextStyle(
                                 color: Color(0xFFA7AEA2),
-                                fontSize: 16,
+                                fontSize: searchHintFontSize,
                               ),
                               isDense: true,
                               contentPadding: const EdgeInsets.symmetric(
@@ -437,7 +441,7 @@ class _CommentSectionScreenState extends State<CommentSectionScreen>
                                 minWidth: 30,
                               ),
                             ),
-                            style: const TextStyle(fontSize: 16),
+                            style: TextStyle(fontSize: searchHintFontSize),
                           ),
                         ),
                       ),
@@ -451,11 +455,11 @@ class _CommentSectionScreenState extends State<CommentSectionScreen>
                           }
                           _searchFocusNode.requestFocus();
                         },
-                        child: const Padding(
+                        child: Padding(
                           padding: EdgeInsets.all(2),
                           child: Icon(
                             Icons.search,
-                            size: 34,
+                            size: searchIconSize,
                             color: Colors.black87,
                           ),
                         ),
@@ -640,8 +644,9 @@ class _DiscussionPostCard extends StatelessWidget {
         children: [
           LayoutBuilder(
             builder: (context, constraints) {
-              const sideWidth = 88.0;
-              const gap = 12.0;
+              final compact = constraints.maxWidth < 360;
+              final sideWidth = compact ? 76.0 : 88.0;
+              final gap = compact ? 8.0 : 12.0;
               final imageWidth = constraints.maxWidth - sideWidth - gap;
               final imageHeight = imageWidth / _postcardAspectRatio;
 
@@ -660,7 +665,7 @@ class _DiscussionPostCard extends StatelessWidget {
                         ),
                       ),
                     ),
-                    const SizedBox(width: gap),
+                    SizedBox(width: gap),
                     SizedBox(
                       width: sideWidth,
                       height: imageHeight,

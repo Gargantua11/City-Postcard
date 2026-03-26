@@ -97,21 +97,87 @@ List<String> _buildAssetSourceCandidates(PostcardElementLayer layer) {
     candidates.add(source);
   }
 
-  add(layer.assetPath);
+  void addPathWithVariants(String raw) {
+    final normalized = _normalizeLayerAssetPath(raw);
+    if (normalized.isEmpty) return;
+    add(normalized);
 
-  final key = layer.elementKey.trim();
-  if (key.isEmpty) return candidates;
+    final withoutQuery = normalized.split('?').first.trim();
+    final withoutLeadingSlash = withoutQuery.replaceFirst(RegExp(r'^/+'), '');
+    if (withoutLeadingSlash.isNotEmpty && withoutLeadingSlash != normalized) {
+      add(withoutLeadingSlash);
+    }
+    if (withoutLeadingSlash.isNotEmpty &&
+        !_isHttpLikePath(withoutLeadingSlash) &&
+        !withoutLeadingSlash.startsWith('assets/')) {
+      add('/$withoutLeadingSlash');
+    }
 
-  final normalizedKey = key.replaceAll('\\', '/');
-  final isPathLike = normalizedKey.contains('/') || normalizedKey.contains('.');
-  if (isPathLike) {
-    add(normalizedKey);
-    return candidates;
+    final filename = _assetFilenameWithoutExtension(withoutLeadingSlash);
+    if (filename.isNotEmpty) {
+      add('assets/images/add_elements/$filename.png');
+      add('postcards/elements/$filename.png');
+    }
+
+    if (!_assetPathHasExtension(withoutLeadingSlash) &&
+        withoutLeadingSlash.isNotEmpty &&
+        !withoutLeadingSlash.endsWith('/')) {
+      add('$withoutLeadingSlash.png');
+    }
   }
 
-  add('assets/images/add_elements/$normalizedKey.png');
-  add('postcards/elements/$normalizedKey.png');
+  addPathWithVariants(layer.assetPath);
+
+  final key = layer.elementKey.trim();
+  if (key.isNotEmpty) {
+    final normalizedKey = _normalizeLayerAssetPath(key);
+    final isPathLike =
+        normalizedKey.contains('/') || normalizedKey.contains('.');
+    if (isPathLike) {
+      addPathWithVariants(normalizedKey);
+    } else {
+      add('assets/images/add_elements/$normalizedKey.png');
+      add('postcards/elements/$normalizedKey.png');
+      add('/postcards/elements/$normalizedKey.png');
+    }
+  }
+
   return candidates;
+}
+
+String _normalizeLayerAssetPath(String raw) {
+  final source = raw.trim();
+  if (source.isEmpty) return '';
+  return source.replaceAll('\\', '/');
+}
+
+bool _isHttpLikePath(String path) {
+  final lower = path.toLowerCase();
+  return lower.startsWith('http://') || lower.startsWith('https://');
+}
+
+bool _assetPathHasExtension(String path) {
+  return RegExp(
+    r'\.(jpg|jpeg|png|webp|gif|bmp|svg|avif)(\?.*)?$',
+    caseSensitive: false,
+  ).hasMatch(path);
+}
+
+String _assetFilenameWithoutExtension(String path) {
+  final normalized = path.trim();
+  if (normalized.isEmpty) return '';
+  var filename = normalized.split('/').last.trim();
+  if (filename.isEmpty) return '';
+  final queryIndex = filename.indexOf('?');
+  if (queryIndex >= 0) {
+    filename = filename.substring(0, queryIndex).trim();
+  }
+  if (filename.isEmpty) return '';
+  final dot = filename.lastIndexOf('.');
+  if (dot > 0) {
+    filename = filename.substring(0, dot);
+  }
+  return filename.trim();
 }
 
 Widget _buildAssetVisualWithFallback(

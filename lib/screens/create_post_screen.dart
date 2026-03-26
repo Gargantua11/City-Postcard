@@ -317,28 +317,50 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
           ),
         ),
         Expanded(
-          child: GridView.builder(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            itemCount: _postcards.length,
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 2,
-              crossAxisSpacing: 12,
-              mainAxisSpacing: 12,
-              childAspectRatio: 0.86,
-            ),
-            itemBuilder: (context, index) {
-              final item = _postcards[index];
-              final selected = _selectedIndex == index;
-              return _SelectablePostcardTile(
-                item: item,
-                selected: selected,
-                onTap: _isPublishing
-                    ? null
-                    : () {
-                        setState(() {
-                          _selectedIndex = index;
-                        });
-                      },
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final width = constraints.maxWidth;
+              final crossAxisCount = width >= 1080
+                  ? 4
+                  : width >= 760
+                  ? 3
+                  : width >= 420
+                  ? 2
+                  : 1;
+              const postcardAspectRatio = 400 / 258;
+              final textScale = MediaQuery.textScalerOf(context).scale(1.0);
+              final normalizedTextScale = textScale.clamp(1.0, 1.4).toDouble();
+              final infoAreaHeight = 62.0 * normalizedTextScale;
+              final oneColumnAspectRatio =
+                  width / ((width / postcardAspectRatio) + infoAreaHeight);
+              final gridChildAspectRatio = crossAxisCount == 1
+                  ? oneColumnAspectRatio
+                  : 0.86;
+
+              return GridView.builder(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                itemCount: _postcards.length,
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: crossAxisCount,
+                  crossAxisSpacing: 12,
+                  mainAxisSpacing: 12,
+                  childAspectRatio: gridChildAspectRatio,
+                ),
+                itemBuilder: (context, index) {
+                  final item = _postcards[index];
+                  final selected = _selectedIndex == index;
+                  return _SelectablePostcardTile(
+                    item: item,
+                    selected: selected,
+                    onTap: _isPublishing
+                        ? null
+                        : () {
+                            setState(() {
+                              _selectedIndex = index;
+                            });
+                          },
+                  );
+                },
               );
             },
           ),

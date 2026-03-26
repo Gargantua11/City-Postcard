@@ -23,7 +23,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   String _nickname = '用户';
   String _phone = '';
   String? _avatarSource;
-  bool _hasPassword = false;
 
   @override
   void initState() {
@@ -40,7 +39,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       _storageService.getProfileNickname(),
       _storageService.getProfilePhone(),
       _storageService.getProfileAvatar(),
-      _storageService.getProfilePassword(),
     ]);
     final storedAvatar = AvatarUploadService.normalizeAvatarStorageSource(
       (results[2] as String?)?.trim() ?? '',
@@ -59,7 +57,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       _avatarSource = displayAvatar.isEmpty
           ? storedAvatarDisplay
           : displayAvatar;
-      _hasPassword = ((results[3] as String?) ?? '').isNotEmpty;
       _isLoading = false;
     });
   }
@@ -160,7 +157,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                   : LayoutBuilder(
                       builder: (context, constraints) {
                         final maxWidth = constraints.maxWidth;
-                        final rowWidth = maxWidth > 320 ? 300.0 : maxWidth - 20;
+                        final rowWidth = (maxWidth - 20).clamp(0.0, 320.0);
 
                         return Center(
                           child: SizedBox(
@@ -236,7 +233,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                   _EditProfileItem(
                                     width: rowWidth,
                                     icon: Icons.person_outline,
-                                    text: '昵称',
+                                    text: '用户名',
                                     value: _nickname,
                                     onTap: _openNicknameEdit,
                                   ),
@@ -253,7 +250,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                     width: rowWidth,
                                     icon: Icons.lock_outline,
                                     text: '密码',
-                                    value: _hasPassword ? '已设置' : '',
+                                    value: '进入修改',
                                     onTap: _openPasswordEdit,
                                   ),
                                 ],

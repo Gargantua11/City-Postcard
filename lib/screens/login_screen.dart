@@ -116,8 +116,8 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ),
                   const SizedBox(height: 55),
-                  SizedBox(
-                    width: 300,
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 320),
                     child: CustomTextField(
                       controller: _phoneController,
                       hintText: '请输入手机号',
@@ -128,8 +128,8 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ),
                   const SizedBox(height: 15),
-                  SizedBox(
-                    width: 300,
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 320),
                     child: CustomTextField(
                       controller: _passwordController,
                       hintText: '请输入密码',
