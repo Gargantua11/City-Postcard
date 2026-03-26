@@ -7,13 +7,15 @@ import 'discussion_service.dart';
 
 class LikedPostcardService {
   LikedPostcardService({BackendApiClient? apiClient})
-    : _apiClient = apiClient ?? BackendApiClient();
+    : _apiClient = apiClient ?? BackendApiClient(),
+      _discussionService = DiscussionService(apiClient: apiClient);
 
   static const String _storageKey = 'liked_postcards_v1';
   static bool _useVolatileMode = false;
   static List<DiscussionPost> _volatileLikedPosts = const <DiscussionPost>[];
 
   final BackendApiClient _apiClient;
+  final DiscussionService _discussionService;
 
   Future<List<DiscussionPost>> getLikedPosts() async {
     try {
@@ -108,8 +110,9 @@ class LikedPostcardService {
           posts.add(DiscussionPost.fromJson(map));
         }
 
-        posts.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-        return posts;
+        final enrichedPosts = await _enrichLikedPosts(posts);
+        enrichedPosts.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+        return enrichedPosts;
       } on BackendApiException catch (e) {
         lastBackendError = e;
       }
@@ -117,6 +120,64 @@ class LikedPostcardService {
 
     if (lastBackendError != null) throw lastBackendError;
     throw const BackendApiException('加载点赞帖子失败');
+  }
+
+  Future<List<DiscussionPost>> _enrichLikedPosts(
+    List<DiscussionPost> posts,
+  ) async {
+    if (posts.isEmpty) return posts;
+
+    final futures = posts.map(_enrichLikedPost).toList(growable: false);
+    return Future.wait(futures);
+  }
+
+  Future<DiscussionPost> _enrichLikedPost(DiscussionPost post) async {
+    if (!_shouldResolveNickname(post)) {
+      return post;
+    }
+
+    try {
+      final detail = await _discussionService.fetchPostDetail(post.id);
+      return _mergePostDetail(post, detail);
+    } catch (_) {
+      return post;
+    }
+  }
+
+  bool _shouldResolveNickname(DiscussionPost post) {
+    final username = post.username.trim();
+    if (username.isEmpty) return true;
+    if (username == '匿名用户') return true;
+    return false;
+  }
+
+  DiscussionPost _mergePostDetail(
+    DiscussionPost fallback,
+    DiscussionPost detail,
+  ) {
+    return DiscussionPost(
+      id: detail.id > 0 ? detail.id : fallback.id,
+      username:
+          detail.username.trim().isNotEmpty && detail.username.trim() != '匿名用户'
+          ? detail.username
+          : fallback.username,
+      avatar: _pickFirstNonEmpty(detail.avatar, fallback.avatar),
+      imageUrl: detail.imageUrl.trim().isNotEmpty
+          ? detail.imageUrl
+          : fallback.imageUrl,
+      layers: detail.layers.isNotEmpty ? detail.layers : fallback.layers,
+      createdAt: detail.createdAt,
+      address: detail.address.trim().isNotEmpty
+          ? detail.address
+          : fallback.address,
+      likeCount: detail.likeCount > 0 ? detail.likeCount : fallback.likeCount,
+      commentCount: detail.commentCount > 0
+          ? detail.commentCount
+          : fallback.commentCount,
+      hotComment: detail.hotComment.trim().isNotEmpty
+          ? detail.hotComment
+          : fallback.hotComment,
+    );
   }
 
   Future<void> _requestLike(int postId) async {
@@ -325,6 +386,14 @@ class LikedPostcardService {
     final copy = List<DiscussionPost>.of(source);
     copy.sort((a, b) => b.createdAt.compareTo(a.createdAt));
     return copy;
+  }
+
+  String? _pickFirstNonEmpty(String? first, String? second) {
+    final firstText = first?.trim() ?? '';
+    if (firstText.isNotEmpty) return firstText;
+    final secondText = second?.trim() ?? '';
+    if (secondText.isNotEmpty) return secondText;
+    return null;
   }
 
   Future<bool> _persistToPrefs(

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../data/city_location_helper.dart';
 import '../models/postcard_element_layer.dart';
+import '../services/backend_api_client.dart';
 import '../services/edited_postcard_service.dart';
 import '../services/postcard_data_refresh_bus.dart';
 import '../services/storage_service.dart';
@@ -68,6 +69,10 @@ class _HomeScreenState extends State<HomeScreen> {
       }
       _isLoading = false;
     });
+  }
+
+  Future<void> _refreshEditedPostcards() async {
+    await _loadEditedPostcards();
   }
 
   Future<void> _openPostcardEditor() async {
@@ -163,33 +168,49 @@ class _HomeScreenState extends State<HomeScreen> {
       _isDeleting = true;
     });
 
-    final deleted = await _editedPostcardService.deleteEditedPostcardsByIds(
-      selectedDraftIds,
-    );
-    if (!mounted) return;
+    try {
+      final deleted = await _editedPostcardService.deleteEditedPostcardsByIds(
+        selectedDraftIds,
+      );
+      if (!mounted) return;
 
-    if (deleted <= 0) {
+      if (deleted <= 0) {
+        setState(() {
+          _isDeleting = false;
+        });
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('删除失败，请重试')));
+        return;
+      }
+
+      await _loadEditedPostcards();
+      if (!mounted) return;
+
+      setState(() {
+        _isDeleting = false;
+        _selectedDeleteIds.clear();
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(deleteCount == 1 ? '已删除明信片' : '已删除选中明信片')),
+      );
+    } on BackendApiException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isDeleting = false;
+      });
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(e.message)));
+    } catch (_) {
+      if (!mounted) return;
       setState(() {
         _isDeleting = false;
       });
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('删除失败，请重试')));
-      return;
     }
-
-    await _loadEditedPostcards();
-    if (!mounted) return;
-
-    setState(() {
-      _isDeleting = false;
-      _selectedDeleteIds.clear();
-    });
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(
-      SnackBar(content: Text(deleteCount == 1 ? '已删除明信片' : '已删除选中明信片')),
-    );
   }
 
   @override
@@ -205,153 +226,160 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return Scaffold(
       backgroundColor: const Color(0xFFEDEDED),
-      body: SingleChildScrollView(
-        padding: EdgeInsets.only(
-          top: topPadding,
-          bottom: 24,
-          left: horizontalPadding,
-          right: horizontalPadding,
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            Container(
-              padding: titleContainerPadding,
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: <Color>[Color(0xFFEFF7EC), Color(0xFFDDEDD7)],
-                ),
-                borderRadius: BorderRadius.circular(22),
-                boxShadow: const <BoxShadow>[
-                  BoxShadow(
-                    color: Color(0x12000000),
-                    blurRadius: 12,
-                    offset: Offset(0, 4),
+      body: RefreshIndicator(
+        color: const Color(0xFF4F7E54),
+        backgroundColor: Colors.white,
+        onRefresh: _refreshEditedPostcards,
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: EdgeInsets.only(
+            top: topPadding,
+            bottom: 24,
+            left: horizontalPadding,
+            right: horizontalPadding,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Container(
+                padding: titleContainerPadding,
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: <Color>[Color(0xFFEFF7EC), Color(0xFFDDEDD7)],
                   ),
-                ],
-              ),
-              child: Text(
-                '城市明信片',
-                style: TextStyle(
-                  fontSize: titleFontSize,
-                  fontWeight: FontWeight.w700,
-                  color: Color(0xFF2F5B34),
-                  letterSpacing: 1.6,
-                  shadows: <Shadow>[
-                    Shadow(
-                      color: Color(0x22FFFFFF),
-                      offset: Offset(0, 1),
-                      blurRadius: 1,
+                  borderRadius: BorderRadius.circular(22),
+                  boxShadow: const <BoxShadow>[
+                    BoxShadow(
+                      color: Color(0x12000000),
+                      blurRadius: 12,
+                      offset: Offset(0, 4),
                     ),
-                    Shadow(
-                      color: Color(0x22000000),
-                      offset: Offset(0, 2),
-                      blurRadius: 5,
+                  ],
+                ),
+                child: Text(
+                  '城市明信片',
+                  style: TextStyle(
+                    fontSize: titleFontSize,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF2F5B34),
+                    letterSpacing: 1.6,
+                    shadows: <Shadow>[
+                      Shadow(
+                        color: Color(0x22FFFFFF),
+                        offset: Offset(0, 1),
+                        blurRadius: 1,
+                      ),
+                      Shadow(
+                        color: Color(0x22000000),
+                        offset: Offset(0, 2),
+                        blurRadius: 5,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              SizedBox(
+                width: double.infinity,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    _TopActionButton(
+                      icon: _isSelectionMode
+                          ? Icons.check_circle_outline
+                          : Icons.edit_outlined,
+                      label: _isSelectionMode ? '完成' : '编辑',
+                      onTap: _toggleSelectionMode,
+                    ),
+                    _Top3dToggleButton(
+                      checked: _isHome3dPreviewEnabled,
+                      onTap: _toggleHome3dPreview,
+                    ),
+                    _TopActionButton(
+                      icon: Icons.search,
+                      label: '搜索',
+                      onTap: () =>
+                          Navigator.pushNamed(context, '/search_screen'),
                     ),
                   ],
                 ),
               ),
-            ),
-            const SizedBox(height: 20),
-            SizedBox(
-              width: double.infinity,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  _TopActionButton(
-                    icon: _isSelectionMode
-                        ? Icons.check_circle_outline
-                        : Icons.edit_outlined,
-                    label: _isSelectionMode ? '完成' : '编辑',
-                    onTap: _toggleSelectionMode,
-                  ),
-                  _Top3dToggleButton(
-                    checked: _isHome3dPreviewEnabled,
-                    onTap: _toggleHome3dPreview,
-                  ),
-                  _TopActionButton(
-                    icon: Icons.search,
-                    label: '搜索',
-                    onTap: () => Navigator.pushNamed(context, '/search_screen'),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 22),
-            _AddPostcardCard(onTap: _openPostcardEditor),
-            if (_isSelectionMode) ...[
-              const SizedBox(height: 12),
-              Align(
-                alignment: Alignment.centerLeft,
+              const SizedBox(height: 22),
+              _AddPostcardCard(onTap: _openPostcardEditor),
+              if (_isSelectionMode) ...[
+                const SizedBox(height: 12),
+                Align(
+                  alignment: Alignment.centerLeft,
                   child: Text(
                     _selectedDeleteIds.isEmpty
-                      ? '点选要删除的明信片'
-                      : '已选 ${_selectedDeleteIds.length} 张',
+                        ? '点选要删除的明信片'
+                        : '已选 ${_selectedDeleteIds.length} 张',
                     style: const TextStyle(
                       fontSize: 13,
                       color: Color(0xFF4F5A4A),
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ),
-            ],
-            if (_selectedDeleteIds.isNotEmpty) ...[
-              const SizedBox(height: 10),
-              Align(
-                alignment: Alignment.centerRight,
-                child: FilledButton.icon(
-                  onPressed: _isDeleting ? null : _deleteSelectedPostcard,
-                  style: FilledButton.styleFrom(
-                    backgroundColor: const Color(0xFFE9A1A1),
-                    disabledBackgroundColor: const Color(0xFFF2D6D6),
-                    foregroundColor: const Color(0xFF5A2424),
-                    disabledForegroundColor: const Color(0xFF977C7C),
-                  ),
-                  icon: _isDeleting
-                      ? const SizedBox(
-                          width: 14,
-                          height: 14,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                        : const Icon(Icons.delete_outline),
-                  label: Text(
-                    _isDeleting
-                        ? '删除中...'
-                        : '删除${_selectedDeleteIds.length}张',
-                  ),
-                ),
-              ),
-            ],
-            const SizedBox(height: 22),
-            if (_isLoading)
-              const Padding(
-                padding: EdgeInsets.all(24),
-                child: CircularProgressIndicator(),
-              )
-            else if (_editedPostcards.isNotEmpty)
-              Column(
-                children: _editedPostcards.asMap().entries.map((entry) {
-                  final index = entry.key;
-                  final item = entry.value;
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 22),
-                    child: _EditedPostcardCard(
-                      item: item,
-                      enable3dPreview: _isHome3dPreviewEnabled,
-                      selectable: _isSelectionMode,
-                      selected: _selectedDeleteIds.contains(
-                        item.draftId.trim(),
-                      ),
-                      onTap: () => _onSelectPostcard(index),
+                      fontWeight: FontWeight.w500,
                     ),
-                  );
-                }).toList(),
-              )
-            else
-              const SizedBox.shrink(),
-          ],
+                  ),
+                ),
+              ],
+              if (_selectedDeleteIds.isNotEmpty) ...[
+                const SizedBox(height: 10),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: FilledButton.icon(
+                    onPressed: _isDeleting ? null : _deleteSelectedPostcard,
+                    style: FilledButton.styleFrom(
+                      backgroundColor: const Color(0xFFE9A1A1),
+                      disabledBackgroundColor: const Color(0xFFF2D6D6),
+                      foregroundColor: const Color(0xFF5A2424),
+                      disabledForegroundColor: const Color(0xFF977C7C),
+                    ),
+                    icon: _isDeleting
+                        ? const SizedBox(
+                            width: 14,
+                            height: 14,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.delete_outline),
+                    label: Text(
+                      _isDeleting
+                          ? '删除中...'
+                          : '删除${_selectedDeleteIds.length}张',
+                    ),
+                  ),
+                ),
+              ],
+              const SizedBox(height: 22),
+              if (_isLoading)
+                const Padding(
+                  padding: EdgeInsets.all(24),
+                  child: CircularProgressIndicator(),
+                )
+              else if (_editedPostcards.isNotEmpty)
+                Column(
+                  children: _editedPostcards.asMap().entries.map((entry) {
+                    final index = entry.key;
+                    final item = entry.value;
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 22),
+                      child: _EditedPostcardCard(
+                        item: item,
+                        enable3dPreview: _isHome3dPreviewEnabled,
+                        selectable: _isSelectionMode,
+                        selected: _selectedDeleteIds.contains(
+                          item.draftId.trim(),
+                        ),
+                        onTap: () => _onSelectPostcard(index),
+                      ),
+                    );
+                  }).toList(),
+                )
+              else
+                const SizedBox.shrink(),
+            ],
+          ),
         ),
       ),
       bottomNavigationBar: AppBottomNavBar(

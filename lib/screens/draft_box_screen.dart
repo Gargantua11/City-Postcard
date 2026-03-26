@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../data/city_location_helper.dart';
+import '../services/backend_api_client.dart';
 import '../services/edited_postcard_service.dart';
 import '../widgets/resolved_image.dart';
 import 'postcard_edit_screen.dart';
@@ -108,9 +109,7 @@ class _DraftBoxScreenState extends State<DraftBoxScreen> {
         return AlertDialog(
           title: const Text('删除草稿'),
           content: Text(
-            deleteCount == 1
-                ? '确认删除这张草稿吗？'
-                : '确认删除这 $deleteCount 张草稿吗？',
+            deleteCount == 1 ? '确认删除这张草稿吗？' : '确认删除这 $deleteCount 张草稿吗？',
           ),
           actions: [
             TextButton(
@@ -155,11 +154,17 @@ class _DraftBoxScreenState extends State<DraftBoxScreen> {
         _isDeleting = false;
         _selectedDeleteIds.clear();
       });
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(
+      ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(deleteCount == 1 ? '草稿已删除' : '已删除选中草稿')),
       );
+    } on BackendApiException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isDeleting = false;
+      });
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(e.message)));
     } catch (_) {
       if (!mounted) return;
       setState(() {
@@ -251,12 +256,10 @@ class _DraftBoxScreenState extends State<DraftBoxScreen> {
                             width: 14,
                             height: 14,
                             child: CircularProgressIndicator(strokeWidth: 2),
-                    )
+                          )
                         : const Icon(Icons.delete_outline),
                     label: Text(
-                      _isDeleting
-                          ? '删除中'
-                          : '删除${_selectedDeleteIds.length}张',
+                      _isDeleting ? '删除中' : '删除${_selectedDeleteIds.length}张',
                     ),
                   ),
                 ),

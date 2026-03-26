@@ -2532,25 +2532,13 @@ class EditedPostcardService {
     if (index < 0 || index >= postcards.length) {
       return false;
     }
-    postcards.removeAt(index);
-    await _savePostcards(postcards);
-    return true;
+    return (await deleteEditedPostcardsByIds([postcards[index].draftId])) > 0;
   }
 
   Future<bool> deleteEditedPostcardById(String draftId) async {
     final normalizedId = draftId.trim();
     if (normalizedId.isEmpty) return false;
-
-    final postcards = await getEditedPostcards();
-    final nextPostcards = postcards
-        .where((item) => item.draftId != normalizedId)
-        .toList(growable: false);
-    if (nextPostcards.length == postcards.length) {
-      return false;
-    }
-
-    await _savePostcards(nextPostcards);
-    return true;
+    return (await deleteEditedPostcardsByIds([normalizedId])) > 0;
   }
 
   Future<int> deleteEditedPostcardsByIds(Iterable<String> draftIds) async {
@@ -2561,14 +2549,33 @@ class EditedPostcardService {
     if (normalizedIds.isEmpty) return 0;
 
     final postcards = await getEditedPostcards();
-    final beforeCount = postcards.length;
-    postcards.removeWhere((item) => normalizedIds.contains(item.draftId));
-    if (postcards.length == beforeCount) {
+    final matchedPostcards = postcards
+        .where((item) => normalizedIds.contains(item.draftId.trim()))
+        .toList(growable: false);
+    if (matchedPostcards.isEmpty) {
       return 0;
     }
 
-    await _savePostcards(postcards);
-    return beforeCount - postcards.length;
+    for (final postcard in matchedPostcards) {
+      if (postcard.isPublished && postcard.draftId.trim().isNotEmpty) {
+        await _deleteRemotePostcard(postcard.draftId);
+      }
+    }
+
+    final nextPostcards = postcards
+        .where((item) => !normalizedIds.contains(item.draftId.trim()))
+        .toList(growable: false);
+    await _savePostcards(nextPostcards);
+    return matchedPostcards.length;
+  }
+
+  Future<void> _deleteRemotePostcard(String postcardId) async {
+    final normalizedId = postcardId.trim();
+    if (normalizedId.isEmpty) {
+      throw const BackendApiException('明信片ID不能为空。');
+    }
+
+    await _apiClient.delete('/postcard/$normalizedId', requireAuth: true);
   }
 
   Future<bool> markPostcardPublished(String draftId) async {

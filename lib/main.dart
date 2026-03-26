@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -87,16 +87,19 @@ class _StartupAnimationGate extends StatefulWidget {
 
 class _StartupAnimationGateState extends State<_StartupAnimationGate> {
   static const String _startupVideoAsset = 'assets/videos/startup.mp4';
+  static const String _startupPosterAsset = 'assets/images/iogo.png';
 
   late final VideoPlayerController _videoController;
   Timer? _finishTimer;
   bool _videoReady = false;
+  bool _videoFailed = false;
   bool _showMainContent = false;
 
   @override
   void initState() {
     super.initState();
     _videoController = VideoPlayerController.asset(_startupVideoAsset);
+    _videoController.addListener(_handleVideoStateChanged);
     _prepareAndPlayVideo();
   }
 
@@ -106,13 +109,32 @@ class _StartupAnimationGateState extends State<_StartupAnimationGate> {
       if (!mounted) return;
 
       _videoController.setLooping(false);
+      _videoController.setVolume(0);
       setState(() {
         _videoReady = true;
       });
 
-      final duration = _videoController.value.duration;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || _showMainContent) return;
+        _playStartupVideo();
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _videoFailed = true;
+      });
+      _finishStartup();
+    }
+  }
+
+  Future<void> _playStartupVideo() async {
+    if (_showMainContent || !_videoReady) return;
+
+    try {
+      await _videoController.seekTo(Duration.zero);
       await _videoController.play();
 
+      final duration = _videoController.value.duration;
       final safeDuration = duration > Duration.zero
           ? duration
           : const Duration(milliseconds: 1500);
@@ -121,6 +143,20 @@ class _StartupAnimationGateState extends State<_StartupAnimationGate> {
         _finishStartup,
       );
     } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _videoFailed = true;
+      });
+      _finishStartup();
+    }
+  }
+
+  void _handleVideoStateChanged() {
+    if (!mounted || _showMainContent) return;
+    if (_videoController.value.hasError && !_videoFailed) {
+      setState(() {
+        _videoFailed = true;
+      });
       _finishStartup();
     }
   }
@@ -147,26 +183,36 @@ class _StartupAnimationGateState extends State<_StartupAnimationGate> {
       return const _AuthEntryScreen();
     }
 
-    if (!_videoReady) {
-      return const Scaffold(
-        backgroundColor: Colors.black,
-        body: Center(
-          child: CircularProgressIndicator(color: Colors.white),
-        ),
-      );
-    }
-
     return Scaffold(
       backgroundColor: Colors.black,
-      body: SizedBox.expand(
-        child: FittedBox(
-          fit: BoxFit.cover,
-          child: SizedBox(
-            width: _videoController.value.size.width,
-            height: _videoController.value.size.height,
-            child: VideoPlayer(_videoController),
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          Image.asset(
+            _startupPosterAsset,
+            fit: BoxFit.cover,
+            filterQuality: FilterQuality.high,
           ),
-        ),
+          if (_videoReady && !_videoFailed)
+            SizedBox.expand(
+              child: FittedBox(
+                fit: BoxFit.cover,
+                child: SizedBox(
+                  width: _videoController.value.size.width > 0
+                      ? _videoController.value.size.width
+                      : 16,
+                  height: _videoController.value.size.height > 0
+                      ? _videoController.value.size.height
+                      : 9,
+                  child: VideoPlayer(_videoController),
+                ),
+              ),
+            ),
+          if (!_videoReady)
+            const Center(child: CircularProgressIndicator(color: Colors.white)),
+          if (_videoFailed)
+            const Center(child: CircularProgressIndicator(color: Colors.white)),
+        ],
       ),
     );
   }
