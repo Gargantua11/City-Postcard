@@ -10,6 +10,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../data/city_code_center.dart';
+import '../data/city_location_helper.dart';
 import '../models/postcard_element_layer.dart';
 import '../services/backend_api_client.dart';
 import '../services/edited_postcard_service.dart';
@@ -115,7 +116,8 @@ class _PostcardEditScreenState extends State<PostcardEditScreen>
         latitude: coordinate?.latitude,
         longitude: coordinate?.longitude,
         layers: _elementLayers,
-        syncToBackend: false,
+        syncToBackend: true,
+        publishToDiscussion: false,
       );
       if (!mounted) return;
       setState(() {
@@ -259,6 +261,13 @@ class _PostcardEditScreenState extends State<PostcardEditScreen>
   String _buildLocationCoreText() {
     final city = _selectedCity;
     if (city == null) return '';
+
+    final resolved = CityLocationHelper.resolveProvinceCityText(
+      cityName: city.name,
+      cityCode: city.code,
+      provinceName: _resolveProvinceNameFromCityCode(city.code),
+    );
+    if (resolved != null && resolved.isNotEmpty) return resolved;
 
     final name = city.name.trim();
     if (name.isNotEmpty) return name;

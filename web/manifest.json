@@ -1,11 +1,11 @@
 {
-    "name": "city_postcard",
-    "short_name": "city_postcard",
+    "name": "城市明信片",
+    "short_name": "城市明信片",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
     "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "description": "城市明信片",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

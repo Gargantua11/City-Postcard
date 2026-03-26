@@ -184,7 +184,10 @@ class _AuthEntryScreen extends StatelessWidget {
             body: Center(child: CircularProgressIndicator()),
           );
         }
-        return const HomeScreen();
+        if (authProvider.isAuthenticated) {
+          return const HomeScreen();
+        }
+        return const LoginScreen();
       },
     );
   }

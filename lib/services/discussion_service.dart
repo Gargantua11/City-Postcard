@@ -577,6 +577,7 @@ class DiscussionPost {
   static String _normalizeHotCommentText(String raw) {
     final text = raw.trim();
     if (text.isEmpty) return '';
+    if (text == '分享一张明信片') return '';
 
     final jsonLikeMap = _tryParseMapFromJsonText(text);
     if (jsonLikeMap != null) {
@@ -722,7 +723,6 @@ class DiscussionPost {
 class DiscussionService {
   static const String _postsCacheKey = 'discussion_posts_cache_v1';
   static const String _localPostsKey = 'discussion_local_posts_v1';
-  static const String _defaultHotComment = '分享一张明信片';
   static const String _postcardCreateEndpoint = '/postcard/create';
 
   DiscussionService({BackendApiClient? apiClient})
@@ -758,9 +758,7 @@ class DiscussionService {
     final normalizedProvinceName = provinceName?.trim();
     final normalizedCityCodeValue = _normalizeCityCodeValue(normalizedCityCode);
     final trimmedHotComment = hotComment.trim();
-    final normalizedHotComment = trimmedHotComment.isEmpty
-        ? _defaultHotComment
-        : trimmedHotComment;
+    final normalizedHotComment = trimmedHotComment;
     final imageKey = _normalizeImageKeyCandidate(source);
     final elements = _buildElementPayload(layers, useLegacyAssetType: false);
     final title = normalizedCityName != null && normalizedCityName.isNotEmpty

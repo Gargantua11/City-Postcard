@@ -17,7 +17,7 @@ class _RegisterStep1ScreenState extends State<RegisterStep1Screen> {
   final AuthService _authService = AuthService();
   bool _canSendCode = true;
   bool _isSendingCode = false;
-  final bool _isVerifying = false;
+  bool _isVerifying = false;
   int _countdown = 60;
   Timer? _timer;
   @override
@@ -106,13 +106,34 @@ class _RegisterStep1ScreenState extends State<RegisterStep1Screen> {
 
   Future<void> _nextStep() async {
     if (_isVerifying || _isSendingCode) return;
+    if (!_formKey.currentState!.validate()) return;
 
     final phone = _phoneController.text.trim();
+    final code = _codeController.text.trim();
+
+    setState(() {
+      _isVerifying = true;
+    });
+
+    final regToken = await _authService.verifyRegisterCode(phone, code);
+    if (!mounted) return;
+
+    setState(() {
+      _isVerifying = false;
+    });
+
+    if (regToken == null || regToken.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(_authService.lastError ?? '验证码校验失败，请重试')),
+      );
+      return;
+    }
 
     await Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => RegisterStep2Screen(phone: phone, regToken: ''),
+        builder: (context) =>
+            RegisterStep2Screen(phone: phone, regToken: regToken),
       ),
     );
   }

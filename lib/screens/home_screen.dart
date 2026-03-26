@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import '../data/city_location_helper.dart';
 import '../models/postcard_element_layer.dart';
 import '../services/edited_postcard_service.dart';
 import '../services/postcard_data_refresh_bus.dart';
@@ -27,7 +28,7 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _isSelectionMode = false;
   bool _isHome3dPreviewEnabled = true;
   bool _isDeleting = false;
-  int? _selectedDeleteIndex;
+  final Set<String> _selectedDeleteIds = <String>{};
 
   @override
   void initState() {
@@ -53,16 +54,17 @@ class _HomeScreenState extends State<HomeScreen> {
     final postcards = allPostcards
         .where((item) => !item.isDraft)
         .toList(growable: false);
+    final postcardIds = postcards
+        .map((item) => item.draftId.trim())
+        .where((item) => item.isNotEmpty)
+        .toSet();
     if (!mounted) return;
     setState(() {
       _editedPostcards = postcards;
-      if (_selectedDeleteIndex != null &&
-          _selectedDeleteIndex! >= postcards.length) {
-        _selectedDeleteIndex = null;
-      }
+      _selectedDeleteIds.removeWhere((id) => !postcardIds.contains(id));
       if (postcards.isEmpty) {
         _isSelectionMode = false;
-        _selectedDeleteIndex = null;
+        _selectedDeleteIds.clear();
       }
       _isLoading = false;
     });
@@ -86,15 +88,22 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() {
       _isSelectionMode = !_isSelectionMode;
       if (!_isSelectionMode) {
-        _selectedDeleteIndex = null;
+        _selectedDeleteIds.clear();
       }
     });
   }
 
   void _onSelectPostcard(int index) {
     if (!_isSelectionMode) return;
+    if (index < 0 || index >= _editedPostcards.length) return;
+    final draftId = _editedPostcards[index].draftId.trim();
+    if (draftId.isEmpty) return;
     setState(() {
-      _selectedDeleteIndex = _selectedDeleteIndex == index ? null : index;
+      if (_selectedDeleteIds.contains(draftId)) {
+        _selectedDeleteIds.remove(draftId);
+      } else {
+        _selectedDeleteIds.add(draftId);
+      }
     });
   }
 
@@ -119,20 +128,20 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _deleteSelectedPostcard() async {
-    final deleteIndex = _selectedDeleteIndex;
-    if (deleteIndex == null || _isDeleting) return;
-    if (deleteIndex < 0 || deleteIndex >= _editedPostcards.length) return;
-
-    final selectedPostcard = _editedPostcards[deleteIndex];
-    final targetDraftId = selectedPostcard.draftId.trim();
-    if (targetDraftId.isEmpty) return;
+    if (_selectedDeleteIds.isEmpty || _isDeleting) return;
+    final selectedDraftIds = _selectedDeleteIds.toList(growable: false);
+    final deleteCount = selectedDraftIds.length;
 
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
           title: const Text('删除明信片'),
-          content: const Text('确认删除这张已编辑明信片吗？'),
+          content: Text(
+            deleteCount == 1
+                ? '确认删除这张已编辑明信片吗？'
+                : '确认删除这 $deleteCount 张已编辑明信片吗？',
+          ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(dialogContext, false),
@@ -154,15 +163,14 @@ class _HomeScreenState extends State<HomeScreen> {
       _isDeleting = true;
     });
 
-    final deleted = await _editedPostcardService.deleteEditedPostcardById(
-      targetDraftId,
+    final deleted = await _editedPostcardService.deleteEditedPostcardsByIds(
+      selectedDraftIds,
     );
     if (!mounted) return;
 
-    if (!deleted) {
+    if (deleted <= 0) {
       setState(() {
         _isDeleting = false;
-        _selectedDeleteIndex = null;
       });
       ScaffoldMessenger.of(
         context,
@@ -175,11 +183,13 @@ class _HomeScreenState extends State<HomeScreen> {
 
     setState(() {
       _isDeleting = false;
-      _selectedDeleteIndex = null;
+      _selectedDeleteIds.clear();
     });
     ScaffoldMessenger.of(
       context,
-    ).showSnackBar(const SnackBar(content: Text('已删除明信片')));
+    ).showSnackBar(
+      SnackBar(content: Text(deleteCount == 1 ? '已删除明信片' : '已删除选中明信片')),
+    );
   }
 
   @override
@@ -275,17 +285,19 @@ class _HomeScreenState extends State<HomeScreen> {
               const SizedBox(height: 12),
               Align(
                 alignment: Alignment.centerLeft,
-                child: Text(
-                  _selectedDeleteIndex == null ? '请点击一张已编辑明信片' : '已选中，可点击删除',
-                  style: const TextStyle(
-                    fontSize: 13,
-                    color: Color(0xFF4F5A4A),
+                  child: Text(
+                    _selectedDeleteIds.isEmpty
+                      ? '点选要删除的明信片'
+                      : '已选 ${_selectedDeleteIds.length} 张',
+                    style: const TextStyle(
+                      fontSize: 13,
+                      color: Color(0xFF4F5A4A),
                     fontWeight: FontWeight.w500,
                   ),
                 ),
               ),
             ],
-            if (_selectedDeleteIndex != null) ...[
+            if (_selectedDeleteIds.isNotEmpty) ...[
               const SizedBox(height: 10),
               Align(
                 alignment: Alignment.centerRight,
@@ -302,9 +314,13 @@ class _HomeScreenState extends State<HomeScreen> {
                           width: 14,
                           height: 14,
                           child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.delete_outline),
-                  label: Text(_isDeleting ? '删除中...' : '删除'),
+                    )
+                        : const Icon(Icons.delete_outline),
+                  label: Text(
+                    _isDeleting
+                        ? '删除中...'
+                        : '删除${_selectedDeleteIds.length}张',
+                  ),
                 ),
               ),
             ],
@@ -325,7 +341,9 @@ class _HomeScreenState extends State<HomeScreen> {
                       item: item,
                       enable3dPreview: _isHome3dPreviewEnabled,
                       selectable: _isSelectionMode,
-                      selected: _selectedDeleteIndex == index,
+                      selected: _selectedDeleteIds.contains(
+                        item.draftId.trim(),
+                      ),
                       onTap: () => _onSelectPostcard(index),
                     ),
                   );
@@ -625,6 +643,19 @@ class _EditedPostcardCard extends StatelessWidget {
   }
 
   String? _resolveLocation(EditedPostcard postcard) {
+    final normalized = CityLocationHelper.resolveProvinceCityText(
+      cityName: postcard.cityName,
+      cityCode: postcard.cityCode,
+      provinceName: postcard.provinceName,
+    );
+    if (normalized != null && normalized.isNotEmpty) {
+      return CityLocationHelper.mergeWithDetail(
+        base: normalized,
+        detail: postcard.locationDetail,
+        fallback: '',
+      );
+    }
+
     final city = postcard.cityName?.trim();
     final province = postcard.provinceName?.trim();
     final cityCode = postcard.cityCode?.trim();

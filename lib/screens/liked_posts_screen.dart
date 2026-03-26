@@ -195,7 +195,7 @@ class _LikedPostsScreenState extends State<LikedPostsScreen> {
                 child: Align(
                   alignment: Alignment.centerLeft,
                   child: Text(
-                    _selectedDeleteIndex == null ? '请点击一张点赞明信片' : '已选中，可点击删除',
+                    _selectedDeleteIndex == null ? '点选要取消点赞的明信片' : '已选 1 张',
                     style: const TextStyle(
                       fontSize: 13,
                       color: Color(0xFF4F5A4A),

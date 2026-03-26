@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import '../data/city_location_helper.dart';
 import '../services/edited_postcard_service.dart';
 import '../widgets/resolved_image.dart';
 
@@ -255,6 +256,18 @@ class _PostcardOverviewTile extends StatelessWidget {
   }
 
   String _resolveLocation(EditedPostcard postcard) {
+    final normalized = CityLocationHelper.resolveProvinceCityText(
+      cityName: postcard.cityName,
+      cityCode: postcard.cityCode,
+      provinceName: postcard.provinceName,
+    );
+    if (normalized != null && normalized.isNotEmpty) {
+      return CityLocationHelper.mergeWithDetail(
+        base: normalized,
+        detail: postcard.locationDetail,
+      );
+    }
+
     final province = postcard.provinceName?.trim();
     final city = postcard.cityName?.trim();
     final detail = postcard.locationDetail?.trim();

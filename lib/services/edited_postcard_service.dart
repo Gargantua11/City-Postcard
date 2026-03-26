@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_oss_aliyun/flutter_oss_aliyun.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../data/city_location_helper.dart';
 import '../models/postcard_element_layer.dart';
 import 'backend_api_client.dart';
 
@@ -140,6 +141,61 @@ class EditedPostcardService {
         .toList(growable: false);
   }
 
+  Future<int> syncOwnedPostcardsFromBackendOnLogin({
+    required String? userId,
+    required String? username,
+    int maxPages = 8,
+    int pageSize = 20,
+  }) async {
+    final normalizedUserId = userId?.trim() ?? '';
+    final normalizedUsername = username?.trim() ?? '';
+    if (normalizedUserId.isEmpty && normalizedUsername.isEmpty) {
+      return 0;
+    }
+
+    final remoteRecords = await _fetchOwnedDiscussionRecords(
+      userId: normalizedUserId,
+      username: normalizedUsername,
+      maxPages: maxPages,
+      pageSize: pageSize,
+    );
+    if (remoteRecords.isEmpty) {
+      return 0;
+    }
+
+    final local = await getEditedPostcards();
+    final localByDraftId = <String, EditedPostcard>{
+      for (final card in local) card.draftId: card,
+    };
+
+    var changedCount = 0;
+    for (var i = 0; i < remoteRecords.length; i++) {
+      final map = remoteRecords[i];
+      final postcard = await _mapOwnedRemoteRecordToEditedPostcard(
+        map,
+        fallbackIndex: i,
+      );
+      if (postcard == null) continue;
+
+      final key = postcard.draftId.trim();
+      if (key.isEmpty) continue;
+      final existing = localByDraftId[key];
+      if (existing == null || postcard.editedAt.isAfter(existing.editedAt)) {
+        localByDraftId[key] = postcard;
+        changedCount += 1;
+      }
+    }
+
+    if (changedCount <= 0) {
+      return 0;
+    }
+
+    final merged = localByDraftId.values.toList(growable: false)
+      ..sort((a, b) => b.editedAt.compareTo(a.editedAt));
+    await _savePostcards(merged);
+    return changedCount;
+  }
+
   Future<List<EditedPostcard>> getTopLikedPostcards({int limit = 5}) async {
     final safeLimit = limit <= 0 ? 5 : limit;
     final records = await _fetchTopLikedRecordsFromTopLikedEndpoint(safeLimit);
@@ -232,6 +288,186 @@ class EditedPostcardService {
     return sorted;
   }
 
+  Future<List<Map<String, dynamic>>> _fetchOwnedDiscussionRecords({
+    required String userId,
+    required String username,
+    required int maxPages,
+    required int pageSize,
+  }) async {
+    final effectiveMaxPages = maxPages <= 0 ? 1 : maxPages;
+    final effectivePageSize = pageSize <= 0 ? 20 : pageSize;
+    var cursor = DateTime.now();
+
+    final records = <Map<String, dynamic>>[];
+    final seenPostcardIds = <int>{};
+    for (var page = 0; page < effectiveMaxPages; page++) {
+      final body = await _apiClient.get(
+        '/discussion/postcards',
+        queryParameters: <String, String>{
+          'lastTime': _formatDiscussionCursorTime(cursor),
+          'size': '$effectivePageSize',
+        },
+        requireAuth: true,
+      );
+      final data = BackendApiClient.extractData(body);
+      final pageList = BackendApiClient.extractList(data);
+      if (pageList.isEmpty) {
+        break;
+      }
+
+      var oldest = cursor;
+      for (final raw in pageList) {
+        final map = BackendApiClient.asMap(raw);
+        if (map == null) continue;
+
+        final createdAt = _extractCreatedAtForTopLiked(map);
+        if (createdAt.isBefore(oldest)) {
+          oldest = createdAt;
+        }
+        final matchedFromList = _matchesOwnedRecord(
+          map,
+          userId: userId,
+          username: username,
+        );
+
+        final postcardId = _extractTopLikedPostcardId(map);
+        if (postcardId == null || postcardId <= 0) continue;
+        if (!seenPostcardIds.add(postcardId)) continue;
+
+        final detail = await _fetchPostcardDetailForSync(postcardId);
+        if (detail == null) continue;
+        final matchedFromDetail = _matchesOwnedRecord(
+          detail,
+          userId: userId,
+          username: username,
+        );
+        if (!matchedFromDetail && !matchedFromList) {
+          continue;
+        }
+
+        records.add(detail);
+      }
+
+      if (pageList.length < effectivePageSize) {
+        break;
+      }
+      cursor = oldest.subtract(const Duration(seconds: 1));
+    }
+
+    return records;
+  }
+
+  Future<Map<String, dynamic>?> _fetchPostcardDetailForSync(
+    int postcardId,
+  ) async {
+    try {
+      final body = await _apiClient.get(
+        '/postcard/$postcardId',
+        requireAuth: true,
+      );
+      final data = BackendApiClient.extractData(body);
+      final detailMap = BackendApiClient.asMap(data);
+      if (detailMap == null || detailMap.isEmpty) {
+        return null;
+      }
+      return <String, dynamic>{
+        ...detailMap,
+        'id': postcardId,
+        'postcardId': postcardId,
+      };
+    } on BackendApiException catch (_) {
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  bool _matchesOwnedRecord(
+    Map<String, dynamic> map, {
+    required String userId,
+    required String username,
+  }) {
+    final mapUserId =
+        _readDeepString(map, const <String>[
+          'userId',
+          'uid',
+          'authorId',
+          'creatorId',
+        ])?.trim() ??
+        '';
+    if (userId.isNotEmpty && mapUserId.isNotEmpty && mapUserId == userId) {
+      return true;
+    }
+
+    final mapUsername =
+        _readDeepString(map, const <String>[
+          'username',
+          'userName',
+          'nickname',
+          'nickName',
+        ])?.trim() ??
+        '';
+    if (username.isNotEmpty &&
+        mapUsername.isNotEmpty &&
+        mapUsername == username) {
+      return true;
+    }
+
+    if (userId.isNotEmpty && mapUserId.isNotEmpty) {
+      return false;
+    }
+    if (username.isNotEmpty && mapUsername.isNotEmpty) {
+      return false;
+    }
+    return false;
+  }
+
+  Future<EditedPostcard?> _mapOwnedRemoteRecordToEditedPostcard(
+    Map<String, dynamic> record, {
+    required int fallbackIndex,
+  }) async {
+    final base = await _mapTopLikedRecordToEditedPostcard(
+      record,
+      fallbackIndex: fallbackIndex,
+    );
+    if (base == null) return null;
+
+    final remoteId =
+        BackendApiClient.readString(record, const [
+          'id',
+          'postcardId',
+          'cardId',
+          'postId',
+        ])?.trim() ??
+        '';
+
+    return EditedPostcard(
+      draftId: remoteId.isEmpty ? base.draftId : remoteId,
+      imageUrl: base.imageUrl,
+      editedAt: base.editedAt,
+      isPublished: true,
+      isDraft: false,
+      latitude: base.latitude,
+      longitude: base.longitude,
+      cityName: base.cityName,
+      cityCode: base.cityCode,
+      provinceName: base.provinceName,
+      locationDetail: base.locationDetail,
+      layers: base.layers,
+    );
+  }
+
+  String _formatDiscussionCursorTime(DateTime dateTime) {
+    final local = dateTime.toLocal();
+    final year = local.year.toString().padLeft(4, '0');
+    final month = local.month.toString().padLeft(2, '0');
+    final day = local.day.toString().padLeft(2, '0');
+    final hour = local.hour.toString().padLeft(2, '0');
+    final minute = local.minute.toString().padLeft(2, '0');
+    final second = local.second.toString().padLeft(2, '0');
+    return '$year-$month-$day $hour:$minute:$second';
+  }
+
   int _compareTopLikedRecords(dynamic leftRaw, dynamic rightRaw) {
     final left = BackendApiClient.asMap(leftRaw);
     final right = BackendApiClient.asMap(rightRaw);
@@ -314,23 +550,38 @@ class EditedPostcardService {
     String? locationDetail,
     List<PostcardElementLayer>? layers,
     bool syncToBackend = false,
+    bool publishToDiscussion = false,
   }) async {
     String finalImageUrl = imageUrl;
     String? remotePostcardId;
 
     if (syncToBackend) {
-      final syncResult = await _syncPostcardToBackend(
-        imageSource: imageUrl,
-        cityName: cityName,
-        cityCode: cityCode,
-        provinceName: provinceName,
-        locationDetail: locationDetail,
-        latitude: latitude,
-        longitude: longitude,
-        layers: layers ?? const <PostcardElementLayer>[],
-      );
-      finalImageUrl = syncResult.imageUrl;
-      remotePostcardId = syncResult.remotePostcardId;
+      if (publishToDiscussion) {
+        final syncResult = await _syncPostcardToBackend(
+          imageSource: imageUrl,
+          cityName: cityName,
+          cityCode: cityCode,
+          provinceName: provinceName,
+          locationDetail: locationDetail,
+          latitude: latitude,
+          longitude: longitude,
+          layers: layers ?? const <PostcardElementLayer>[],
+        );
+        finalImageUrl = _resolvePreferredStoredImageSource(
+          localSource: imageUrl,
+          remoteSource: syncResult.imageUrl,
+        );
+        remotePostcardId = syncResult.remotePostcardId;
+      } else {
+        final uploadedImageUrl = await _syncImageOnlyToBackend(
+          imageSource: imageUrl,
+          cityCode: cityCode,
+        );
+        finalImageUrl = _resolvePreferredStoredImageSource(
+          localSource: imageUrl,
+          remoteSource: uploadedImageUrl,
+        );
+      }
     }
 
     return _savePostcard(
@@ -346,6 +597,40 @@ class EditedPostcardService {
       locationDetail: locationDetail,
       layers: layers,
     );
+  }
+
+  String _resolvePreferredStoredImageSource({
+    required String localSource,
+    required String remoteSource,
+  }) {
+    final local = localSource.trim();
+    final remote = remoteSource.trim();
+
+    if (local.isEmpty) return remote;
+    if (_looksLikeLocalFilePath(local) || local.startsWith('file://')) {
+      return local;
+    }
+    if (remote.isNotEmpty) return remote;
+    return local;
+  }
+
+  Future<String> _syncImageOnlyToBackend({
+    required String imageSource,
+    required String? cityCode,
+  }) async {
+    final normalizedSource = imageSource.trim();
+    if (normalizedSource.isEmpty) {
+      throw const BackendApiException('请先选择明信片图片。');
+    }
+
+    final uploadedImage = await _resolveImageForBackend(
+      normalizedSource,
+      cityCode: cityCode,
+    );
+    final createImageKey =
+        _tryResolveImageKeyForCreate(uploadedImage) ??
+        _normalizeObjectKey(uploadedImage.imageUrl).trim();
+    return _resolveImageUrlForCreate(uploadedImage, imageKey: createImageKey);
   }
 
   Future<String> saveDraftPostcard({
@@ -481,7 +766,11 @@ class EditedPostcardService {
     try {
       final context = await _resolveOssUploadContext();
       if (context.endpoint.isNotEmpty && context.bucketName.isNotEmpty) {
-        return key;
+        return _buildOssObjectUrl(
+          objectKey: key,
+          endpoint: context.endpoint,
+          bucketName: context.bucketName,
+        );
       }
     } catch (_) {}
 
@@ -493,7 +782,11 @@ class EditedPostcardService {
       _configuredOssBucketName,
     ]);
     if (endpoint.isNotEmpty && bucketName.isNotEmpty) {
-      return key;
+      return _buildOssObjectUrl(
+        objectKey: key,
+        endpoint: endpoint,
+        bucketName: bucketName,
+      );
     }
     return '/$key';
   }
@@ -1020,6 +1313,18 @@ class EditedPostcardService {
     required String? cityCode,
     required String locationDetail,
   }) {
+    final normalized = CityLocationHelper.resolveProvinceCityText(
+      cityName: cityName,
+      cityCode: cityCode,
+      provinceName: provinceName,
+    );
+    if (normalized != null && normalized.isNotEmpty) {
+      return CityLocationHelper.mergeWithDetail(
+        base: normalized,
+        detail: locationDetail,
+      );
+    }
+
     if (cityName.isNotEmpty) {
       return _mergeAddressText(cityName, locationDetail);
     }
@@ -1192,7 +1497,11 @@ class EditedPostcardService {
       try {
         final context = await _resolveOssUploadContext();
         if (context.endpoint.isNotEmpty && context.bucketName.isNotEmpty) {
-          return key;
+          return _buildOssObjectUrl(
+            objectKey: key,
+            endpoint: context.endpoint,
+            bucketName: context.bucketName,
+          );
         }
       } catch (_) {}
 
@@ -1204,7 +1513,11 @@ class EditedPostcardService {
         _configuredOssBucketName,
       ]);
       if (endpoint.isNotEmpty && bucketName.isNotEmpty) {
-        return key;
+        return _buildOssObjectUrl(
+          objectKey: key,
+          endpoint: endpoint,
+          bucketName: bucketName,
+        );
       }
     }
 
@@ -2238,6 +2551,24 @@ class EditedPostcardService {
 
     await _savePostcards(nextPostcards);
     return true;
+  }
+
+  Future<int> deleteEditedPostcardsByIds(Iterable<String> draftIds) async {
+    final normalizedIds = draftIds
+        .map((item) => item.trim())
+        .where((item) => item.isNotEmpty)
+        .toSet();
+    if (normalizedIds.isEmpty) return 0;
+
+    final postcards = await getEditedPostcards();
+    final beforeCount = postcards.length;
+    postcards.removeWhere((item) => normalizedIds.contains(item.draftId));
+    if (postcards.length == beforeCount) {
+      return 0;
+    }
+
+    await _savePostcards(postcards);
+    return beforeCount - postcards.length;
   }
 
   Future<bool> markPostcardPublished(String draftId) async {

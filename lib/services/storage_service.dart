@@ -221,13 +221,17 @@ class StorageService {
     final cachedPhone = prefs.getString(_profilePhoneKey)?.trim() ?? '';
 
     final incomingUsername = user.username.trim();
+    final incomingUsernameLooksLikePhone = _looksLikePhone(incomingUsername);
     final incomingPhone = user.phone?.trim() ?? '';
     final shouldUseCachedNickname =
         cachedNickname.isNotEmpty &&
-        (incomingUsername.isEmpty || incomingUsername == incomingPhone);
+        !_looksLikePhone(cachedNickname) &&
+        (incomingUsername.isEmpty ||
+            incomingUsernameLooksLikePhone ||
+            incomingUsername == incomingPhone);
     final mergedUsername = shouldUseCachedNickname
         ? cachedNickname
-        : incomingUsername;
+        : (incomingUsernameLooksLikePhone ? '' : incomingUsername);
 
     final incomingAvatar = user.avatar?.trim() ?? '';
     final mergedAvatar = incomingAvatar.isNotEmpty
@@ -345,13 +349,15 @@ class StorageService {
   Future<String?> getProfileNickname() async {
     final user = await getUser();
     final fromUser = user?.username.trim();
-    if (fromUser != null && fromUser.isNotEmpty) {
+    if (fromUser != null && fromUser.isNotEmpty && !_looksLikePhone(fromUser)) {
       return fromUser;
     }
 
     final prefs = await SharedPreferences.getInstance();
     final fromPrefs = prefs.getString(_profileNicknameKey)?.trim();
-    if (fromPrefs != null && fromPrefs.isNotEmpty) {
+    if (fromPrefs != null &&
+        fromPrefs.isNotEmpty &&
+        !_looksLikePhone(fromPrefs)) {
       return fromPrefs;
     }
     return null;
@@ -466,5 +472,10 @@ class StorageService {
 
     await clearPostcardAvatarDiscussionLocalData();
     await prefs.setBool(_targetCleanupDoneKey, true);
+  }
+
+  bool _looksLikePhone(String value) {
+    final digits = value.trim().replaceAll(RegExp(r'[^0-9]'), '');
+    return digits.length == 11;
   }
 }

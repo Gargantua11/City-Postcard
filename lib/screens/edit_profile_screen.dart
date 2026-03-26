@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../services/avatar_upload_service.dart';
+import '../services/backend_api_client.dart';
 import '../services/storage_service.dart';
 import '../widgets/resolved_image.dart';
 import 'edit_profile_avatar_screen.dart';
@@ -18,6 +19,7 @@ class EditProfileScreen extends StatefulWidget {
 class _EditProfileScreenState extends State<EditProfileScreen> {
   final StorageService _storageService = StorageService();
   final AvatarUploadService _avatarUploadService = AvatarUploadService();
+  final BackendApiClient _apiClient = BackendApiClient();
 
   bool _isLoading = true;
   String _nickname = '用户';
@@ -59,6 +61,122 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           : displayAvatar;
       _isLoading = false;
     });
+
+    await _syncProfileFromBackend();
+  }
+
+  Future<void> _syncProfileFromBackend() async {
+    String? remoteNickname;
+    String? remoteAvatarSource;
+
+    try {
+      final pingBody = await _apiClient.get('/ping/auth', requireAuth: true);
+      remoteNickname = _extractNicknameFromAuthPing(pingBody);
+    } catch (_) {}
+
+    try {
+      final avatarBody = await _apiClient.get('/me/avatar', requireAuth: true);
+      remoteAvatarSource = _extractAvatarSource(avatarBody);
+    } catch (_) {}
+
+    final normalizedNickname = remoteNickname?.trim() ?? '';
+    final normalizedAvatarStorage =
+        AvatarUploadService.normalizeAvatarStorageSource(
+          (remoteAvatarSource ?? '').trim(),
+        );
+    if (normalizedNickname.isNotEmpty) {
+      await _storageService.saveProfileNickname(normalizedNickname);
+    }
+    if (normalizedAvatarStorage.isNotEmpty) {
+      await _storageService.saveProfileAvatar(normalizedAvatarStorage);
+    }
+
+    if (!mounted) return;
+    final displayAvatar = await _resolveAvatarDisplaySource(
+      normalizedAvatarStorage,
+    );
+    setState(() {
+      if (normalizedNickname.isNotEmpty) {
+        _nickname = normalizedNickname;
+      }
+      if (displayAvatar.isNotEmpty) {
+        _avatarSource = displayAvatar;
+      } else if (AvatarUploadService.isRenderableImageSource(
+        normalizedAvatarStorage,
+      )) {
+        _avatarSource = normalizedAvatarStorage;
+      }
+    });
+  }
+
+  String? _extractNicknameFromAuthPing(Map<String, dynamic> body) {
+    final data = BackendApiClient.extractData(body);
+    final candidates = <String>[
+      body['msg']?.toString() ?? '',
+      body['message']?.toString() ?? '',
+      if (data is String) data,
+    ];
+
+    for (final item in candidates) {
+      final parsed = _parseNicknameFromPingMessage(item);
+      if (parsed != null && parsed.isNotEmpty) {
+        return parsed;
+      }
+    }
+    return null;
+  }
+
+  String? _parseNicknameFromPingMessage(String raw) {
+    final text = raw.trim();
+    if (text.isEmpty) return null;
+
+    final matched = RegExp(
+      r'auth\s+ping\s+success,\s*\S+\s+(.+)$',
+      caseSensitive: false,
+    ).firstMatch(text);
+    if (matched != null) {
+      final nickname = matched.group(1)?.trim() ?? '';
+      if (nickname.isNotEmpty) return nickname;
+    }
+
+    final commaIndex = text.lastIndexOf(',');
+    if (commaIndex >= 0 && commaIndex < text.length - 1) {
+      final tail = text.substring(commaIndex + 1).trim();
+      final parts = tail
+          .split(RegExp(r'\s+'))
+          .where((item) => item.trim().isNotEmpty)
+          .toList(growable: false);
+      if (parts.length >= 2) {
+        final nickname = parts.sublist(1).join(' ').trim();
+        if (nickname.isNotEmpty) return nickname;
+      }
+    }
+
+    if (text.toLowerCase().contains('auth ping success')) {
+      return null;
+    }
+    return text;
+  }
+
+  String? _extractAvatarSource(Map<String, dynamic> body) {
+    final data = BackendApiClient.extractData(body);
+    if (data is String) {
+      final text = data.trim();
+      if (text.isNotEmpty) return text;
+    }
+
+    final map = BackendApiClient.asMap(data) ?? body;
+    return BackendApiClient.readString(map, const <String>[
+      'avatarUrl',
+      'avatar',
+      'avatarKey',
+      'key',
+      'objectKey',
+      'fileKey',
+      'path',
+      'url',
+      'value',
+    ]);
   }
 
   Future<String> _resolveAvatarDisplaySource(String source) async {

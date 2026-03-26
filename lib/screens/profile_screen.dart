@@ -80,9 +80,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _syncProfileFromBackend() async {
+    String? remoteNickname;
     String? remoteCityName;
     String? remoteCityCode;
     String? remoteAvatarSource;
+
+    try {
+      final pingBody = await _apiClient.get('/ping/auth', requireAuth: true);
+      remoteNickname = _extractNicknameFromAuthPing(pingBody);
+    } on BackendApiException catch (e) {
+      if (e.isUnauthorized) {
+        return;
+      }
+    } catch (_) {}
 
     try {
       final cityBody = await _apiClient.get('/me/city', requireAuth: true);
@@ -136,12 +146,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (normalizedAvatarStorage.isNotEmpty) {
       await _storageService.saveProfileAvatar(normalizedAvatarStorage);
     }
+    final normalizedNickname = remoteNickname?.trim() ?? '';
+    if (normalizedNickname.isNotEmpty) {
+      await _storageService.saveProfileNickname(normalizedNickname);
+    }
 
     if (!mounted) return;
     final displayAvatar = await _resolveAvatarDisplaySource(
       normalizedAvatarStorage,
     );
     setState(() {
+      if (normalizedNickname.isNotEmpty) {
+        _username = normalizedNickname;
+      }
       if (normalizedCityName != null && normalizedCityName.isNotEmpty) {
         _cityName = normalizedCityName;
         _cityCode = resolvedCityCode;
@@ -154,6 +171,55 @@ class _ProfileScreenState extends State<ProfileScreen> {
         _avatarSource = normalizedAvatarStorage;
       }
     });
+  }
+
+  String? _extractNicknameFromAuthPing(Map<String, dynamic> body) {
+    final data = BackendApiClient.extractData(body);
+    final candidates = <String>[
+      body['msg']?.toString() ?? '',
+      body['message']?.toString() ?? '',
+      if (data is String) data,
+    ];
+
+    for (final item in candidates) {
+      final parsed = _parseNicknameFromPingMessage(item);
+      if (parsed != null && parsed.isNotEmpty) {
+        return parsed;
+      }
+    }
+    return null;
+  }
+
+  String? _parseNicknameFromPingMessage(String raw) {
+    final text = raw.trim();
+    if (text.isEmpty) return null;
+
+    final matched = RegExp(
+      r'auth\s+ping\s+success,\s*\S+\s+(.+)$',
+      caseSensitive: false,
+    ).firstMatch(text);
+    if (matched != null) {
+      final nickname = matched.group(1)?.trim() ?? '';
+      if (nickname.isNotEmpty) return nickname;
+    }
+
+    final commaIndex = text.lastIndexOf(',');
+    if (commaIndex >= 0 && commaIndex < text.length - 1) {
+      final tail = text.substring(commaIndex + 1).trim();
+      final parts = tail
+          .split(RegExp(r'\s+'))
+          .where((item) => item.trim().isNotEmpty)
+          .toList(growable: false);
+      if (parts.length >= 2) {
+        final nickname = parts.sublist(1).join(' ').trim();
+        if (nickname.isNotEmpty) return nickname;
+      }
+    }
+
+    if (text.toLowerCase().contains('auth ping success')) {
+      return null;
+    }
+    return text;
   }
 
   Future<String> _resolveAvatarDisplaySource(String source) async {
@@ -181,6 +247,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   String? _extractCityName(Map<String, dynamic> body) {
     final data = BackendApiClient.extractData(body);
+    if (data is String) {
+      final parsed = _parseCityCodeAndName(data);
+      final parsedName = parsed.cityName?.trim() ?? '';
+      if (parsedName.isNotEmpty) {
+        return parsedName;
+      }
+      final parsedCode = parsed.cityCode?.trim() ?? '';
+      if (parsedCode.isNotEmpty) {
+        final mapped = kCityCodeNames[parsedCode]?.trim() ?? '';
+        if (mapped.isNotEmpty) {
+          return mapped;
+        }
+      }
+    }
     final map = BackendApiClient.asMap(data) ?? body;
 
     final cityName = BackendApiClient.readString(map, const [
@@ -190,8 +270,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
       'address',
       'value',
     ]);
-    if (cityName != null && cityName.trim().isNotEmpty) {
-      return cityName.trim();
+    final normalizedCityName = cityName?.trim() ?? '';
+    if (normalizedCityName.isNotEmpty) {
+      final parsed = _parseCityCodeAndName(normalizedCityName);
+      final parsedName = parsed.cityName?.trim() ?? '';
+      if (parsedName.isNotEmpty) {
+        return parsedName;
+      }
+      return normalizedCityName;
     }
 
     final cityCode = _extractCityCode(body);
@@ -203,6 +289,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   String? _extractCityCode(Map<String, dynamic> body) {
     final data = BackendApiClient.extractData(body);
+    if (data is String) {
+      final parsed = _parseCityCodeAndName(data);
+      final parsedCode = parsed.cityCode?.trim() ?? '';
+      if (parsedCode.isNotEmpty) {
+        return parsedCode;
+      }
+    }
     final map = BackendApiClient.asMap(data) ?? body;
 
     final codeText = BackendApiClient.readString(map, const [
@@ -220,8 +313,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     final raw = codeText ?? (codeInt?.toString() ?? '');
     final digits = raw.trim().replaceAll(RegExp(r'[^0-9]'), '');
-    if (digits.isEmpty) return null;
-    return digits;
+    if (digits.isNotEmpty) {
+      return _normalizeCityCodeDigits(digits);
+    }
+
+    final rawCityName =
+        BackendApiClient.readString(map, const ['cityName', 'city']) ?? '';
+    final parsed = _parseCityCodeAndName(rawCityName);
+    return parsed.cityCode;
   }
 
   String? _extractAvatarSource(Map<String, dynamic> body) {
@@ -244,18 +343,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   String? _findCityCodeByName(String cityName) {
-    final normalized = cityName.trim();
+    final parsed = _parseCityCodeAndName(cityName);
+    final parsedCode = parsed.cityCode?.trim() ?? '';
+    if (parsedCode.isNotEmpty) return parsedCode;
+
+    final normalized = _sanitizeCityNameForMatch(cityName);
     if (normalized.isEmpty) return null;
 
     for (final entry in kCityCodeNames.entries) {
-      final candidate = entry.value.trim();
+      final candidate = _sanitizeCityNameForMatch(entry.value);
       if (candidate == normalized) {
         return entry.key;
       }
     }
 
     for (final entry in kCityCodeNames.entries) {
-      final candidate = entry.value.trim();
+      final candidate = _sanitizeCityNameForMatch(entry.value);
       if (candidate.isEmpty) continue;
       if (candidate.contains(normalized) || normalized.contains(candidate)) {
         return entry.key;
@@ -549,7 +652,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   String? _resolveCityName(String? cityName, String? cityCode) {
     final name = cityName?.trim() ?? '';
-    if (name.isNotEmpty) return name;
+    if (name.isNotEmpty) {
+      final parsed = _parseCityCodeAndName(name);
+      final parsedName = parsed.cityName?.trim() ?? '';
+      if (parsedName.isNotEmpty) {
+        return parsedName;
+      }
+      return name;
+    }
 
     final code = cityCode?.trim() ?? '';
     if (code.isEmpty) return null;
@@ -563,6 +673,73 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final prefix = code.substring(0, 2);
     return _provinceNameByPrefix[prefix];
   }
+
+  String _normalizeCityCodeDigits(String rawDigits) {
+    final digits = rawDigits.trim().replaceAll(RegExp(r'[^0-9]'), '');
+    if (digits.isEmpty) return '';
+
+    final candidates = <String>[];
+    if (digits.length >= 6) {
+      candidates.add(digits.substring(0, 6));
+    }
+    if (digits.length >= 4) {
+      candidates.add(digits.substring(0, 4));
+    }
+    candidates.add(digits);
+
+    for (final candidate in candidates) {
+      if (kCityCodeNames.containsKey(candidate)) {
+        return candidate;
+      }
+    }
+    return candidates.first;
+  }
+
+  _ParsedCityCodeAndName _parseCityCodeAndName(String raw) {
+    final text = raw.trim();
+    if (text.isEmpty) {
+      return const _ParsedCityCodeAndName(cityCode: null, cityName: null);
+    }
+
+    final directCode = RegExp(r'^\d{4,6}$').firstMatch(text);
+    if (directCode != null) {
+      final code = _normalizeCityCodeDigits(text);
+      final mapped = kCityCodeNames[code]?.trim();
+      return _ParsedCityCodeAndName(
+        cityCode: code.isEmpty ? null : code,
+        cityName: (mapped == null || mapped.isEmpty) ? null : mapped,
+      );
+    }
+
+    final codeMatch = RegExp(r'(\d{4,6})').firstMatch(text);
+    final rawCode = codeMatch?.group(1)?.trim() ?? '';
+    final normalizedCode = rawCode.isEmpty ? '' : _normalizeCityCodeDigits(rawCode);
+    final noCodeText = rawCode.isEmpty ? text : text.replaceFirst(rawCode, '');
+    final name = _sanitizeCityNameForMatch(noCodeText);
+    final mapped = normalizedCode.isEmpty
+        ? null
+        : (kCityCodeNames[normalizedCode]?.trim());
+
+    return _ParsedCityCodeAndName(
+      cityCode: normalizedCode.isEmpty ? null : normalizedCode,
+      cityName: name.isNotEmpty ? name : ((mapped ?? '').isEmpty ? null : mapped),
+    );
+  }
+
+  String _sanitizeCityNameForMatch(String raw) {
+    var value = raw.trim();
+    if (value.isEmpty) return '';
+    value = value.replaceAll(RegExp(r'\d+'), '');
+    value = value.replaceAll(RegExp(r'[\s,，;；:：/\\|_\-]+'), '');
+    return value.trim();
+  }
+}
+
+class _ParsedCityCodeAndName {
+  const _ParsedCityCodeAndName({required this.cityCode, required this.cityName});
+
+  final String? cityCode;
+  final String? cityName;
 }
 
 const Map<String, String> _provinceNameByPrefix = {

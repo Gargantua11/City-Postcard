@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import '../data/city_location_helper.dart';
 import '../models/postcard_element_layer.dart';
 import '../models/user.dart';
 import '../services/backend_api_client.dart';
@@ -173,6 +174,18 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
   }
 
   String _resolveAddress(EditedPostcard postcard) {
+    final normalized = CityLocationHelper.resolveProvinceCityText(
+      cityName: postcard.cityName,
+      cityCode: postcard.cityCode,
+      provinceName: postcard.provinceName,
+    );
+    if (normalized != null && normalized.isNotEmpty) {
+      return CityLocationHelper.mergeWithDetail(
+        base: normalized,
+        detail: postcard.locationDetail,
+      );
+    }
+
     final detail = postcard.locationDetail?.trim();
     final city = postcard.cityName?.trim();
     if (city != null && city.isNotEmpty) {
@@ -504,6 +517,18 @@ class _SelectablePostcardTile extends StatelessWidget {
   }
 
   String _resolveLocation(EditedPostcard postcard) {
+    final normalized = CityLocationHelper.resolveProvinceCityText(
+      cityName: postcard.cityName,
+      cityCode: postcard.cityCode,
+      provinceName: postcard.provinceName,
+    );
+    if (normalized != null && normalized.isNotEmpty) {
+      return CityLocationHelper.mergeWithDetail(
+        base: normalized,
+        detail: postcard.locationDetail,
+      );
+    }
+
     final detail = postcard.locationDetail?.trim();
     final city = postcard.cityName?.trim();
     if (city != null && city.isNotEmpty) {

@@ -741,7 +741,9 @@ class _DiscussionPostCard extends StatelessWidget {
               borderRadius: BorderRadius.circular(28),
             ),
             child: Text(
-              "热评：${item.hotComment.isEmpty ? '暂无热评' : item.hotComment}",
+              item.hotComment.isEmpty
+                  ? '暂无热评'
+                  : '热评：${item.hotComment}',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(

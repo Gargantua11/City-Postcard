@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import '../data/city_location_helper.dart';
 import '../services/edited_postcard_service.dart';
 import '../widgets/resolved_image.dart';
 import 'postcard_edit_screen.dart';
@@ -18,7 +19,7 @@ class _DraftBoxScreenState extends State<DraftBoxScreen> {
   bool _isLoading = true;
   bool _isSelectionMode = false;
   bool _isDeleting = false;
-  int? _selectedDeleteIndex;
+  final Set<String> _selectedDeleteIds = <String>{};
   List<EditedPostcard> _drafts = const [];
 
   @override
@@ -37,13 +38,14 @@ class _DraftBoxScreenState extends State<DraftBoxScreen> {
 
     setState(() {
       _drafts = drafts;
-      if (_selectedDeleteIndex != null &&
-          _selectedDeleteIndex! >= drafts.length) {
-        _selectedDeleteIndex = null;
-      }
+      final draftIds = drafts
+          .map((item) => item.draftId.trim())
+          .where((item) => item.isNotEmpty)
+          .toSet();
+      _selectedDeleteIds.removeWhere((id) => !draftIds.contains(id));
       if (drafts.isEmpty) {
         _isSelectionMode = false;
-        _selectedDeleteIndex = null;
+        _selectedDeleteIds.clear();
       }
       _isLoading = false;
     });
@@ -72,7 +74,7 @@ class _DraftBoxScreenState extends State<DraftBoxScreen> {
     setState(() {
       _isSelectionMode = !_isSelectionMode;
       if (!_isSelectionMode) {
-        _selectedDeleteIndex = null;
+        _selectedDeleteIds.clear();
       }
     });
   }
@@ -85,23 +87,31 @@ class _DraftBoxScreenState extends State<DraftBoxScreen> {
       return;
     }
 
+    final draftId = _drafts[index].draftId.trim();
+    if (draftId.isEmpty) return;
     setState(() {
-      _selectedDeleteIndex = _selectedDeleteIndex == index ? null : index;
+      if (_selectedDeleteIds.contains(draftId)) {
+        _selectedDeleteIds.remove(draftId);
+      } else {
+        _selectedDeleteIds.add(draftId);
+      }
     });
   }
 
   Future<void> _deleteSelectedDraft() async {
-    final selectedIndex = _selectedDeleteIndex;
-    if (selectedIndex == null || _isDeleting) return;
-    if (selectedIndex < 0 || selectedIndex >= _drafts.length) return;
-
-    final selectedDraft = _drafts[selectedIndex];
+    if (_selectedDeleteIds.isEmpty || _isDeleting) return;
+    final selectedDraftIds = _selectedDeleteIds.toList(growable: false);
+    final deleteCount = selectedDraftIds.length;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
           title: const Text('删除草稿'),
-          content: const Text('确认删除这张草稿吗？'),
+          content: Text(
+            deleteCount == 1
+                ? '确认删除这张草稿吗？'
+                : '确认删除这 $deleteCount 张草稿吗？',
+          ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(dialogContext, false),
@@ -124,12 +134,12 @@ class _DraftBoxScreenState extends State<DraftBoxScreen> {
     });
 
     try {
-      final deleted = await _editedPostcardService.deleteEditedPostcardById(
-        selectedDraft.draftId,
+      final deleted = await _editedPostcardService.deleteEditedPostcardsByIds(
+        selectedDraftIds,
       );
       if (!mounted) return;
 
-      if (!deleted) {
+      if (deleted <= 0) {
         setState(() {
           _isDeleting = false;
         });
@@ -143,11 +153,13 @@ class _DraftBoxScreenState extends State<DraftBoxScreen> {
       if (!mounted) return;
       setState(() {
         _isDeleting = false;
-        _selectedDeleteIndex = null;
+        _selectedDeleteIds.clear();
       });
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('草稿已删除')));
+      ).showSnackBar(
+        SnackBar(content: Text(deleteCount == 1 ? '草稿已删除' : '已删除选中草稿')),
+      );
     } catch (_) {
       if (!mounted) return;
       setState(() {
@@ -210,7 +222,9 @@ class _DraftBoxScreenState extends State<DraftBoxScreen> {
                 child: Align(
                   alignment: Alignment.centerLeft,
                   child: Text(
-                    _selectedDeleteIndex == null ? '请点击一张草稿' : '已选中，可点击删除',
+                    _selectedDeleteIds.isEmpty
+                        ? '点选要删除的草稿'
+                        : '已选 ${_selectedDeleteIds.length} 张',
                     style: const TextStyle(
                       fontSize: 13,
                       color: Color(0xFF4F5A4A),
@@ -219,7 +233,7 @@ class _DraftBoxScreenState extends State<DraftBoxScreen> {
                   ),
                 ),
               ),
-            if (_selectedDeleteIndex != null)
+            if (_selectedDeleteIds.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
                 child: Align(
@@ -237,9 +251,13 @@ class _DraftBoxScreenState extends State<DraftBoxScreen> {
                             width: 14,
                             height: 14,
                             child: CircularProgressIndicator(strokeWidth: 2),
-                          )
+                    )
                         : const Icon(Icons.delete_outline),
-                    label: Text(_isDeleting ? '删除中' : '删除'),
+                    label: Text(
+                      _isDeleting
+                          ? '删除中'
+                          : '删除${_selectedDeleteIds.length}张',
+                    ),
                   ),
                 ),
               ),
@@ -299,7 +317,7 @@ class _DraftBoxScreenState extends State<DraftBoxScreen> {
             return _DraftPostcardTile(
               item: item,
               selectable: _isSelectionMode,
-              selected: _selectedDeleteIndex == index,
+              selected: _selectedDeleteIds.contains(item.draftId.trim()),
               onTap: () => _onTapDraft(index),
             );
           },
@@ -439,6 +457,18 @@ class _DraftPostcardTile extends StatelessWidget {
   }
 
   String _resolveLocation(EditedPostcard postcard) {
+    final normalized = CityLocationHelper.resolveProvinceCityText(
+      cityName: postcard.cityName,
+      cityCode: postcard.cityCode,
+      provinceName: postcard.provinceName,
+    );
+    if (normalized != null && normalized.isNotEmpty) {
+      return CityLocationHelper.mergeWithDetail(
+        base: normalized,
+        detail: postcard.locationDetail,
+      );
+    }
+
     final detail = postcard.locationDetail?.trim();
     final city = postcard.cityName?.trim();
     if (city != null && city.isNotEmpty) {

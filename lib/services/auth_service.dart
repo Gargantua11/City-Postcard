@@ -136,14 +136,25 @@ class AuthService {
       'expiresInSeconds',
       'expiresIn',
     ]);
+    final tokenUserId = _extractUserIdFromJwt(accessToken);
 
     return User(
       id:
-          _extractStringField(data ?? body, const <String>['userId', 'id']) ??
+          _extractStringField(data ?? body, const <String>[
+            'userId',
+            'id',
+            'uid',
+            'sub',
+          ]) ??
+          tokenUserId ??
           '',
       username:
-          _extractStringField(data ?? body, const <String>['username']) ??
-          phone,
+          _extractStringField(data ?? body, const <String>[
+            'username',
+            'nickname',
+            'nickName',
+          ]) ??
+          '',
       avatar: _extractStringField(data ?? body, const <String>['avatar']),
       phone:
           _extractStringField(data ?? body, const <String>['phone']) ?? phone,
@@ -157,6 +168,34 @@ class AuthService {
       tokenType: tokenType ?? 'Bearer',
       expiresInSeconds: expiresInSeconds ?? 1800,
     );
+  }
+
+  String? _extractUserIdFromJwt(String token) {
+    final normalized = token.trim();
+    if (normalized.isEmpty) return null;
+
+    final parts = normalized.split('.');
+    if (parts.length < 2) return null;
+    final payloadPart = parts[1].trim();
+    if (payloadPart.isEmpty) return null;
+
+    try {
+      final normalizedBase64 = base64Url.normalize(payloadPart);
+      final decodedBytes = base64Url.decode(normalizedBase64);
+      final payloadText = utf8.decode(decodedBytes);
+      final payload = jsonDecode(payloadText);
+      if (payload is! Map) return null;
+
+      final subject =
+          payload['sub']?.toString().trim() ??
+          payload['userId']?.toString().trim() ??
+          payload['id']?.toString().trim() ??
+          '';
+      if (subject.isEmpty) return null;
+      return subject;
+    } catch (_) {
+      return null;
+    }
   }
 
   Future<bool> sendForgotPasswordCode(String phone) async {
